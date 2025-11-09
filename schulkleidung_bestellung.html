@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bestellung Schulkleidung - Oberschule Westerzgebirge Bad Schlema</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        
+        .deadline {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 15px;
+            text-align: center;
+            font-weight: bold;
+            border-bottom: 3px solid #fc8181;
+        }
+        
+        .form-content {
+            padding: 30px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 18px;
+            color: #667eea;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+        }
+        
+        .form-group label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #2d3748;
+        }
+        
+        .form-group input[type="text"],
+        .form-group input[type="email"],
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+            background: white;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .required {
+            color: #e53e3e;
+        }
+        
+        .products-section {
+            margin-top: 30px;
+        }
+        
+        .products-section h2 {
+            color: #2d3748;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+        }
+        
+        .color-legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f7fafc;
+            border-radius: 8px;
+        }
+        
+        .color-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .color-sample {
+            width: 25px;
+            height: 25px;
+            border-radius: 4px;
+            border: 2px solid #cbd5e0;
+        }
+        
+        .product-card {
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            background: white;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .product-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .product-card.expanded {
+            border-color: #667eea;
+        }
+        
+        .product-card:nth-child(even) {
+            background: #f7fafc;
+        }
+        
+        .product-header {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr auto;
+            gap: 15px;
+            padding: 20px;
+            cursor: pointer;
+            user-select: none;
+            align-items: center;
+        }
+        
+        .product-header:hover {
+            background: rgba(102, 126, 234, 0.05);
+        }
+        
+        .expand-icon {
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: 20px;
+            transition: transform 0.3s ease;
+        }
+        
+        .product-card.expanded .expand-icon {
+            transform: rotate(180deg);
+        }
+        
+        .product-header-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .product-header-item label {
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        
+        .product-header-item .value {
+            font-size: 16px;
+            color: #667eea;
+            font-weight: bold;
+        }
+        
+        .colors-grid {
+            display: none;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            padding: 0 20px 20px 20px;
+            border-top: 2px solid #e2e8f0;
+            padding-top: 20px;
+        }
+        
+        .product-card.expanded .colors-grid {
+            display: grid;
+        }
+        
+        .color-item {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 15px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+        }
+        
+        .product-card:nth-child(even) .color-item {
+            background: #f7fafc;
+        }
+        
+        .color-item.disabled {
+            background: #f0f0f0;
+            opacity: 0.5;
+        }
+        
+        .color-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #2d3748;
+            font-weight: bold;
+        }
+        
+        .color-inputs {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        
+        .color-inputs > div {
+            flex: 1;
+        }
+        
+        .color-inputs label {
+            display: block;
+            font-size: 12px;
+            color: #718096;
+            margin-bottom: 5px;
+        }
+        
+        .color-item select,
+        .color-item input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #cbd5e0;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .color-item select:disabled,
+        .color-item input[type="number"]:disabled {
+            background: #e2e8f0;
+        }
+        
+        .total-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 8px;
+            text-align: right;
+        }
+        
+        .total-section h3 {
+            font-size: 24px;
+            color: #2d3748;
+            margin-bottom: 10px;
+        }
+        
+        .total-amount {
+            font-size: 32px;
+            color: #667eea;
+            font-weight: bold;
+        }
+        
+        .signature-section {
+            display: none;
+            margin-top: 40px;
+            padding: 30px;
+            background: #fff5e6;
+            border: 3px solid #f59e0b;
+            border-radius: 8px;
+        }
+        
+        .signature-section h3 {
+            color: #d97706;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        
+        .signature-section .warning {
+            background: #fed7d7;
+            padding: 15px;
+            border-left: 4px solid #fc8181;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            color: #c53030;
+            font-weight: bold;
+        }
+        
+        .signature-fields {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .signature-field {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .signature-field label {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #2d3748;
+        }
+        
+        .signature-line {
+            border-bottom: 2px solid #2d3748;
+            min-height: 60px;
+            padding-top: 40px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+            justify-content: center;
+        }
+        
+        .btn {
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .btn-secondary {
+            background: #718096;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #4a5568;
+        }
+        
+        .info-box {
+            background: #bee3f8;
+            border-left: 4px solid #3182ce;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .error-box {
+            background: #fed7d7;
+            border-left: 4px solid #fc8181;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            color: #c53030;
+        }
+        
+        .closed-message {
+            display: none;
+            background: #fff5e6;
+            border: 3px solid #f59e0b;
+            border-radius: 8px;
+            padding: 30px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .closed-message.show {
+            display: block;
+        }
+        
+        .closed-message h2 {
+            color: #d97706;
+            margin-bottom: 15px;
+        }
+        
+        .closed-message p {
+            color: #2d3748;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        
+        .success-message {
+            display: none;
+            background: #c6f6d5;
+            border-left: 4px solid #38a169;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .success-message.show {
+            display: block;
+        }
+        
+        .success-message .print-button {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 12px 30px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            font-size: 16px;
+        }
+        
+        .success-message .print-button:hover {
+            background: #5568d3;
+        }
+        
+        .print-summary {
+            display: none;
+        }
+        
+        .print-summary table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .print-summary th,
+        .print-summary td {
+            border: 1px solid #2d3748;
+            padding: 10px;
+            text-align: left;
+        }
+        
+        .print-summary th {
+            background-color: #4a5568;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .print-summary .total-row {
+            background-color: #f7fafc;
+            font-weight: bold;
+        }
+        
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            
+            .button-group,
+            .deadline,
+            .form-group,
+            .info-box,
+            .success-message,
+            .products-section,
+            .total-section,
+            .color-legend {
+                display: none !important;
+            }
+            
+            .container {
+                box-shadow: none;
+            }
+            
+            .print-summary {
+                display: block !important;
+                padding: 20px;
+            }
+            
+            .signature-section {
+                display: block !important;
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                max-width: 100%;
+            }
+            
+            .product-header {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+            
+            .product-header-item {
+                text-align: center;
+            }
+            
+            .colors-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .color-legend {
+                font-size: 12px;
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            }
+            
+            .color-sample {
+                width: 18px;
+                height: 18px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Bestellung Schulkleidung</h1>
+            <p>Oberschule Westerzgebirge Bad Schlema</p>
+            <p id="schuljahrDisplay">Lädt...</p>
+        </div>
+        
+        <div class="deadline" id="deadlineDisplay">
+            ⚠️ Lädt Abgabetermin...
+        </div>
+        
+        <div class="form-content">
+            <div class="loading" id="loadingMessage">
+                📄 Lade Artikel und Schülerdaten aus der Datenbank...
+            </div>
+            
+            <div id="errorMessage" class="error-box" style="display: none;">
+                <strong>⚠️ Fehler beim Laden!</strong>
+                <p>Bitte kontaktieren Sie das Sekretariat: k.knodel@bze-aue.de</p>
+            </div>
+            
+            <div class="closed-message" id="closedMessage">
+                <h2>🔒 Bestellungen derzeit geschlossen</h2>
+                <p id="closedMessageText">Das Bestellformular ist aktuell nicht verfügbar.</p>
+                <p style="margin-top: 20px;">Bei Fragen wenden Sie sich bitte an:<br>
+                <strong>k.knodel@bze-aue.de</strong></p>
+            </div>
+            
+            <div class="success-message" id="successMessage">
+                <h3>✅ Bestellung erfolgreich übermittelt!</h3>
+                <p>Die Bestellung wurde gespeichert und Sie erhalten in Kürze eine Bestätigungs-E-Mail.</p>
+                <p><strong>Nächste Schritte:</strong></p>
+                <ol style="margin: 10px 0;">
+                    <li>Drucken Sie diese Seite aus (Button unten)</li>
+                    <li>Tragen Sie Datum ein und unterschreiben Sie</li>
+                    <li>Geben Sie die Bestellung bis <span id="deadlineInSuccess"></span> im Sekretariat ab</li>
+                </ol>
+                <button class="print-button" onclick="window.print()">🖨️ Jetzt ausdrucken</button>
+            </div>
+            
+            <form id="orderForm" style="display: none;">
+                <div class="form-group">
+                    <label>Klasse: <span class="required">*</span></label>
+                    <select id="studentClass" required onchange="updateSchuelerDropdown()">
+                        <option value="">Bitte wählen...</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Name, Vorname: <span class="required">*</span></label>
+                    <select id="studentName" required>
+                        <option value="">Erst Klasse wählen...</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>E-Mail (für Bestätigung): <span class="required">*</span></label>
+                    <input type="email" id="email" required placeholder="beispiel@email.de">
+                </div>
+                
+                <div class="form-group">
+                    <label>E-Mail wiederholen: <span class="required">*</span></label>
+                    <input type="email" id="emailConfirm" required placeholder="beispiel@email.de">
+                    <small id="emailMatchError" style="color: #e53e3e; display: none; margin-top: 5px;">⚠️ Die E-Mail-Adressen stimmen nicht überein!</small>
+                </div>
+                
+                <div class="info-box">
+                    <strong>Hinweis:</strong> Wählen Sie bei jeder gewünschten Farbe die Größe und Anzahl aus. Bitte beachten Sie, dass nicht jeder Artikel in jeder Farbe verfügbar ist. Wir bitten um Verständnis!
+                </div>
+                
+                <div class="products-section">
+                    <h2>📦 Artikelauswahl</h2>
+                    
+                    <div class="color-legend" id="colorLegend"></div>
+                    
+                    <div id="productsContainer"></div>
+                </div>
+                
+                <div class="total-section">
+                    <h3>Gesamtbetrag:</h3>
+                    <div class="total-amount" id="totalAmount">0,00 €</div>
+                </div>
+                
+                <div class="print-summary" id="printSummary">
+                    <h2 style="color: #2d3748; margin-bottom: 20px;">Bestellzusammenfassung</h2>
+                    <div style="background: #f7fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <p style="margin: 5px 0;"><strong>Name:</strong> <span id="printName"></span></p>
+                        <p style="margin: 5px 0;"><strong>Klasse:</strong> <span id="printClass"></span></p>
+                        <p style="margin: 5px 0;"><strong>E-Mail:</strong> <span id="printEmail"></span></p>
+                        <p style="margin: 5px 0;"><strong>Bestelldatum:</strong> <span id="printDate"></span></p>
+                    </div>
+                    <table id="printOrderTable"></table>
+                </div>
+                
+                <div class="signature-section" id="signatureSection">
+                    <h3>⚠️ WICHTIG: Bestellung rechtsgültig machen</h3>
+                    <div class="warning" id="signatureWarning">
+                        Diese Bestellung ist nur gültig, wenn sie ausgedruckt, unterschrieben und bis spätestens im Sekretariat abgegeben wird!
+                    </div>
+                    <p style="margin-bottom: 20px;">
+                        <strong>Abgabe:</strong> Sekretariat<br>
+                        <strong>E-Mail:</strong> k.knodel@bze-aue.de<br>
+                        <strong>Fax:</strong> 03772 22638
+                    </p>
+                    <div class="signature-fields">
+                        <div class="signature-field">
+                            <label>Datum:</label>
+                            <div class="signature-line"></div>
+                        </div>
+                        <div class="signature-field">
+                            <label>Unterschrift Erziehungsberechtigter:</label>
+                            <div class="signature-line"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="button-group">
+                    <button type="button" class="btn btn-secondary" onclick="resetForm()">Zurücksetzen</button>
+                    <button type="submit" class="btn btn-primary">Bestellung absenden</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const scriptURL = 'https://script.google.com/macros/s/AKfycby5KdJlmmAnOTzmfN-zW5HSXeBRR7RAn7TrgwT-Hh28KGmuoQ0knOXTQEkfG3KIHyO3Mw/exec';
+        
+        let products = [];
+        let allColors = [];
+        let schuelerData = {};
+        let einstellungen = {};
+        
+        const colorMap = {
+            'weiß': 'white',
+            'rot': 'red',
+            'royalblau': 'royalblue',
+            'dunkelblau': 'darkblue',
+            'schwarz': 'black',
+            'orange': 'orange',
+            'lila': 'purple',
+            'azurblau': 'deepskyblue',
+            'fuchsia': 'fuchsia',
+            'grün': 'green',
+            'burgund': '#800020',
+            'hellgrau': 'lightgray',
+            'dunkelgrau': 'darkgray'
+        };
+
+        async function loadArtikel() {
+            try {
+                // Lade Einstellungen
+                const einstellungenResponse = await fetch(scriptURL + '?action=getEinstellungen');
+                const einstellungenText = await einstellungenResponse.text();
+                einstellungen = JSON.parse(einstellungenText);
+                
+                // Prüfe ob Bestellungen geöffnet sind
+                if (!checkIfOpen()) {
+                    document.getElementById('loadingMessage').style.display = 'none';
+                    document.getElementById('closedMessage').classList.add('show');
+                    return;
+                }
+                
+                // Aktualisiere Header und Deadline mit den geladenen Daten
+                updateHeaderAndDeadline();
+                
+                // Lade Artikel
+                const artikelResponse = await fetch(scriptURL + '?action=getArtikel');
+                const artikelText = await artikelResponse.text();
+                const artikelData = JSON.parse(artikelText);
+                
+                if (!artikelData || artikelData.length === 0) {
+                    throw new Error('Keine Artikel gefunden');
+                }
+                
+                products = artikelData;
+                
+                const colorSet = new Set();
+                products.forEach(p => p.colors.forEach(c => colorSet.add(c)));
+                allColors = Array.from(colorSet);
+                
+                // Lade Schüler
+                const schuelerResponse = await fetch(scriptURL + '?action=getSchueler');
+                const schuelerText = await schuelerResponse.text();
+                schuelerData = JSON.parse(schuelerText);
+                
+                document.getElementById('loadingMessage').style.display = 'none';
+                document.getElementById('orderForm').style.display = 'block';
+                
+                initializeKlassenDropdown();
+                initializeColorLegend();
+                initializeTable();
+                
+            } catch (error) {
+                console.error('Fehler beim Laden:', error);
+                document.getElementById('loadingMessage').style.display = 'none';
+                document.getElementById('errorMessage').style.display = 'block';
+            }
+        }
+        
+        function checkIfOpen() {
+            if (!einstellungen.bestellungOffen) {
+                return false;
+            }
+            
+            const now = new Date();
+            
+            // Wenn Start-Datum gesetzt ist, prüfe ob wir schon im Zeitraum sind
+            if (einstellungen.startDatum) {
+                const startDate = new Date(einstellungen.startDatum);
+                if (now < startDate) {
+                    const startFormatted = formatDate(einstellungen.startDatum);
+                    document.getElementById('closedMessageText').innerHTML = 
+                        `Das Bestellformular ist ab dem <strong>${startFormatted}</strong> verfügbar.<br>Bitte versuchen Sie es zu diesem Zeitpunkt erneut.`;
+                    return false;
+                }
+            }
+            
+            // Wenn End-Datum gesetzt ist, prüfe ob wir noch im Zeitraum sind
+            if (einstellungen.endDatum) {
+                const endDate = new Date(einstellungen.endDatum);
+                if (now > endDate) {
+                    document.getElementById('closedMessageText').innerHTML = 
+                        `Der Bestellzeitraum ist abgelaufen.<br>Bestellungen waren bis zum <strong>${formatDate(einstellungen.endDatum)}</strong> möglich.`;
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+        
+        function formatDate(dateString) {
+            // Konvertiere das Datum von ISO-Format in DD.MM.YYYY
+            const date = new Date(dateString);
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}.${month}.${year}`;
+        }
+        
+        function updateHeaderAndDeadline() {
+            // Aktualisiere Schuljahr im Header
+            if (einstellungen.schuljahr) {
+                document.getElementById('schuljahrDisplay').textContent = 'Schuljahr ' + einstellungen.schuljahr;
+            }
+            
+            // Aktualisiere Abgabetermin
+            if (einstellungen.abgabetermin) {
+                const deadline = formatDate(einstellungen.abgabetermin);
+                document.getElementById('deadlineDisplay').innerHTML = 
+                    `⚠️ Letzter Abgabetermin: ${deadline} - Spätere Abgabe kann bei Bestellung nicht berücksichtigt werden! Bestellung verpflichtet zum Kauf!`;
+                
+                // Aktualisiere auch in der Erfolgs-Nachricht
+                document.getElementById('deadlineInSuccess').textContent = deadline;
+                
+                // Aktualisiere in der Unterschriften-Sektion
+                document.getElementById('signatureWarning').innerHTML = 
+                    `Diese Bestellung ist nur gültig, wenn sie ausgedruckt, unterschrieben und bis spätestens ${deadline} im Sekretariat abgegeben wird!`;
+            }
+        }
+        
+        function initializeKlassenDropdown() {
+            const klassenSelect = document.getElementById('studentClass');
+            klassenSelect.innerHTML = '<option value="">Bitte wählen...</option>';
+            
+            const klassen = Object.keys(schuelerData).sort();
+            klassen.forEach(klasse => {
+                const option = document.createElement('option');
+                option.value = klasse;
+                option.textContent = klasse;
+                klassenSelect.appendChild(option);
+            });
+        }
+        
+        function updateSchuelerDropdown() {
+            const klassenSelect = document.getElementById('studentClass');
+            const schuelerSelect = document.getElementById('studentName');
+            const selectedKlasse = klassenSelect.value;
+            
+            schuelerSelect.innerHTML = '<option value="">Bitte wählen...</option>';
+            
+            if (selectedKlasse && schuelerData[selectedKlasse]) {
+                const schueler = schuelerData[selectedKlasse];
+                schueler.forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    schuelerSelect.appendChild(option);
+                });
+            }
+        }
+        
+        function initializeColorLegend() {
+            const legend = document.getElementById('colorLegend');
+            legend.innerHTML = '';
+            
+            allColors.forEach(color => {
+                const colorBox = document.createElement('div');
+                colorBox.className = 'color-box';
+                
+                const colorSample = document.createElement('div');
+                colorSample.className = 'color-sample';
+                colorSample.style.background = colorMap[color] || color;
+                if (color === 'weiß') {
+                    colorSample.style.borderColor = '#000';
+                }
+                
+                const colorLabel = document.createElement('span');
+                colorLabel.textContent = color.charAt(0).toUpperCase() + color.slice(1);
+                
+                colorBox.appendChild(colorSample);
+                colorBox.appendChild(colorLabel);
+                legend.appendChild(colorBox);
+            });
+        }
+
+        function initializeTable() {
+            const container = document.getElementById('productsContainer');
+            container.innerHTML = '';
+            
+            products.forEach((product, index) => {
+                const card = document.createElement('div');
+                card.className = 'product-card';
+                card.id = 'product_' + index;
+                
+                let cardHTML = '<div class="product-header" onclick="toggleProduct(' + index + ')">';
+                cardHTML += '<div class="product-header-item">';
+                cardHTML += '<label>Artikel</label>';
+                cardHTML += '<div class="value">' + product.name + '</div>';
+                cardHTML += '</div>';
+                
+                cardHTML += '<div class="product-header-item">';
+                cardHTML += '<label>Preis/Stück</label>';
+                cardHTML += '<div class="value">' + product.price.toFixed(2) + ' €</div>';
+                cardHTML += '</div>';
+                
+                cardHTML += '<div class="product-header-item">';
+                cardHTML += '<label>Gesamt</label>';
+                cardHTML += '<div class="value" id="lineTotal_' + index + '">0,00 €</div>';
+                cardHTML += '</div>';
+                
+                cardHTML += '<div class="product-header-item">';
+                cardHTML += '<label>Bestellt</label>';
+                cardHTML += '<div class="value" id="itemCount_' + index + '">0 Stück</div>';
+                cardHTML += '</div>';
+                
+                cardHTML += '<div class="expand-icon">+</div>';
+                
+                cardHTML += '</div>';
+                
+                cardHTML += '<div class="colors-grid">';
+                
+                allColors.forEach(color => {
+                    const isAvailable = product.colors.includes(color);
+                    cardHTML += '<div class="color-item' + (isAvailable ? '' : ' disabled') + '">';
+                    cardHTML += '<div class="color-label">';
+                    cardHTML += '<div class="color-sample" style="background: ' + (colorMap[color] || color) + '; ';
+                    if (color === 'weiß') cardHTML += 'border-color: #000;';
+                    cardHTML += '"></div>';
+                    cardHTML += '<span>' + color.charAt(0).toUpperCase() + color.slice(1) + '</span>';
+                    cardHTML += '</div>';
+                    cardHTML += '<div class="color-inputs">';
+                    cardHTML += '<div><label>Größe</label>';
+                    cardHTML += '<select id="size_' + index + '_' + color + '" ' + (isAvailable ? '' : 'disabled') + '>';
+                    cardHTML += '<option value="">-</option>';
+                    product.sizes.forEach(size => {
+                        cardHTML += '<option value="' + size + '">' + size + '</option>';
+                    });
+                    cardHTML += '</select></div>';
+                    cardHTML += '<div><label>Anzahl</label>';
+                    cardHTML += '<input type="number" min="0" max="99" value="0" ';
+                    cardHTML += 'id="qty_' + index + '_' + color + '" ';
+                    cardHTML += (isAvailable ? '' : 'disabled ');
+                    cardHTML += 'onchange="calculateTotal()"></div>';
+                    cardHTML += '</div>';
+                    cardHTML += '</div>';
+                });
+                
+                cardHTML += '</div>';
+                
+                card.innerHTML = cardHTML;
+                container.appendChild(card);
+            });
+        }
+
+        function toggleProduct(index) {
+            const card = document.getElementById('product_' + index);
+            card.classList.toggle('expanded');
+        }
+
+        function calculateTotal() {
+            let grandTotal = 0;
+            
+            products.forEach((product, index) => {
+                let lineTotal = 0;
+                let itemCount = 0;
+                allColors.forEach(color => {
+                    const input = document.getElementById(`qty_${index}_${color}`);
+                    if (input && !input.disabled) {
+                        const qty = parseInt(input.value) || 0;
+                        lineTotal += qty * product.price;
+                        itemCount += qty;
+                    }
+                });
+                
+                document.getElementById(`lineTotal_${index}`).textContent = lineTotal.toFixed(2) + ' €';
+                document.getElementById(`itemCount_${index}`).textContent = itemCount + ' Stück';
+                
+                // Hervorhebung wenn Artikel bestellt wurden
+                const countElement = document.getElementById(`itemCount_${index}`);
+                if (itemCount > 0) {
+                    countElement.style.color = '#38a169';
+                    countElement.style.fontWeight = 'bold';
+                } else {
+                    countElement.style.color = '#667eea';
+                    countElement.style.fontWeight = 'bold';
+                }
+                
+                grandTotal += lineTotal;
+            });
+            
+            document.getElementById('totalAmount').textContent = grandTotal.toFixed(2) + ' €';
+        }
+
+        function resetForm() {
+            if (confirm('Möchten Sie das Formular wirklich zurücksetzen?')) {
+                document.getElementById('orderForm').reset();
+                initializeTable();
+                calculateTotal();
+            }
+        }
+
+        document.getElementById('orderForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const studentName = document.getElementById('studentName').value;
+            const studentClass = document.getElementById('studentClass').value;
+            const email = document.getElementById('email').value;
+            const emailConfirm = document.getElementById('emailConfirm').value;
+            
+            // Überprüfe, ob beide E-Mail-Adressen übereinstimmen
+            if (email !== emailConfirm) {
+                document.getElementById('emailMatchError').style.display = 'block';
+                document.getElementById('emailConfirm').focus();
+                alert('⚠️ Die E-Mail-Adressen stimmen nicht überein!\n\nBitte überprüfen Sie Ihre Eingabe.');
+                return;
+            }
+            
+            // Verstecke Fehlermeldung, falls sie angezeigt war
+            document.getElementById('emailMatchError').style.display = 'none';
+            
+            const orderItems = [];
+            products.forEach((product, index) => {
+                allColors.forEach(color => {
+                    const sizeSelect = document.getElementById(`size_${index}_${color}`);
+                    const qtyInput = document.getElementById(`qty_${index}_${color}`);
+                    
+                    if (sizeSelect && qtyInput && !qtyInput.disabled) {
+                        const size = sizeSelect.value;
+                        const qty = parseInt(qtyInput.value) || 0;
+                        
+                        if (size && qty > 0) {
+                            orderItems.push({
+                                artikel: product.name,
+                                größe: size,
+                                farbe: color,
+                                anzahl: qty,
+                                preis: product.price,
+                                gesamt: qty * product.price
+                            });
+                        }
+                    }
+                });
+            });
+            
+            if (orderItems.length === 0) {
+                alert('Bitte wählen Sie mindestens einen Artikel aus!\n\nVergessen Sie nicht, bei jeder Farbe die Größe anzugeben.');
+                return;
+            }
+            
+            const totalAmount = orderItems.reduce((sum, item) => sum + item.gesamt, 0);
+            
+            const orderData = {
+                timestamp: new Date().toISOString(),
+                name: studentName,
+                klasse: studentClass,
+                email: email,
+                bestellungen: orderItems,
+                gesamtbetrag: totalAmount
+            };
+            
+            console.log('Bestellung:', orderData);
+            
+            const submitBtn = document.querySelector('.btn-primary');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Wird gesendet...';
+            
+            const params = new URLSearchParams();
+            params.append('name', orderData.name);
+            params.append('klasse', orderData.klasse);
+            params.append('email', orderData.email);
+            params.append('gesamtbetrag', orderData.gesamtbetrag);
+            params.append('bestellungen', JSON.stringify(orderData.bestellungen));
+            params.append('timestamp', orderData.timestamp);
+            
+            const fullURL = scriptURL + '?' + params.toString();
+            
+            const img = document.createElement('img');
+            img.style.display = 'none';
+            img.src = fullURL;
+            img.onerror = function() {
+                setTimeout(() => {
+                    preparePrintSummary(orderData, orderItems);
+                    document.getElementById('successMessage').classList.add('show');
+                    document.getElementById('signatureSection').style.display = 'block';
+                    alert('✅ Bestellung erfolgreich übermittelt!\n\nSie erhalten gleich eine E-Mail.\n\nKlicken Sie auf den Druck-Button oder drücken Sie Strg+P zum Ausdrucken.');
+                    window.scrollTo(0, 0);
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Bestellung absenden';
+                    document.body.removeChild(img);
+                }, 500);
+            };
+            img.onload = function() {
+                setTimeout(() => {
+                    preparePrintSummary(orderData, orderItems);
+                    document.getElementById('successMessage').classList.add('show');
+                    document.getElementById('signatureSection').style.display = 'block';
+                    alert('✅ Bestellung erfolgreich übermittelt!\n\nSie erhalten gleich eine E-Mail.\n\nKlicken Sie auf den Druck-Button oder drücken Sie Strg+P zum Ausdrucken.');
+                    window.scrollTo(0, 0);
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Bestellung absenden';
+                    document.body.removeChild(img);
+                }, 500);
+            };
+            document.body.appendChild(img);
+        });
+        
+        function preparePrintSummary(orderData, orderItems) {
+            // Fülle die Kundeninfos
+            document.getElementById('printName').textContent = orderData.name;
+            document.getElementById('printClass').textContent = orderData.klasse;
+            document.getElementById('printEmail').textContent = orderData.email;
+            document.getElementById('printDate').textContent = new Date().toLocaleString('de-DE');
+            
+            // Erstelle die Tabelle mit bestellten Artikeln
+            let tableHTML = '<thead><tr>';
+            tableHTML += '<th>Artikel</th>';
+            tableHTML += '<th>Größe</th>';
+            tableHTML += '<th>Farbe</th>';
+            tableHTML += '<th>Anzahl</th>';
+            tableHTML += '<th>Einzelpreis</th>';
+            tableHTML += '<th>Gesamtpreis</th>';
+            tableHTML += '</tr></thead><tbody>';
+            
+            orderItems.forEach(item => {
+                tableHTML += '<tr>';
+                tableHTML += '<td>' + item.artikel + '</td>';
+                tableHTML += '<td>' + item.größe + '</td>';
+                tableHTML += '<td>' + item.farbe + '</td>';
+                tableHTML += '<td>' + item.anzahl + '</td>';
+                tableHTML += '<td>' + item.preis.toFixed(2) + ' €</td>';
+                tableHTML += '<td><strong>' + item.gesamt.toFixed(2) + ' €</strong></td>';
+                tableHTML += '</tr>';
+            });
+            
+            tableHTML += '<tr class="total-row">';
+            tableHTML += '<td colspan="5" style="text-align: right;">GESAMTBETRAG:</td>';
+            tableHTML += '<td style="color: #667eea; font-size: 18px;"><strong>' + orderData.gesamtbetrag.toFixed(2) + ' €</strong></td>';
+            tableHTML += '</tr></tbody>';
+            
+            document.getElementById('printOrderTable').innerHTML = tableHTML;
+        }
+
+        // Echtzeit-Überprüfung der E-Mail-Felder
+        document.getElementById('emailConfirm').addEventListener('input', function() {
+            const email = document.getElementById('email').value;
+            const emailConfirm = this.value;
+            const errorMsg = document.getElementById('emailMatchError');
+            
+            if (emailConfirm.length > 0 && email !== emailConfirm) {
+                errorMsg.style.display = 'block';
+            } else {
+                errorMsg.style.display = 'none';
+            }
+        });
+
+        loadArtikel();
+    </script>
+</body>
+</html>
