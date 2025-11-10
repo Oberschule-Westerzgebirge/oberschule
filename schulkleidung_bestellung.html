@@ -1000,6 +1000,8 @@
             document.getElementById('emailMatchError').style.display = 'none';
             
             const orderItems = [];
+            const missingSize = [];
+            
             products.forEach((product, index) => {
                 allColors.forEach(color => {
                     const sizeSelect = document.getElementById(`size_${index}_${color}`);
@@ -1008,6 +1010,14 @@
                     if (sizeSelect && qtyInput && !qtyInput.disabled) {
                         const size = sizeSelect.value;
                         const qty = parseInt(qtyInput.value) || 0;
+                        
+                        // Prüfe ob Anzahl eingegeben aber Größe fehlt
+                        if (qty > 0 && !size) {
+                            missingSize.push({
+                                artikel: product.name,
+                                farbe: color
+                            });
+                        }
                         
                         if (size && qty > 0) {
                             orderItems.push({
@@ -1022,6 +1032,17 @@
                     }
                 });
             });
+            
+            // Prüfe ob Größen fehlen
+            if (missingSize.length > 0) {
+                let errorMsg = '⚠️ Bitte wählen Sie für folgende Artikel eine Größe aus:\n\n';
+                missingSize.forEach(item => {
+                    errorMsg += `• ${item.artikel} (${item.farbe})\n`;
+                });
+                errorMsg += '\nSie haben eine Anzahl eingegeben, aber die Größe nicht ausgewählt!';
+                alert(errorMsg);
+                return;
+            }
             
             if (orderItems.length === 0) {
                 alert('Bitte wählen Sie mindestens einen Artikel aus!\n\nVergessen Sie nicht, bei jeder Farbe die Größe anzugeben.');
