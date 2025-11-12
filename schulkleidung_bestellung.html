@@ -1083,9 +1083,16 @@
                 setTimeout(() => {
                     preparePrintSummary(orderData, orderItems);
                     document.getElementById('successMessage').classList.add('show');
-                    document.getElementById('signatureSection').style.display = 'block';
                     alert('✅ Bestellung erfolgreich übermittelt!\n\nSie erhalten gleich eine E-Mail.\n\nKlicken Sie auf den Druck-Button oder drücken Sie Strg+P zum Ausdrucken.');
                     window.scrollTo(0, 0);
+                    
+                    // Formular zurücksetzen nach erfolgreicher Bestellung
+                    document.getElementById('orderForm').reset();
+                    document.getElementById('studentClass').selectedIndex = 0;
+                    document.getElementById('studentName').innerHTML = '<option value="">Erst Klasse wählen...</option>';
+                    initializeTable();
+                    calculateTotal();
+                    
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'Bestellung absenden';
                     document.body.removeChild(img);
@@ -1095,9 +1102,16 @@
                 setTimeout(() => {
                     preparePrintSummary(orderData, orderItems);
                     document.getElementById('successMessage').classList.add('show');
-                    document.getElementById('signatureSection').style.display = 'block';
                     alert('✅ Bestellung erfolgreich übermittelt!\n\nSie erhalten gleich eine E-Mail.\n\nKlicken Sie auf den Druck-Button oder drücken Sie Strg+P zum Ausdrucken.');
                     window.scrollTo(0, 0);
+                    
+                    // Formular zurücksetzen nach erfolgreicher Bestellung
+                    document.getElementById('orderForm').reset();
+                    document.getElementById('studentClass').selectedIndex = 0;
+                    document.getElementById('studentName').innerHTML = '<option value="">Erst Klasse wählen...</option>';
+                    initializeTable();
+                    calculateTotal();
+                    
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'Bestellung absenden';
                     document.body.removeChild(img);
