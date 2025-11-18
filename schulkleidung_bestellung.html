@@ -241,36 +241,38 @@
             font-size: 14px;
             color: #2d3748;
             font-weight: bold;
-        }
-        
-        .color-inputs {
-            display: flex;
-            gap: 10px;
-            align-items: flex-end;
-        }
-        
-        .color-inputs > div {
-            flex: 1;
-        }
-        
-        .color-inputs label {
-            display: block;
-            font-size: 12px;
-            color: #718096;
             margin-bottom: 5px;
         }
         
-        .color-item select,
-        .color-item input[type="number"] {
+        .size-inputs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+            gap: 8px;
+        }
+        
+        .size-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .size-input-group label {
+            font-size: 11px;
+            color: #718096;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .size-input-group input[type="number"] {
             width: 100%;
-            padding: 8px;
+            padding: 6px;
             border: 1px solid #cbd5e0;
             border-radius: 4px;
             font-size: 14px;
+            text-align: center;
         }
         
-        .color-item select:disabled,
-        .color-item input[type="number"]:disabled {
+        .size-input-group input[type="number"]:disabled {
             background: #e2e8f0;
         }
         
@@ -895,7 +897,6 @@
                 cardHTML += '</div>';
                 
                 cardHTML += '<div class="expand-icon">+</div>';
-                
                 cardHTML += '</div>';
                 
                 cardHTML += '<div class="colors-grid">';
@@ -909,20 +910,21 @@
                     cardHTML += '"></div>';
                     cardHTML += '<span>' + color.charAt(0).toUpperCase() + color.slice(1) + '</span>';
                     cardHTML += '</div>';
-                    cardHTML += '<div class="color-inputs">';
-                    cardHTML += '<div><label>Größe</label>';
-                    cardHTML += '<select id="size_' + index + '_' + color + '" ' + (isAvailable ? '' : 'disabled') + '>';
-                    cardHTML += '<option value="">-</option>';
+                    
+                    // Größen-Eingabefelder
+                    cardHTML += '<div class="size-inputs">';
                     product.sizes.forEach(size => {
-                        cardHTML += '<option value="' + size + '">' + size + '</option>';
+                        cardHTML += '<div class="size-input-group">';
+                        cardHTML += '<label>' + size + '</label>';
+                        cardHTML += '<input type="number" min="0" max="99" value="0" ';
+                        cardHTML += 'id="qty_' + index + '_' + color + '_' + size + '" ';
+                        cardHTML += (isAvailable ? '' : 'disabled ');
+                        cardHTML += 'onchange="calculateTotal()" ';
+                        cardHTML += 'placeholder="0">';
+                        cardHTML += '</div>';
                     });
-                    cardHTML += '</select></div>';
-                    cardHTML += '<div><label>Anzahl</label>';
-                    cardHTML += '<input type="number" min="0" max="99" value="0" ';
-                    cardHTML += 'id="qty_' + index + '_' + color + '" ';
-                    cardHTML += (isAvailable ? '' : 'disabled ');
-                    cardHTML += 'onchange="calculateTotal()"></div>';
                     cardHTML += '</div>';
+                    
                     cardHTML += '</div>';
                 });
                 
@@ -944,13 +946,16 @@
             products.forEach((product, index) => {
                 let lineTotal = 0;
                 let itemCount = 0;
+                
                 allColors.forEach(color => {
-                    const input = document.getElementById(`qty_${index}_${color}`);
-                    if (input && !input.disabled) {
-                        const qty = parseInt(input.value) || 0;
-                        lineTotal += qty * product.price;
-                        itemCount += qty;
-                    }
+                    product.sizes.forEach(size => {
+                        const input = document.getElementById(`qty_${index}_${color}_${size}`);
+                        if (input && !input.disabled) {
+                            const qty = parseInt(input.value) || 0;
+                            lineTotal += qty * product.price;
+                            itemCount += qty;
+                        }
+                    });
                 });
                 
                 document.getElementById(`lineTotal_${index}`).textContent = lineTotal.toFixed(2) + ' €';
@@ -1004,48 +1009,29 @@
             
             products.forEach((product, index) => {
                 allColors.forEach(color => {
-                    const sizeSelect = document.getElementById(`size_${index}_${color}`);
-                    const qtyInput = document.getElementById(`qty_${index}_${color}`);
-                    
-                    if (sizeSelect && qtyInput && !qtyInput.disabled) {
-                        const size = sizeSelect.value;
-                        const qty = parseInt(qtyInput.value) || 0;
+                    product.sizes.forEach(size => {
+                        const qtyInput = document.getElementById(`qty_${index}_${color}_${size}`);
                         
-                        // Prüfe ob Anzahl eingegeben aber Größe fehlt
-                        if (qty > 0 && !size) {
-                            missingSize.push({
-                                artikel: product.name,
-                                farbe: color
-                            });
+                        if (qtyInput && !qtyInput.disabled) {
+                            const qty = parseInt(qtyInput.value) || 0;
+                            
+                            if (qty > 0) {
+                                orderItems.push({
+                                    artikel: product.name,
+                                    größe: size,
+                                    farbe: color,
+                                    anzahl: qty,
+                                    preis: product.price,
+                                    gesamt: qty * product.price
+                                });
+                            }
                         }
-                        
-                        if (size && qty > 0) {
-                            orderItems.push({
-                                artikel: product.name,
-                                größe: size,
-                                farbe: color,
-                                anzahl: qty,
-                                preis: product.price,
-                                gesamt: qty * product.price
-                            });
-                        }
-                    }
+                    });
                 });
             });
             
-            // Prüfe ob Größen fehlen
-            if (missingSize.length > 0) {
-                let errorMsg = '⚠️ Bitte wählen Sie für folgende Artikel eine Größe aus:\n\n';
-                missingSize.forEach(item => {
-                    errorMsg += `• ${item.artikel} (${item.farbe})\n`;
-                });
-                errorMsg += '\nSie haben eine Anzahl eingegeben, aber die Größe nicht ausgewählt!';
-                alert(errorMsg);
-                return;
-            }
-            
             if (orderItems.length === 0) {
-                alert('Bitte wählen Sie mindestens einen Artikel aus!\n\nVergessen Sie nicht, bei jeder Farbe die Größe anzugeben.');
+                alert('Bitte wählen Sie mindestens einen Artikel aus!\n\nTragen Sie bei der gewünschten Farbe und Größe die Anzahl ein.');
                 return;
             }
             
