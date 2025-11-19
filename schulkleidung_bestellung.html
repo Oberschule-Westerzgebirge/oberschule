@@ -298,34 +298,36 @@
         
         .signature-section {
             display: none;
-            margin-top: 40px;
-            padding: 30px;
+            margin-top: 20px;
+            padding: 15px;
             background: #fff5e6;
-            border: 3px solid #f59e0b;
-            border-radius: 8px;
+            border: 2px solid #f59e0b;
+            border-radius: 6px;
+            font-size: 12px;
         }
         
         .signature-section h3 {
             color: #d97706;
-            margin-bottom: 15px;
-            font-size: 20px;
+            margin-bottom: 10px;
+            font-size: 14px;
         }
         
         .signature-section .warning {
             background: #fed7d7;
-            padding: 15px;
-            border-left: 4px solid #fc8181;
-            margin-bottom: 20px;
+            padding: 10px;
+            border-left: 3px solid #fc8181;
+            margin-bottom: 10px;
             border-radius: 4px;
             color: #c53030;
             font-weight: bold;
+            font-size: 11px;
         }
         
         .signature-fields {
             display: grid;
             grid-template-columns: 1fr 2fr;
-            gap: 20px;
-            margin-top: 20px;
+            gap: 15px;
+            margin-top: 10px;
         }
         
         .signature-field {
@@ -335,14 +337,15 @@
         
         .signature-field label {
             font-weight: bold;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
             color: #2d3748;
+            font-size: 11px;
         }
         
         .signature-line {
             border-bottom: 2px solid #2d3748;
-            min-height: 60px;
-            padding-top: 40px;
+            min-height: 40px;
+            padding-top: 20px;
         }
         
         .button-group {
@@ -463,16 +466,22 @@
             display: none;
         }
         
+        .print-summary h2 {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        
         .print-summary table {
             width: 100%;
             border-collapse: collapse;
-            margin: 20px 0;
+            margin: 10px 0;
+            font-size: 12px;
         }
         
         .print-summary th,
         .print-summary td {
             border: 1px solid #2d3748;
-            padding: 10px;
+            padding: 6px;
             text-align: left;
         }
         
@@ -480,11 +489,24 @@
             background-color: #4a5568;
             color: white;
             font-weight: bold;
+            font-size: 11px;
         }
         
         .print-summary .total-row {
             background-color: #f7fafc;
             font-weight: bold;
+        }
+        
+        .print-summary .info-box {
+            background: #f7fafc;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 11px;
+        }
+        
+        .print-summary .info-box p {
+            margin: 2px 0;
         }
         
         @media print {
@@ -635,12 +657,12 @@
                 </div>
                 
                 <div class="print-summary" id="printSummary">
-                    <h2 style="color: #2d3748; margin-bottom: 20px;">Bestellzusammenfassung</h2>
-                    <div style="background: #f7fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                        <p style="margin: 5px 0;"><strong>Name:</strong> <span id="printName"></span></p>
-                        <p style="margin: 5px 0;"><strong>Klasse:</strong> <span id="printClass"></span></p>
-                        <p style="margin: 5px 0;"><strong>E-Mail:</strong> <span id="printEmail"></span></p>
-                        <p style="margin: 5px 0;"><strong>Bestelldatum:</strong> <span id="printDate"></span></p>
+                    <h2 style="color: #2d3748; margin-bottom: 10px;">Bestellzusammenfassung</h2>
+                    <div class="info-box" style="background: #f7fafc; padding: 8px; border-radius: 4px; margin-bottom: 10px; font-size: 11px;">
+                        <p style="margin: 2px 0;"><strong>Name:</strong> <span id="printName"></span></p>
+                        <p style="margin: 2px 0;"><strong>Klasse:</strong> <span id="printClass"></span></p>
+                        <p style="margin: 2px 0;"><strong>E-Mail:</strong> <span id="printEmail"></span></p>
+                        <p style="margin: 2px 0;"><strong>Bestelldatum:</strong> <span id="printDate"></span></p>
                     </div>
                     <table id="printOrderTable"></table>
                 </div>
@@ -650,10 +672,8 @@
                     <div class="warning" id="signatureWarning">
                         Diese Bestellung ist nur gültig, wenn sie ausgedruckt, unterschrieben und bis spätestens im Sekretariat abgegeben wird!
                     </div>
-                    <p style="margin-bottom: 20px;">
-                        <strong>Abgabe:</strong> Sekretariat<br>
-                        <strong>E-Mail:</strong> k.knodel@bze-aue.de<br>
-                        <strong>Fax:</strong> 03772 22638
+                    <p style="margin-bottom: 10px; font-size: 11px;">
+                        <strong>Abgabe:</strong> Sekretariat | <strong>E-Mail:</strong> k.knodel@bze-aue.de | <strong>Fax:</strong> 03772 22638
                     </p>
                     <div class="signature-fields">
                         <div class="signature-field">
