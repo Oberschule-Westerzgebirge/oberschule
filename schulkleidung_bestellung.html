@@ -1030,7 +1030,7 @@
             products.forEach((product, index) => {
                 allColors.forEach(color => {
                     product.sizes.forEach(size => {
-                        const qtyInput = document.getElementById(`qty_${index}_${color}_${size}`);
+                       const qtyInput = document.getElementById(`qty_${index}_${color}_${size}`);
                         
                         if (qtyInput && !qtyInput.disabled) {
                             const qty = parseInt(qtyInput.value) || 0;
