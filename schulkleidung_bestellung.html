@@ -1128,40 +1128,51 @@
         });
         
         function preparePrintSummary(orderData, orderItems) {
-            // Fülle die Kundeninfos
-            document.getElementById('printName').textContent = orderData.name;
-            document.getElementById('printClass').textContent = orderData.klasse;
-            document.getElementById('printEmail').textContent = orderData.email;
-            document.getElementById('printDate').textContent = new Date().toLocaleString('de-DE');
-            
-            // Erstelle die Tabelle mit bestellten Artikeln
-            let tableHTML = '<thead><tr>';
-            tableHTML += '<th>Artikel</th>';
-            tableHTML += '<th>Größe</th>';
-            tableHTML += '<th>Farbe</th>';
-            tableHTML += '<th>Anzahl</th>';
-            tableHTML += '<th>Einzelpreis</th>';
-            tableHTML += '<th>Gesamtpreis</th>';
-            tableHTML += '</tr></thead><tbody>';
-            
-            orderItems.forEach(item => {
-                tableHTML += '<tr>';
-                tableHTML += '<td>' + item.name + '</td>';
-                tableHTML += '<td>' + item.größe + '</td>';
-                tableHTML += '<td>' + item.farbe + '</td>';
-                tableHTML += '<td>' + item.anzahl + '</td>';
-                tableHTML += '<td>' + item.preis.toFixed(2) + ' €</td>';
-                tableHTML += '<td><strong>' + item.gesamt.toFixed(2) + ' €</strong></td>';
-                tableHTML += '</tr>';
-            });
-            
-            tableHTML += '<tr class="total-row">';
-            tableHTML += '<td colspan="5" style="text-align: right;">GESAMTBETRAG:</td>';
-            tableHTML += '<td style="color: #667eea; font-size: 18px;"><strong>' + orderData.gesamtbetrag.toFixed(2) + ' €</strong></td>';
-            tableHTML += '</tr></tbody>';
-            
-            document.getElementById('printOrderTable').innerHTML = tableHTML;
-        }
+    // Fülle die Kundeninfos
+    document.getElementById('printName').textContent = orderData.name;
+    document.getElementById('printClass').textContent = orderData.klasse;
+    document.getElementById('printEmail').textContent = orderData.email;
+    
+    // Formatiere das Datum schön
+    const now = new Date();
+    const dateString = now.toLocaleDateString('de-DE', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    }) + ' um ' + now.toLocaleTimeString('de-DE', {
+        hour: '2-digit',
+        minute: '2-digit'
+    }) + ' Uhr';
+    document.getElementById('printDate').textContent = dateString;
+    
+    // Erstelle die Tabelle mit bestellten Artikeln
+    let tableHTML = '<thead><tr>';
+    tableHTML += '<th>Artikel</th>';
+    tableHTML += '<th>Größe</th>';
+    tableHTML += '<th>Farbe</th>';
+    tableHTML += '<th>Anzahl</th>';
+    tableHTML += '<th>Einzelpreis</th>';
+    tableHTML += '<th>Gesamtpreis</th>';
+    tableHTML += '</tr></thead><tbody>';
+    
+    orderItems.forEach(item => {
+        tableHTML += '<tr>';
+        tableHTML += '<td>' + (item['Artikel-Name'] || item.name || 'Artikel') + '</td>';
+        tableHTML += '<td>' + item.größe + '</td>';
+        tableHTML += '<td>' + item.farbe + '</td>';
+        tableHTML += '<td>' + item.anzahl + '</td>';
+        tableHTML += '<td>' + item.preis.toFixed(2) + ' €</td>';
+        tableHTML += '<td><strong>' + item.gesamt.toFixed(2) + ' €</strong></td>';
+        tableHTML += '</tr>';
+    });
+    
+    tableHTML += '<tr class="total-row">';
+    tableHTML += '<td colspan="5" style="text-align: right;">GESAMTBETRAG:</td>';
+    tableHTML += '<td style="color: #667eea; font-size: 18px;"><strong>' + orderData.gesamtbetrag.toFixed(2) + ' €</strong></td>';
+    tableHTML += '</tr></tbody>';
+    
+    document.getElementById('printOrderTable').innerHTML = tableHTML;
+}
 
         // Echtzeit-Überprüfung der E-Mail-Felder
         document.getElementById('emailConfirm').addEventListener('input', function() {
