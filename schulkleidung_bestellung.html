@@ -518,7 +518,7 @@
     .button-group,
     .deadline,
     .form-group,
-    .info-box,  /* <-- Fügen Sie diese Zeile wieder hinzu */
+    .info-box,
     .success-message,
     .products-section,
     .total-section,
@@ -526,7 +526,15 @@
         display: none !important;
     }
     
-    /* Info-Box in der Druckansicht sichtbar machen */
+    .container {
+        box-shadow: none;
+    }
+    
+    .print-summary {
+        display: block !important;
+        padding: 20px;
+    }
+    
     .print-summary .info-box {
         display: block !important;
         background: #f7fafc;
@@ -535,6 +543,12 @@
         margin-bottom: 15px;
         font-size: 12px;
         border: 1px solid #cbd5e0;
+    }
+    
+    .signature-section {
+        display: block !important;
+        break-inside: avoid;
+        page-break-inside: avoid;
     }
 }
             .container {
