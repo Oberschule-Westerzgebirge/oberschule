@@ -509,23 +509,32 @@
             margin: 2px 0;
         }
         
-        @media print {
-            body {
-                background: white;
-                padding: 0;
-            }
-            
-            .button-group,
-            .deadline,
-            .form-group,
-            .info-box,
-            .success-message,
-            .products-section,
-            .total-section,
-            .color-legend {
-                display: none !important;
-            }
-            
+       @media print {
+    body {
+        background: white;
+        padding: 0;
+    }
+    
+    .button-group,
+    .deadline,
+    .form-group,
+    .success-message,
+    .products-section,
+    .total-section,
+    .color-legend {
+        display: none !important;
+    }
+    
+    /* Info-Box in der Druckansicht sichtbar machen */
+    .print-summary .info-box {
+        display: block !important;
+        background: #f7fafc;
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 15px;
+        font-size: 12px;
+        border: 1px solid #cbd5e0;
+    }
             .container {
                 box-shadow: none;
             }
