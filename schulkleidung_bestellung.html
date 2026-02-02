@@ -616,6 +616,12 @@
             <div class="success-message" id="successMessage">
                 <h3>✅ Bestellung erfolgreich übermittelt!</h3>
                 <p>Die Bestellung wurde gespeichert und Sie erhalten in Kürze eine Bestätigungs-E-Mail.</p>
+                <p><strong>Nächste Schritte:</strong></p>
+                <ol style="margin: 10px 0;">
+                    <li>Drucken Sie diese Seite aus (Button unten)</li>
+                    <li>Tragen Sie Datum ein und unterschreiben Sie</li>
+                    <li>Geben Sie die Bestellung bis <span id="deadlineInSuccess"></span> im Sekretariat ab</li>
+                </ol>
                 <button class="print-button" onclick="window.print()">🖨️ Jetzt ausdrucken</button>
             </div>
             
@@ -680,7 +686,26 @@
                 <table id="printOrderTable"></table>
             </div>
             
-           
+            <!-- UNTERSCHRIFTEN-SEKTION: Initial versteckt, nur beim Drucken sichtbar -->
+            <div class="signature-section" id="signatureSection">
+                <h3>⚠️ WICHTIG: Bestellung rechtsgültig machen</h3>
+                <div class="warning" id="signatureWarning">
+                    Diese Bestellung ist nur gültig, wenn sie ausgedruckt, unterschrieben und bis spätestens im Sekretariat abgegeben wird!
+                </div>
+                <p style="margin-bottom: 10px; font-size: 11px;">
+                    <strong>Abgabe:</strong> Sekretariat | <strong>E-Mail:</strong> oswe.schulkleidung@gmail.com | <strong>Fax:</strong> 03772 22638
+                </p>
+                <div class="signature-fields">
+                    <div class="signature-field">
+                        <label>Datum:</label>
+                        <div class="signature-line"></div>
+                    </div>
+                    <div class="signature-field">
+                        <label>Unterschrift Erziehungsberechtigter:</label>
+                        <div class="signature-line"></div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
