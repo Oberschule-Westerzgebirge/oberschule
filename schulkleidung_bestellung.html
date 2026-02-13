@@ -296,59 +296,6 @@
             font-weight: bold;
         }
         
-        /* KRITISCH: Diese Sektionen sind initial versteckt */
-        .signature-section {
-            display: none;
-            margin-top: 20px;
-            padding: 15px;
-            background: #fff5e6;
-            border: 2px solid #f59e0b;
-            border-radius: 6px;
-            font-size: 12px;
-        }
-        
-        .signature-section h3 {
-            color: #d97706;
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
-        
-        .signature-section .warning {
-            background: #fed7d7;
-            padding: 10px;
-            border-left: 3px solid #fc8181;
-            margin-bottom: 10px;
-            border-radius: 4px;
-            color: #c53030;
-            font-weight: bold;
-            font-size: 11px;
-        }
-        
-        .signature-fields {
-            display: grid;
-            grid-template-columns: 1fr 2fr;
-            gap: 15px;
-            margin-top: 10px;
-        }
-        
-        .signature-field {
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .signature-field label {
-            font-weight: bold;
-            margin-bottom: 5px;
-            color: #2d3748;
-            font-size: 11px;
-        }
-        
-        .signature-line {
-            border-bottom: 2px solid #2d3748;
-            min-height: 40px;
-            padding-top: 20px;
-        }
-        
         .button-group {
             display: flex;
             gap: 15px;
@@ -463,7 +410,6 @@
             background: #5568d3;
         }
         
-        /* KRITISCH: Print-Summary ist initial versteckt */
         .print-summary {
             display: none;
         }
@@ -471,7 +417,6 @@
         .print-summary h2 {
             font-size: 18px;
             margin-bottom: 10px;
-            color: #2d3748;
         }
         
         .print-summary table {
@@ -506,25 +451,22 @@
             border-radius: 4px;
             margin-bottom: 10px;
             font-size: 11px;
-            border: 1px solid #cbd5e0;
         }
         
         .print-summary .info-box p {
             margin: 2px 0;
         }
         
-        /* DRUCK-STILE */
         @media print {
             body {
                 background: white;
                 padding: 0;
             }
             
-            /* Verstecke alle nicht benötigten Elemente beim Drucken */
             .button-group,
             .deadline,
             .form-group,
-            .info-box:not(.print-summary .info-box),
+            .info-box,
             .success-message,
             .products-section,
             .total-section,
@@ -536,7 +478,6 @@
                 box-shadow: none;
             }
             
-            /* Zeige die Druckzusammenfassung */
             .print-summary {
                 display: block !important;
                 padding: 20px;
@@ -544,13 +485,12 @@
             
             .print-summary .info-box {
                 display: block !important;
-            }
-            
-            /* Zeige die Unterschriftensektion */
-            .signature-section {
-                display: block !important;
-                break-inside: avoid;
-                page-break-inside: avoid;
+                background: #f7fafc;
+                padding: 12px;
+                border-radius: 4px;
+                margin-bottom: 15px;
+                font-size: 12px;
+                border: 1px solid #cbd5e0;
             }
         }
         
@@ -616,12 +556,7 @@
             <div class="success-message" id="successMessage">
                 <h3>✅ Bestellung erfolgreich übermittelt!</h3>
                 <p>Die Bestellung wurde gespeichert und Sie erhalten in Kürze eine Bestätigungs-E-Mail.</p>
-                <p><strong>Nächste Schritte:</strong></p>
-                <ol style="margin: 10px 0;">
-                    <li>Drucken Sie diese Seite aus (Button unten)</li>
-                    <li>Tragen Sie Datum ein und unterschreiben Sie</li>
-                    <li>Geben Sie die Bestellung bis <span id="deadlineInSuccess"></span> im Sekretariat ab</li>
-                </ol>
+                <p>Drucken Sie diese Seite für Ihre Unterlagen aus.</p>
                 <button class="print-button" onclick="window.print()">🖨️ Jetzt ausdrucken</button>
             </div>
             
@@ -668,44 +603,22 @@
                     <div class="total-amount" id="totalAmount">0,00 €</div>
                 </div>
                 
+                <div class="print-summary" id="printSummary">
+                    <h2 style="color: #2d3748; margin-bottom: 10px;">Bestellzusammenfassung</h2>
+                    <div class="info-box" style="background: #f7fafc; padding: 8px; border-radius: 4px; margin-bottom: 10px; font-size: 11px;">
+                        <p style="margin: 2px 0;"><strong>Name:</strong> <span id="printName"></span></p>
+                        <p style="margin: 2px 0;"><strong>Klasse:</strong> <span id="printClass"></span></p>
+                        <p style="margin: 2px 0;"><strong>E-Mail:</strong> <span id="printEmail"></span></p>
+                        <p style="margin: 2px 0;"><strong>Bestelldatum:</strong> <span id="printDate"></span></p>
+                    </div>
+                    <table id="printOrderTable"></table>
+                </div>
+                
                 <div class="button-group">
                     <button type="button" class="btn btn-secondary" onclick="resetForm()">Zurücksetzen</button>
                     <button type="submit" class="btn btn-primary">Bestellung absenden</button>
                 </div>
             </form>
-            
-            <!-- DRUCK-ZUSAMMENFASSUNG: Initial versteckt, nur beim Drucken sichtbar -->
-            <div class="print-summary" id="printSummary">
-                <h2>Bestellzusammenfassung</h2>
-                <div class="info-box">
-                    <p><strong>Name:</strong> <span id="printName"></span></p>
-                    <p><strong>Klasse:</strong> <span id="printClass"></span></p>
-                    <p><strong>E-Mail:</strong> <span id="printEmail"></span></p>
-                    <p><strong>Bestelldatum:</strong> <span id="printDate"></span></p>
-                </div>
-                <table id="printOrderTable"></table>
-            </div>
-            
-            <!-- UNTERSCHRIFTEN-SEKTION: Initial versteckt, nur beim Drucken sichtbar -->
-            <div class="signature-section" id="signatureSection">
-                <h3>⚠️ WICHTIG: Bestellung rechtsgültig machen</h3>
-                <div class="warning" id="signatureWarning">
-                    Diese Bestellung ist nur gültig, wenn sie ausgedruckt, unterschrieben und bis spätestens im Sekretariat abgegeben wird!
-                </div>
-                <p style="margin-bottom: 10px; font-size: 11px;">
-                    <strong>Abgabe:</strong> Sekretariat | <strong>E-Mail:</strong> oswe.schulkleidung@gmail.com | <strong>Fax:</strong> 03772 22638
-                </p>
-                <div class="signature-fields">
-                    <div class="signature-field">
-                        <label>Datum:</label>
-                        <div class="signature-line"></div>
-                    </div>
-                    <div class="signature-field">
-                        <label>Unterschrift Erziehungsberechtigter:</label>
-                        <div class="signature-line"></div>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -735,22 +648,18 @@
 
         async function loadArtikel() {
             try {
-                // Lade Einstellungen
                 const einstellungenResponse = await fetch(scriptURL + '?action=getEinstellungen');
                 const einstellungenText = await einstellungenResponse.text();
                 einstellungen = JSON.parse(einstellungenText);
                 
-                // Prüfe ob Bestellungen geöffnet sind
                 if (!checkIfOpen()) {
                     document.getElementById('loadingMessage').style.display = 'none';
                     document.getElementById('closedMessage').classList.add('show');
                     return;
                 }
                 
-                // Aktualisiere Header und Deadline mit den geladenen Daten
                 updateHeaderAndDeadline();
                 
-                // Lade Artikel
                 const artikelResponse = await fetch(scriptURL + '?action=getArtikel');
                 const artikelText = await artikelResponse.text();
                 const artikelData = JSON.parse(artikelText);
@@ -765,7 +674,6 @@
                 products.forEach(p => p.colors.forEach(c => colorSet.add(c)));
                 allColors = Array.from(colorSet);
                 
-                // Lade Schüler
                 const schuelerResponse = await fetch(scriptURL + '?action=getSchueler');
                 const schuelerText = await schuelerResponse.text();
                 schuelerData = JSON.parse(schuelerText);
@@ -791,7 +699,6 @@
             
             const now = new Date();
             
-            // Wenn Start-Datum gesetzt ist, prüfe ob wir schon im Zeitraum sind
             if (einstellungen.startDatum) {
                 const startDate = new Date(einstellungen.startDatum);
                 if (now < startDate) {
@@ -802,7 +709,6 @@
                 }
             }
             
-            // Wenn End-Datum gesetzt ist, prüfe ob wir noch im Zeitraum sind
             if (einstellungen.endDatum) {
                 const endDate = new Date(einstellungen.endDatum);
                 if (now > endDate) {
@@ -816,7 +722,6 @@
         }
         
         function formatDate(dateString) {
-            // Konvertiere das Datum von ISO-Format in DD.MM.YYYY
             const date = new Date(dateString);
             const day = String(date.getDate()).padStart(2, '0');
             const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -825,23 +730,14 @@
         }
         
         function updateHeaderAndDeadline() {
-            // Aktualisiere Schuljahr im Header
             if (einstellungen.schuljahr) {
                 document.getElementById('schuljahrDisplay').textContent = 'Schuljahr ' + einstellungen.schuljahr;
             }
             
-            // Aktualisiere Abgabetermin
             if (einstellungen.abgabetermin) {
                 const deadline = formatDate(einstellungen.abgabetermin);
                 document.getElementById('deadlineDisplay').innerHTML = 
                     `⚠️ Letzter Abgabetermin: ${deadline} - Spätere Abgabe kann bei Bestellung nicht berücksichtigt werden! Bestellung verpflichtet zum Kauf!`;
-                
-                // Aktualisiere auch in der Erfolgs-Nachricht
-                document.getElementById('deadlineInSuccess').textContent = deadline;
-                
-                // Aktualisiere in der Unterschriften-Sektion
-                document.getElementById('signatureWarning').innerHTML = 
-                    `Diese Bestellung ist nur gültig, wenn sie ausgedruckt, unterschrieben und bis spätestens ${deadline} im Sekretariat abgegeben wird!`;
             }
         }
         
@@ -945,7 +841,6 @@
                     cardHTML += '<span>' + color.charAt(0).toUpperCase() + color.slice(1) + '</span>';
                     cardHTML += '</div>';
                     
-                    // Größen-Eingabefelder
                     cardHTML += '<div class="size-inputs">';
                     product.sizes.forEach(size => {
                         cardHTML += '<div class="size-input-group">';
@@ -995,7 +890,6 @@
                 document.getElementById(`lineTotal_${index}`).textContent = lineTotal.toFixed(2) + ' €';
                 document.getElementById(`itemCount_${index}`).textContent = itemCount + ' Stück';
                 
-                // Hervorhebung wenn Artikel bestellt wurden
                 const countElement = document.getElementById(`itemCount_${index}`);
                 if (itemCount > 0) {
                     countElement.style.color = '#38a169';
@@ -1027,7 +921,6 @@
             const email = document.getElementById('email').value;
             const emailConfirm = document.getElementById('emailConfirm').value;
             
-            // Überprüfe, ob beide E-Mail-Adressen übereinstimmen
             if (email !== emailConfirm) {
                 document.getElementById('emailMatchError').style.display = 'block';
                 document.getElementById('emailConfirm').focus();
@@ -1035,7 +928,6 @@
                 return;
             }
             
-            // Verstecke Fehlermeldung, falls sie angezeigt war
             document.getElementById('emailMatchError').style.display = 'none';
             
             const orderItems = [];
@@ -1080,8 +972,6 @@
                 gesamtbetrag: totalAmount
             };
             
-            console.log('Bestellung:', orderData);
-            
             const submitBtn = document.querySelector('.btn-primary');
             submitBtn.disabled = true;
             submitBtn.textContent = 'Wird gesendet...';
@@ -1106,7 +996,6 @@
                     alert('✅ Bestellung erfolgreich übermittelt!\n\nSie erhalten gleich eine E-Mail.\n\nKlicken Sie auf den Druck-Button oder drücken Sie Strg+P zum Ausdrucken.');
                     window.scrollTo(0, 0);
                     
-                    // Formular zurücksetzen nach erfolgreicher Bestellung
                     document.getElementById('orderForm').reset();
                     document.getElementById('studentClass').selectedIndex = 0;
                     document.getElementById('studentName').innerHTML = '<option value="">Erst Klasse wählen...</option>';
@@ -1125,7 +1014,6 @@
                     alert('✅ Bestellung erfolgreich übermittelt!\n\nSie erhalten gleich eine E-Mail.\n\nKlicken Sie auf den Druck-Button oder drücken Sie Strg+P zum Ausdrucken.');
                     window.scrollTo(0, 0);
                     
-                    // Formular zurücksetzen nach erfolgreicher Bestellung
                     document.getElementById('orderForm').reset();
                     document.getElementById('studentClass').selectedIndex = 0;
                     document.getElementById('studentName').innerHTML = '<option value="">Erst Klasse wählen...</option>';
@@ -1141,16 +1029,10 @@
         });
         
         function preparePrintSummary(orderData, orderItems) {
-            // KRITISCH: Zeige die Druck-Sektion nur nach erfolgreicher Bestellung an
-            document.getElementById('printSummary').style.display = 'block';
-            document.getElementById('signatureSection').style.display = 'block';
-            
-            // Fülle die Kundeninfos
             document.getElementById('printName').textContent = orderData.name;
             document.getElementById('printClass').textContent = orderData.klasse;
             document.getElementById('printEmail').textContent = orderData.email;
             
-            // Formatiere das Datum schön
             const now = new Date();
             const dateString = now.toLocaleDateString('de-DE', {
                 day: '2-digit',
@@ -1162,7 +1044,6 @@
             }) + ' Uhr';
             document.getElementById('printDate').textContent = dateString;
             
-            // Erstelle die Tabelle mit bestellten Artikeln
             let tableHTML = '<thead><tr>';
             tableHTML += '<th>Artikel</th>';
             tableHTML += '<th>Größe</th>';
@@ -1191,7 +1072,6 @@
             document.getElementById('printOrderTable').innerHTML = tableHTML;
         }
 
-        // Echtzeit-Überprüfung der E-Mail-Felder
         document.getElementById('emailConfirm').addEventListener('input', function() {
             const email = document.getElementById('email').value;
             const emailConfirm = this.value;
