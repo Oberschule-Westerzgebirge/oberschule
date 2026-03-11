@@ -476,6 +476,47 @@
                 settingsData = data.settings;
                 availabilityData = data.availability || {};
                 
+                // Fallback: Rohe Schlüssel aus der Tabelle als camelCase verfügbar machen
+                if (settingsData['Max Tickets pro Bestellung'] !== undefined && settingsData.maxTicketsProBestellung === undefined) {
+                    settingsData.maxTicketsProBestellung = parseInt(settingsData['Max Tickets pro Bestellung']) || 10;
+                }
+                if (settingsData['Bestellung offen'] !== undefined && settingsData.bestellungOffen === undefined) {
+                    settingsData.bestellungOffen = settingsData['Bestellung offen'];
+                }
+                if (settingsData['Start-Datum'] !== undefined && settingsData.startDatum === undefined) {
+                    settingsData.startDatum = settingsData['Start-Datum'];
+                }
+                if (settingsData['End-Datum'] !== undefined && settingsData.endDatum === undefined) {
+                    settingsData.endDatum = settingsData['End-Datum'];
+                }
+                if (settingsData['Titel'] !== undefined && settingsData.titel === undefined) {
+                    settingsData.titel = settingsData['Titel'];
+                }
+                if (settingsData['Aufführungsdatum'] !== undefined && settingsData.aufführungsdatum === undefined) {
+                    settingsData.aufführungsdatum = settingsData['Aufführungsdatum'];
+                }
+                if (settingsData['Allgemeine Informationen'] !== undefined && settingsData.allgemeineInfo === undefined) {
+                    settingsData.allgemeineInfo = settingsData['Allgemeine Informationen'];
+                }
+                if (settingsData['Vorstellung 1'] !== undefined && settingsData.vorstellung1 === undefined) {
+                    settingsData.vorstellung1 = settingsData['Vorstellung 1'];
+                }
+                if (settingsData['Vorstellung 2'] !== undefined && settingsData.vorstellung2 === undefined) {
+                    settingsData.vorstellung2 = settingsData['Vorstellung 2'];
+                }
+                if (settingsData['Ticketpreis'] !== undefined && settingsData.ticketpreis === undefined) {
+                    settingsData.ticketpreis = parseFloat((settingsData['Ticketpreis']||'').toString().replace('€','').replace(',','.')) || 0;
+                }
+                if (settingsData['Schuljahr'] !== undefined && settingsData.schuljahr === undefined) {
+                    settingsData.schuljahr = settingsData['Schuljahr'];
+                }
+                if (settingsData['Kapazität Vorstellung 1'] !== undefined && settingsData.kapazitaetVorstellung1 === undefined) {
+                    settingsData.kapazitaetVorstellung1 = parseInt(settingsData['Kapazität Vorstellung 1']) || 0;
+                }
+                if (settingsData['Kapazität Vorstellung 2'] !== undefined && settingsData.kapazitaetVorstellung2 === undefined) {
+                    settingsData.kapazitaetVorstellung2 = parseInt(settingsData['Kapazität Vorstellung 2']) || 0;
+                }
+                
                 debug('Schülerdaten:', studentsData);
                 debug('Einstellungen:', settingsData);
                 debug('Verfügbarkeit:', availabilityData);
