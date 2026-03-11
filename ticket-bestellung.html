@@ -788,11 +788,16 @@
                 document.getElementById('anzahlHinweis').style.color = '#e74c3c';
                 document.getElementById('anzahlHinweis').style.fontWeight = 'bold';
             } else {
-                document.getElementById('maxAnzahlText').textContent = maxProBestellung;
-                document.getElementById('anzahlHinweis').innerHTML = 
-                    `Max. <span id="maxAnzahlText">${maxProBestellung}</span> Tickets pro Bestellung`;
-                document.getElementById('anzahlHinweis').style.color = '#666';
-                document.getElementById('anzahlHinweis').style.fontWeight = 'normal';
+                if (maxProBestellung < 9999) {
+                    document.getElementById('maxAnzahlText').textContent = maxProBestellung;
+                    document.getElementById('anzahlHinweis').innerHTML =
+                        `Max. <span id="maxAnzahlText">${maxProBestellung}</span> Tickets pro Bestellung`;
+                    document.getElementById('anzahlHinweis').style.display = 'block';
+                    document.getElementById('anzahlHinweis').style.color = '#666';
+                    document.getElementById('anzahlHinweis').style.fontWeight = 'normal';
+                } else {
+                    document.getElementById('anzahlHinweis').style.display = 'none';
+                }
             }
             
             // Wenn aktueller Wert größer als verfügbar, zurücksetzen
