@@ -491,6 +491,10 @@
                     closedMessage.style.display = 'block';
                     // Bestellzeitraum anzeigen wenn geschlossen
                     document.getElementById('bestellzeitraumInfo').style.display = 'block';
+                    // Formular, Checkbox und allg. Infos verstecken
+                    form.style.display = 'none';
+                    bestaetigungBox.style.display = 'none';
+                    document.getElementById('allgemeineInfo').style.display = 'none';
                     debug('Bestellung ist geschlossen');
                     return;
                 }
@@ -517,6 +521,15 @@
                 
                 // Klassen-Dropdown füllen
                 populateKlassen();
+
+                // Max Tickets sofort setzen (nicht erst bei Vorstellungsauswahl)
+                const maxTicketsInit = settingsData.maxTicketsProBestellung || 10;
+                anzahlInput.max = maxTicketsInit;
+                anzahl2Input.max = maxTicketsInit;
+                document.getElementById('maxAnzahlText').textContent = maxTicketsInit;
+                document.getElementById('maxAnzahlText2').textContent = maxTicketsInit;
+                document.getElementById('anzahlHinweis').style.display = 'block';
+
                 debug('Initialisierung erfolgreich abgeschlossen');
                 
             } catch (error) {
@@ -573,7 +586,7 @@
                 const option1 = document.createElement('option');
                 option1.id = 'vorstellung1';
                 option1.value = settingsData.vorstellung1;
-                const verfuegbar1 = availabilityData.vorstellung1Available || 0;
+                const verfuegbar1 = availabilityData['vorstellung1Available'] || 0;
                 option1.textContent = `${settingsData.vorstellung1} (noch ${verfuegbar1} verfügbar)`;
                 vorstellungSelect.appendChild(option1);
             }
@@ -581,7 +594,7 @@
                 const option2 = document.createElement('option');
                 option2.id = 'vorstellung2';
                 option2.value = settingsData.vorstellung2;
-                const verfuegbar2 = availabilityData.vorstellung2Available || 0;
+                const verfuegbar2 = availabilityData['vorstellung2Available'] || 0;
                 option2.textContent = `${settingsData.vorstellung2} (noch ${verfuegbar2} verfügbar)`;
                 vorstellungSelect.appendChild(option2);
             }
@@ -723,12 +736,12 @@
             if (selectedVorstellung === settingsData.vorstellung1) {
                 maxVerfuegbar = Math.min(
                     settingsData.maxTicketsProBestellung || 10,
-                    availabilityData.vorstellung1Available || 0
+                    availabilityData['vorstellung1Available'] || 0
                 );
             } else if (selectedVorstellung === settingsData.vorstellung2) {
                 maxVerfuegbar = Math.min(
                     settingsData.maxTicketsProBestellung || 10,
-                    availabilityData.vorstellung2Available || 0
+                    availabilityData['vorstellung2Available'] || 0
                 );
             }
             
@@ -870,9 +883,9 @@
             let verfuegbar = 0;
             
             if (selectedVorstellung === settingsData.vorstellung1) {
-                verfuegbar = availabilityData.vorstellung1Available || 0;
+                verfuegbar = availabilityData['vorstellung1Available'] || 0;
             } else if (selectedVorstellung === settingsData.vorstellung2) {
-                verfuegbar = availabilityData.vorstellung2Available || 0;
+                verfuegbar = availabilityData['vorstellung2Available'] || 0;
             }
             
             let gesamtAnzahl = anzahl;
