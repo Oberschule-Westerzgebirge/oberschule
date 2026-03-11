@@ -316,11 +316,11 @@
             <div class="form-group">
                 <label for="anzahl">Anzahl Tickets *</label>
                 <input type="number" id="anzahl" name="anzahl" required 
-                       min="1" max="9999" value="1"
+                       min="1" max="10" value="1"
                        placeholder="Anzahl">
                 <div class="error" id="anzahlError">Bitte geben Sie eine Anzahl zwischen 1 und 10 ein.</div>
-                <div style="font-size: 12px; color: #666; margin-top: 5px; display:none;" id="anzahlHinweis">
-                    Max. <span id="maxAnzahlText"></span> Tickets pro Bestellung
+                <div style="font-size: 12px; color: #e74c3c; margin-top: 5px; display:none; font-weight:bold;" id="anzahlHinweis">
+                    Max. <span id="maxAnzahlText">10</span> Tickets pro Bestellung
                 </div>
             </div>
             
@@ -351,10 +351,10 @@
                 <div class="form-group">
                     <label for="anzahl2">Anzahl Tickets für diese Person *</label>
                     <input type="number" id="anzahl2" name="anzahl2" 
-                           min="1" max="9999" value="1"
+                           min="1" max="10" value="1"
                            placeholder="Anzahl">
-                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
-                        Max. <span id="maxAnzahlText2"></span> Tickets
+                    <div style="font-size: 12px; color: #e74c3c; margin-top: 5px; display:none; font-weight:bold;" id="anzahlHinweis2">
+                        Max. <span id="maxAnzahlText2">10</span> Tickets
                     </div>
                 </div>
             </div>
@@ -454,7 +454,7 @@
                 debug('Lade Daten von: ' + SCRIPT_URL);
                 
                 // Daten vom Google Apps Script laden
-                const response = await fetch(SCRIPT_URL + '?t=' + Date.now(), { cache: 'no-store' });
+                const response = await fetch(SCRIPT_URL);
                 debug('Response erhalten, Status: ' + response.status);
                 
                 if (!response.ok) {
@@ -474,21 +474,6 @@
                 
                 studentsData = data.students;
                 settingsData = data.settings;
-
-                // Rohschlüssel → camelCase mappen
-                const rawMax = (settingsData['Max Tickets pro Bestellung']||'').toString().trim();
-                settingsData.maxTicketsProBestellung = rawMax !== '' ? (parseInt(rawMax) || 9999) : 9999;
-                settingsData.bestellungOffen        = settingsData['Bestellung offen'] || '';
-                settingsData.startDatum             = settingsData['Start-Datum'] || '';
-                settingsData.endDatum               = settingsData['End-Datum'] || '';
-                settingsData.titel                  = settingsData['Titel'] || '';
-                settingsData.aufführungsdatum        = settingsData['Aufführungsdatum'] || '';
-                settingsData.allgemeineInfo         = settingsData['Allgemeine Informationen'] || '';
-                settingsData.vorstellung1           = settingsData['Vorstellung 1'] || '';
-                settingsData.vorstellung2           = settingsData['Vorstellung 2'] || '';
-                settingsData.schuljahr              = settingsData['Schuljahr'] || '';
-                const rawPreis = (settingsData['Ticketpreis']||'').toString().replace('€','').replace(',','.').trim();
-                settingsData.ticketpreis            = rawPreis !== '' ? parseFloat(rawPreis) : 0;
                 availabilityData = data.availability || {};
                 
                 debug('Schülerdaten:', studentsData);
@@ -574,7 +559,7 @@
                 `${startDatum} bis ${endDatum}`;
             
             // Max Tickets pro Bestellung setzen
-            const maxTickets = settingsData.maxTicketsProBestellung || 9999;
+            const maxTickets = settingsData.maxTicketsProBestellung || 10;
             anzahlInput.max = maxTickets;
             anzahl2Input.max = maxTickets;
             debug('Max Tickets pro Bestellung: ' + maxTickets);
@@ -613,9 +598,6 @@
             
             // Max-Anzahl-Text aktualisieren
             document.getElementById('maxAnzahlText').textContent = maxTickets;
-            document.getElementById('anzahlHinweis').style.display = maxTickets < 9999 ? 'block' : 'none';
-            if(document.getElementById('maxAnzahlText2')) document.getElementById('maxAnzahlText2').textContent = maxTickets;
-            if(document.getElementById('anzahlHinweis2')) document.getElementById('anzahlHinweis2').style.display = maxTickets < 9999 ? 'block' : 'none';
             document.getElementById('maxAnzahlText2').textContent = maxTickets;
             
             debug('Einstellungen aktualisiert');
@@ -740,12 +722,12 @@
             
             if (selectedVorstellung === settingsData.vorstellung1) {
                 maxVerfuegbar = Math.min(
-                    settingsData.maxTicketsProBestellung || 9999,
+                    settingsData.maxTicketsProBestellung || 10,
                     availabilityData.vorstellung1Available || 0
                 );
             } else if (selectedVorstellung === settingsData.vorstellung2) {
                 maxVerfuegbar = Math.min(
-                    settingsData.maxTicketsProBestellung || 9999,
+                    settingsData.maxTicketsProBestellung || 10,
                     availabilityData.vorstellung2Available || 0
                 );
             }
@@ -753,7 +735,7 @@
             anzahlInput.max = maxVerfuegbar;
             
             // Hinweistext aktualisieren
-            const maxProBestellung = settingsData.maxTicketsProBestellung || 9999;
+            const maxProBestellung = settingsData.maxTicketsProBestellung || 10;
             if (maxVerfuegbar < maxProBestellung) {
                 document.getElementById('anzahlHinweis').innerHTML = 
                     `Nur noch <strong>${maxVerfuegbar}</strong> Tickets für diese Vorstellung verfügbar`;
@@ -761,14 +743,10 @@
                 document.getElementById('anzahlHinweis').style.fontWeight = 'bold';
             } else {
                 document.getElementById('maxAnzahlText').textContent = maxProBestellung;
-                if (maxProBestellung < 9999) {
-                    document.getElementById('anzahlHinweis').innerHTML = `Max. <span id="maxAnzahlText">\${maxProBestellung}</span> Tickets pro Bestellung`;
-                    document.getElementById('anzahlHinweis').style.display = 'block';
-                    document.getElementById('anzahlHinweis').style.color = '#666';
-                    document.getElementById('anzahlHinweis').style.fontWeight = 'normal';
-                } else {
-                    document.getElementById('anzahlHinweis').style.display = 'none';
-                }
+                document.getElementById('anzahlHinweis').innerHTML = 
+                    `Max. <span id="maxAnzahlText">${maxProBestellung}</span> Tickets pro Bestellung`;
+                document.getElementById('anzahlHinweis').style.color = '#666';
+                document.getElementById('anzahlHinweis').style.fontWeight = 'normal';
             }
             
             // Wenn aktueller Wert größer als verfügbar, zurücksetzen
@@ -793,6 +771,31 @@
         }
         
         // E-Mail 1 Validierung
+        // Hinweis anzeigen wenn Anzahl die Begrenzung überschreitet
+        anzahlInput.addEventListener('input', function() {
+            const max = parseInt(this.max) || 10;
+            const val = parseInt(this.value) || 0;
+            const hinweis = document.getElementById('anzahlHinweis');
+            if (val > max) {
+                this.value = max;
+                hinweis.textContent = 'Max. ' + max + ' Tickets pro Bestellung';
+                hinweis.style.display = 'block';
+            } else {
+                hinweis.style.display = 'none';
+            }
+        });
+        anzahl2Input.addEventListener('input', function() {
+            const max = parseInt(this.max) || 10;
+            const val = parseInt(this.value) || 0;
+            const hinweis2 = document.getElementById('anzahlHinweis2');
+            if (val > max) {
+                this.value = max;
+                if(hinweis2) { hinweis2.textContent = 'Max. ' + max + ' Tickets'; hinweis2.style.display = 'block'; }
+            } else {
+                if(hinweis2) hinweis2.style.display = 'none';
+            }
+        });
+
         email1Input.addEventListener('blur', function() {
             const email1Error = document.getElementById('email1Error');
             
@@ -850,7 +853,7 @@
             }
             
             const anzahl = parseInt(anzahlInput.value);
-            const maxTickets = settingsData.maxTicketsProBestellung || 9999;
+            const maxTickets = settingsData.maxTicketsProBestellung || 10;
             
             if (isNaN(anzahl) || anzahl < 1) {
                 alert('Bitte geben Sie eine gültige Anzahl ein.');
