@@ -318,7 +318,7 @@
                 <input type="number" id="anzahl" name="anzahl" required 
                        min="1" max="9999" value="1"
                        placeholder="Anzahl">
-                <div class="error" id="anzahlError">Bitte geben Sie eine gültige Anzahl ein.</div>
+                <div class="error" id="anzahlError">Bitte geben Sie eine Anzahl zwischen 1 und 10 ein.</div>
                 <div style="font-size: 12px; color: #666; margin-top: 5px; display:none;" id="anzahlHinweis">
                     Max. <span id="maxAnzahlText"></span> Tickets pro Bestellung
                 </div>
@@ -353,7 +353,7 @@
                     <input type="number" id="anzahl2" name="anzahl2" 
                            min="1" max="9999" value="1"
                            placeholder="Anzahl">
-                    <div style="font-size: 12px; color: #666; margin-top: 5px; display:none;" id="anzahlHinweis2">
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
                         Max. <span id="maxAnzahlText2"></span> Tickets
                     </div>
                 </div>
@@ -474,49 +474,17 @@
                 
                 studentsData = data.students;
                 settingsData = data.settings;
+                // Wenn maxTicketsProBestellung nicht gesetzt oder 0, auf 9999 setzen
+                if (!settingsData.maxTicketsProBestellung || settingsData.maxTicketsProBestellung === 0) {
+                    settingsData.maxTicketsProBestellung = 9999;
+                }
+                const rawMaxVal = settingsData['Max Tickets pro Bestellung'];
+                if (!rawMaxVal || rawMaxVal.toString().trim() === '') {
+                    settingsData.maxTicketsProBestellung = 9999;
+                } else {
+                    settingsData.maxTicketsProBestellung = parseInt(rawMaxVal) || 9999;
+                }
                 availabilityData = data.availability || {};
-                
-                // Fallback: Rohe Schlüssel aus der Tabelle als camelCase verfügbar machen
-                if (settingsData['Max Tickets pro Bestellung'] !== undefined && settingsData.maxTicketsProBestellung === undefined) {
-                    const rawMax = settingsData['Max Tickets pro Bestellung'];
-                    settingsData.maxTicketsProBestellung = rawMax ? parseInt(rawMax) : 9999;
-                }
-                if (settingsData['Bestellung offen'] !== undefined && settingsData.bestellungOffen === undefined) {
-                    settingsData.bestellungOffen = settingsData['Bestellung offen'];
-                }
-                if (settingsData['Start-Datum'] !== undefined && settingsData.startDatum === undefined) {
-                    settingsData.startDatum = settingsData['Start-Datum'];
-                }
-                if (settingsData['End-Datum'] !== undefined && settingsData.endDatum === undefined) {
-                    settingsData.endDatum = settingsData['End-Datum'];
-                }
-                if (settingsData['Titel'] !== undefined && settingsData.titel === undefined) {
-                    settingsData.titel = settingsData['Titel'];
-                }
-                if (settingsData['Aufführungsdatum'] !== undefined && settingsData.aufführungsdatum === undefined) {
-                    settingsData.aufführungsdatum = settingsData['Aufführungsdatum'];
-                }
-                if (settingsData['Allgemeine Informationen'] !== undefined && settingsData.allgemeineInfo === undefined) {
-                    settingsData.allgemeineInfo = settingsData['Allgemeine Informationen'];
-                }
-                if (settingsData['Vorstellung 1'] !== undefined && settingsData.vorstellung1 === undefined) {
-                    settingsData.vorstellung1 = settingsData['Vorstellung 1'];
-                }
-                if (settingsData['Vorstellung 2'] !== undefined && settingsData.vorstellung2 === undefined) {
-                    settingsData.vorstellung2 = settingsData['Vorstellung 2'];
-                }
-                if (settingsData['Ticketpreis'] !== undefined && settingsData.ticketpreis === undefined) {
-                    settingsData.ticketpreis = parseFloat((settingsData['Ticketpreis']||'').toString().replace('€','').replace(',','.')) || 0;
-                }
-                if (settingsData['Schuljahr'] !== undefined && settingsData.schuljahr === undefined) {
-                    settingsData.schuljahr = settingsData['Schuljahr'];
-                }
-                if (settingsData['Kapazität Vorstellung 1'] !== undefined && settingsData.kapazitaetVorstellung1 === undefined) {
-                    settingsData.kapazitaetVorstellung1 = parseInt(settingsData['Kapazität Vorstellung 1']) || 0;
-                }
-                if (settingsData['Kapazität Vorstellung 2'] !== undefined && settingsData.kapazitaetVorstellung2 === undefined) {
-                    settingsData.kapazitaetVorstellung2 = parseInt(settingsData['Kapazität Vorstellung 2']) || 0;
-                }
                 
                 debug('Schülerdaten:', studentsData);
                 debug('Einstellungen:', settingsData);
@@ -640,11 +608,10 @@
             
             // Max-Anzahl-Text aktualisieren
             document.getElementById('maxAnzahlText').textContent = maxTickets;
+            document.getElementById('anzahlHinweis').style.display = maxTickets < 9999 ? 'block' : 'none';
+            if(document.getElementById('maxAnzahlText2')) document.getElementById('maxAnzahlText2').textContent = maxTickets;
+            if(document.getElementById('anzahlHinweis2')) document.getElementById('anzahlHinweis2').style.display = maxTickets < 9999 ? 'block' : 'none';
             document.getElementById('maxAnzahlText2').textContent = maxTickets;
-            if (maxTickets < 9999) {
-                document.getElementById('anzahlHinweis').style.display = 'block';
-                if (document.getElementById('anzahlHinweis2')) document.getElementById('anzahlHinweis2').style.display = 'block';
-            }
             
             debug('Einstellungen aktualisiert');
         }
@@ -788,10 +755,9 @@
                 document.getElementById('anzahlHinweis').style.color = '#e74c3c';
                 document.getElementById('anzahlHinweis').style.fontWeight = 'bold';
             } else {
+                document.getElementById('maxAnzahlText').textContent = maxProBestellung;
                 if (maxProBestellung < 9999) {
-                    document.getElementById('maxAnzahlText').textContent = maxProBestellung;
-                    document.getElementById('anzahlHinweis').innerHTML =
-                        `Max. <span id="maxAnzahlText">${maxProBestellung}</span> Tickets pro Bestellung`;
+                    document.getElementById('anzahlHinweis').innerHTML = `Max. <span id="maxAnzahlText">\${maxProBestellung}</span> Tickets pro Bestellung`;
                     document.getElementById('anzahlHinweis').style.display = 'block';
                     document.getElementById('anzahlHinweis').style.color = '#666';
                     document.getElementById('anzahlHinweis').style.fontWeight = 'normal';
