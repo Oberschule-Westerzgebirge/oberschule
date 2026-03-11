@@ -454,7 +454,7 @@
                 debug('Lade Daten von: ' + SCRIPT_URL);
                 
                 // Daten vom Google Apps Script laden
-                const response = await fetch(SCRIPT_URL);
+                const response = await fetch(SCRIPT_URL + '?t=' + Date.now(), { cache: 'no-store' });
                 debug('Response erhalten, Status: ' + response.status);
                 
                 if (!response.ok) {
@@ -474,16 +474,21 @@
                 
                 studentsData = data.students;
                 settingsData = data.settings;
-                // Wenn maxTicketsProBestellung nicht gesetzt oder 0, auf 9999 setzen
-                if (!settingsData.maxTicketsProBestellung || settingsData.maxTicketsProBestellung === 0) {
-                    settingsData.maxTicketsProBestellung = 9999;
-                }
-                const rawMaxVal = settingsData['Max Tickets pro Bestellung'];
-                if (!rawMaxVal || rawMaxVal.toString().trim() === '') {
-                    settingsData.maxTicketsProBestellung = 9999;
-                } else {
-                    settingsData.maxTicketsProBestellung = parseInt(rawMaxVal) || 9999;
-                }
+
+                // Rohschlüssel → camelCase mappen
+                const rawMax = (settingsData['Max Tickets pro Bestellung']||'').toString().trim();
+                settingsData.maxTicketsProBestellung = rawMax !== '' ? (parseInt(rawMax) || 9999) : 9999;
+                settingsData.bestellungOffen        = settingsData['Bestellung offen'] || '';
+                settingsData.startDatum             = settingsData['Start-Datum'] || '';
+                settingsData.endDatum               = settingsData['End-Datum'] || '';
+                settingsData.titel                  = settingsData['Titel'] || '';
+                settingsData.aufführungsdatum        = settingsData['Aufführungsdatum'] || '';
+                settingsData.allgemeineInfo         = settingsData['Allgemeine Informationen'] || '';
+                settingsData.vorstellung1           = settingsData['Vorstellung 1'] || '';
+                settingsData.vorstellung2           = settingsData['Vorstellung 2'] || '';
+                settingsData.schuljahr              = settingsData['Schuljahr'] || '';
+                const rawPreis = (settingsData['Ticketpreis']||'').toString().replace('€','').replace(',','.').trim();
+                settingsData.ticketpreis            = rawPreis !== '' ? parseFloat(rawPreis) : 0;
                 availabilityData = data.availability || {};
                 
                 debug('Schülerdaten:', studentsData);
