@@ -478,7 +478,8 @@
                 
                 // Fallback: Rohe Schlüssel aus der Tabelle als camelCase verfügbar machen
                 if (settingsData['Max Tickets pro Bestellung'] !== undefined && settingsData.maxTicketsProBestellung === undefined) {
-                    settingsData.maxTicketsProBestellung = parseInt(settingsData['Max Tickets pro Bestellung']) || 10;
+                    const rawMax = settingsData['Max Tickets pro Bestellung'];
+                    settingsData.maxTicketsProBestellung = rawMax ? parseInt(rawMax) : 9999;
                 }
                 if (settingsData['Bestellung offen'] !== undefined && settingsData.bestellungOffen === undefined) {
                     settingsData.bestellungOffen = settingsData['Bestellung offen'];
