@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schulumfragen – OSWE</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap');
+
+  :root {
+    --bg: #f0ede8;
+    --card: #ffffff;
+    --ink: #1a1714;
+    --ink-soft: #6b6560;
+    --accent: #2d6a4f;
+    --accent-light: #d8f3dc;
+    --accent2: #e76f51;
+    --border: #e0dbd4;
+    --radius: 16px;
+    --shadow: 0 2px 20px rgba(0,0,0,0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 0 0 60px;
+  }
+
+  /* Header */
+  .header {
+    background: var(--ink);
+    color: white;
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header img { height: 42px; border-radius: 6px; }
+  .header-text h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 20px;
+    font-weight: 400;
+    letter-spacing: -0.3px;
+  }
+  .header-text p { font-size: 12px; color: #aaa; margin-top: 2px; }
+
+  /* Main layout */
+  .container { max-width: 640px; margin: 0 auto; padding: 24px 16px; }
+
+  /* Student selector */
+  .student-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+    margin-bottom: 20px;
+  }
+  .student-card h2 {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--ink-soft);
+    margin-bottom: 14px;
+  }
+  .select-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  select, input[type="text"] {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    color: var(--ink);
+    background: white;
+    appearance: none;
+    -webkit-appearance: none;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  select:focus, input:focus { border-color: var(--accent); }
+  .select-wrapper { position: relative; }
+  .select-wrapper::after {
+    content: '▾';
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--ink-soft);
+    pointer-events: none;
+    font-size: 12px;
+  }
+
+  /* Survey list */
+  .surveys-title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--ink-soft);
+    margin-bottom: 12px;
+    padding: 0 4px;
+  }
+
+  .survey-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+    overflow: hidden;
+    transition: transform 0.15s;
+  }
+  .survey-card:hover { transform: translateY(-1px); }
+
+  .survey-header {
+    padding: 18px 20px 14px;
+    border-bottom: 1.5px solid var(--border);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .survey-header-left { flex: 1; }
+  .survey-name {
+    font-family: 'DM Serif Display', serif;
+    font-size: 19px;
+    font-weight: 400;
+    line-height: 1.3;
+  }
+  .survey-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+  }
+  .tag {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 20px;
+    letter-spacing: 0.4px;
+  }
+  .tag-anonym { background: #e8f4f0; color: var(--accent); }
+  .tag-name { background: #fff3ef; color: var(--accent2); }
+  .tag-klassen { background: #f5f3f0; color: var(--ink-soft); }
+  .tag-done { background: #f5f3f0; color: #999; }
+
+  .chevron {
+    color: var(--ink-soft);
+    font-size: 18px;
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+  .survey-card.open .chevron { transform: rotate(180deg); }
+
+  .survey-body {
+    display: none;
+    padding: 20px;
+  }
+  .survey-card.open .survey-body { display: block; }
+
+  /* Already answered banner */
+  .answered-banner {
+    background: #f0f9f4;
+    border: 1.5px solid #b7e4c7;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 14px;
+    color: var(--accent);
+    font-weight: 500;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Questions */
+  .question-block {
+    margin-bottom: 22px;
+  }
+  .question-label {
+    font-weight: 600;
+    font-size: 15px;
+    margin-bottom: 12px;
+    line-height: 1.4;
+  }
+  .question-num {
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    background: var(--ink);
+    color: white;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+    line-height: 22px;
+    margin-right: 8px;
+    flex-shrink: 0;
+  }
+
+  /* Star rating */
+  .stars {
+    display: flex;
+    gap: 6px;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+  }
+  .stars input { display: none; }
+  .stars label {
+    font-size: 32px;
+    color: #ddd;
+    cursor: pointer;
+    transition: color 0.1s, transform 0.1s;
+  }
+  .stars label:hover,
+  .stars label:hover ~ label,
+  .stars input:checked ~ label {
+    color: #f4a818;
+  }
+  .stars label:hover { transform: scale(1.15); }
+
+  /* Ja/Nein */
+  .jaNein { display: flex; gap: 10px; }
+  .jaNein-btn {
+    flex: 1;
+    padding: 13px;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    background: white;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--ink-soft);
+  }
+  .jaNein-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .jaNein-btn.selected-ja { background: var(--accent); border-color: var(--accent); color: white; }
+  .jaNein-btn.selected-nein { background: var(--accent2); border-color: var(--accent2); color: white; }
+
+  /* Multiple choice */
+  .mc-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.12s;
+    font-size: 15px;
+  }
+  .mc-option:hover { border-color: var(--accent); background: var(--accent-light); }
+  .mc-option input[type="radio"],
+  .mc-option input[type="checkbox"] { accent-color: var(--accent); width: 17px; height: 17px; }
+  .mc-option.selected { border-color: var(--accent); background: var(--accent-light); }
+
+  /* Freitext */
+  textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    color: var(--ink);
+    resize: vertical;
+    min-height: 90px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  textarea:focus { border-color: var(--accent); }
+
+  /* Submit button */
+  .btn-submit {
+    width: 100%;
+    padding: 16px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    margin-top: 8px;
+  }
+  .btn-submit:hover { background: #245e44; transform: translateY(-1px); }
+  .btn-submit:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+
+  /* Success */
+  .success-msg {
+    background: var(--accent-light);
+    border: 1.5px solid #95d5b2;
+    border-radius: 12px;
+    padding: 16px;
+    color: var(--accent);
+    font-weight: 600;
+    text-align: center;
+    margin-top: 12px;
+    display: none;
+  }
+
+  /* Loading & states */
+  .loading-screen {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--ink-soft);
+  }
+  .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty-state {
+    text-align: center;
+    padding: 50px 20px;
+    color: var(--ink-soft);
+    display: none;
+  }
+  .empty-state h3 { font-size: 20px; margin-bottom: 8px; color: var(--ink); }
+
+  .error-state {
+    background: #fff0ee;
+    border: 1.5px solid #f4b9ae;
+    border-radius: 12px;
+    padding: 16px;
+    color: #c0392b;
+    font-size: 14px;
+    margin-bottom: 20px;
+    display: none;
+  }
+
+  /* Hinweis: Schüler muss zuerst gewählt werden */
+  .select-first {
+    text-align: center;
+    padding: 30px 20px;
+    color: var(--ink-soft);
+    font-size: 15px;
+  }
+  .select-first span { font-size: 28px; display: block; margin-bottom: 8px; }
+
+  hr.divider {
+    border: none;
+    border-top: 1.5px solid var(--border);
+    margin: 18px 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-text">
+    <h1>Schulumfragen</h1>
+    <p>Oberschule Westerzgebirge Bad Schlema</p>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Student selector -->
+  <div class="student-card">
+    <h2>Wer bist du?</h2>
+    <div class="select-row">
+      <div class="select-wrapper">
+        <select id="klasseSelect">
+          <option value="">Klasse wählen…</option>
+        </select>
+      </div>
+      <div class="select-wrapper">
+        <select id="nameSelect" disabled>
+          <option value="">Erst Klasse wählen…</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div class="error-state" id="errorState"></div>
+
+  <!-- Loading -->
+  <div class="loading-screen" id="loadingScreen">
+    <div class="spinner"></div>
+    <p>Umfragen werden geladen…</p>
+  </div>
+
+  <!-- Surveys container -->
+  <div id="surveysContainer" style="display:none;">
+    <div class="surveys-title">Aktive Umfragen</div>
+    <div id="surveysList"></div>
+    <div class="empty-state" id="emptyState">
+      <span>📋</span>
+      <h3>Keine Umfragen aktiv</h3>
+      <p>Momentan gibt es keine Umfragen für deine Klasse.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// KONFIGURATION
+// ============================================================
+const APPS_SCRIPT_URL = 'DEINE_APPS_SCRIPT_URL_HIER';
+
+// ============================================================
+// STATE
+// ============================================================
+let studentsData = {};
+let surveysData = [];
+let selectedKlasse = '';
+let selectedName = '';
+let answeredSurveys = {}; // { surveyName: true }
+
+// ============================================================
+// INIT
+// ============================================================
+async function init() {
+  try {
+    const res = await fetch(APPS_SCRIPT_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    studentsData = data.students || {};
+    surveysData = data.surveys || [];
+
+    // Klassen befüllen
+    const klasseSelect = document.getElementById('klasseSelect');
+    Object.keys(studentsData).sort().forEach(k => {
+      const o = document.createElement('option');
+      o.value = k; o.textContent = k;
+      klasseSelect.appendChild(o);
+    });
+
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('surveysContainer').style.display = 'block';
+    renderSurveys();
+
+  } catch(e) {
+    document.getElementById('loadingScreen').style.display = 'none';
+    const err = document.getElementById('errorState');
+    err.textContent = 'Fehler beim Laden: ' + e.message;
+    err.style.display = 'block';
+  }
+}
+
+// ============================================================
+// KLASSE / NAME AUSWAHL
+// ============================================================
+document.getElementById('klasseSelect').addEventListener('change', function() {
+  selectedKlasse = this.value;
+  selectedName = '';
+  const nameSelect = document.getElementById('nameSelect');
+  nameSelect.innerHTML = '<option value="">Name wählen…</option>';
+  nameSelect.disabled = !selectedKlasse;
+
+  if (selectedKlasse && studentsData[selectedKlasse]) {
+    studentsData[selectedKlasse].forEach(n => {
+      const o = document.createElement('option');
+      o.value = n; o.textContent = n;
+      nameSelect.appendChild(o);
+    });
+  }
+  renderSurveys();
+});
+
+document.getElementById('nameSelect').addEventListener('change', async function() {
+  selectedName = this.value;
+  if (selectedName && selectedKlasse) {
+    await loadAnsweredStatus();
+  }
+  renderSurveys();
+});
+
+// ============================================================
+// BEREITS BEANTWORTET LADEN
+// ============================================================
+async function loadAnsweredStatus() {
+  try {
+    const res = await fetch(APPS_SCRIPT_URL + '?action=checkAnswered&klasse=' + encodeURIComponent(selectedKlasse) + '&name=' + encodeURIComponent(selectedName) + '&t=' + Date.now(), { cache: 'no-store' });
+    const data = await res.json();
+    answeredSurveys = data.answered || {};
+  } catch(e) {
+    answeredSurveys = {};
+  }
+  renderSurveys();
+}
+
+// ============================================================
+// UMFRAGEN RENDERN
+// ============================================================
+function renderSurveys() {
+  const list = document.getElementById('surveysList');
+  const empty = document.getElementById('emptyState');
+  list.innerHTML = '';
+
+  if (!selectedKlasse || !selectedName) {
+    list.innerHTML = '<div class="select-first"><span>👆</span>Bitte zuerst Klasse und Name wählen</div>';
+    empty.style.display = 'none';
+    return;
+  }
+
+  // Filter: Umfragen für diese Klasse
+  const visible = surveysData.filter(s => {
+    if (!s.aktiv) return false;
+    if (!s.klassen || s.klassen.trim() === '' || s.klassen.trim() === 'alle') return true;
+    const klassen = s.klassen.split(',').map(k => k.trim());
+    return klassen.includes(selectedKlasse);
+  });
+
+  if (visible.length === 0) {
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  visible.forEach(survey => {
+    const card = buildSurveyCard(survey);
+    list.appendChild(card);
+  });
+}
+
+// ============================================================
+// UMFRAGE-KARTE BAUEN
+// ============================================================
+function buildSurveyCard(survey) {
+  const done = answeredSurveys[survey.name];
+  const div = document.createElement('div');
+  div.className = 'survey-card';
+  div.dataset.name = survey.name;
+
+  const anonym = survey.anonym === 'JA';
+
+  div.innerHTML = `
+    <div class="survey-header" onclick="toggleCard(this)">
+      <div class="survey-header-left">
+        <div class="survey-name">${survey.name}</div>
+        <div class="survey-meta">
+          <span class="tag ${anonym ? 'tag-anonym' : 'tag-name'}">${anonym ? '🔒 Anonym' : '👤 Mit Name'}</span>
+          ${survey.klassen && survey.klassen !== 'alle' ? `<span class="tag tag-klassen">Klasse ${survey.klassen}</span>` : ''}
+          ${done ? '<span class="tag tag-done">✓ Beantwortet</span>' : ''}
+        </div>
+      </div>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="survey-body">
+      ${done ? `<div class="answered-banner">✓ Du hast diese Umfrage bereits ausgefüllt.</div>` : ''}
+      <div class="questions-container" id="questions_${sanitize(survey.name)}"></div>
+      ${!done ? `
+        <div class="success-msg" id="success_${sanitize(survey.name)}">✓ Danke! Deine Antworten wurden gespeichert.</div>
+        <button class="btn-submit" onclick="submitSurvey('${survey.name}')" id="btn_${sanitize(survey.name)}">Absenden</button>
+      ` : ''}
+    </div>
+  `;
+
+  // Fragen rendern
+  if (survey.fragen && survey.fragen.length > 0) {
+    const container = div.querySelector('.questions-container');
+    survey.fragen.forEach((frage, i) => {
+      container.appendChild(buildQuestion(frage, i, survey.name, done));
+    });
+  }
+
+  return div;
+}
+
+function sanitize(str) {
+  return str.replace(/[^a-zA-Z0-9]/g, '_');
+}
+
+function toggleCard(header) {
+  header.parentElement.classList.toggle('open');
+}
+
+// ============================================================
+// FRAGE-BLOCK BAUEN
+// ============================================================
+function buildQuestion(frage, index, surveyName, readonly) {
+  const block = document.createElement('div');
+  block.className = 'question-block';
+  const id = `q_${sanitize(surveyName)}_${index}`;
+
+  let inputHTML = '';
+  const typ = (frage.typ || '').toLowerCase();
+
+  if (typ === 'sterne') {
+    inputHTML = `<div class="stars" id="${id}">
+      ${[5,4,3,2,1].map(n => `
+        <input type="radio" name="${id}" id="${id}_${n}" value="${n}" ${readonly ? 'disabled' : ''}>
+        <label for="${id}_${n}" title="${n} Stern${n>1?'e':''}">★</label>
+      `).join('')}
+    </div>`;
+
+  } else if (typ === 'janein') {
+    inputHTML = `<div class="jaNein" id="${id}">
+      <button type="button" class="jaNein-btn" onclick="selectJaNein('${id}','Ja')" ${readonly ? 'disabled' : ''}>👍 Ja</button>
+      <button type="button" class="jaNein-btn" onclick="selectJaNein('${id}','Nein')" ${readonly ? 'disabled' : ''}>👎 Nein</button>
+    </div>
+    <input type="hidden" id="${id}_val" value="">`;
+
+  } else if (typ === 'multiplechoice') {
+    const optionen = (frage.optionen || '').split(',').map(o => o.trim()).filter(Boolean);
+    inputHTML = `<div id="${id}">
+      ${optionen.map(opt => `
+        <label class="mc-option" onclick="this.classList.toggle('selected')">
+          <input type="checkbox" value="${opt}" ${readonly ? 'disabled' : ''}> ${opt}
+        </label>
+      `).join('')}
+    </div>`;
+
+  } else { // freitext
+    inputHTML = `<textarea id="${id}" placeholder="Deine Antwort…" rows="3" ${readonly ? 'disabled' : ''}></textarea>`;
+  }
+
+  block.innerHTML = `
+    <div class="question-label">
+      <span class="question-num">${index + 1}</span>${frage.frage}
+    </div>
+    ${inputHTML}
+    ${index < 99 ? '<hr class="divider">' : ''}
+  `;
+  return block;
+}
+
+function selectJaNein(id, val) {
+  const container = document.getElementById(id);
+  container.querySelectorAll('.jaNein-btn').forEach(b => b.className = 'jaNein-btn');
+  const btn = Array.from(container.querySelectorAll('.jaNein-btn')).find(b => b.textContent.includes(val));
+  if (btn) btn.classList.add(val === 'Ja' ? 'selected-ja' : 'selected-nein');
+  document.getElementById(id + '_val').value = val;
+}
+
+// ============================================================
+// ABSENDEN
+// ============================================================
+async function submitSurvey(surveyName) {
+  const survey = surveysData.find(s => s.name === surveyName);
+  if (!survey) return;
+
+  const sid = sanitize(surveyName);
+  const btn = document.getElementById('btn_' + sid);
+  btn.disabled = true;
+  btn.textContent = 'Wird gesendet…';
+
+  const antworten = {};
+  let valid = true;
+
+  survey.fragen.forEach((frage, i) => {
+    const id = `q_${sid}_${i}`;
+    const typ = (frage.typ || '').toLowerCase();
+    let val = '';
+
+    if (typ === 'sterne') {
+      const checked = document.querySelector(`input[name="${id}"]:checked`);
+      val = checked ? checked.value : '';
+    } else if (typ === 'janein') {
+      val = document.getElementById(id + '_val').value;
+    } else if (typ === 'multiplechoice') {
+      const checked = document.querySelectorAll(`#${id} input:checked`);
+      val = Array.from(checked).map(c => c.value).join(', ');
+    } else {
+      val = document.getElementById(id).value.trim();
+    }
+
+    if (!val && frage.pflicht !== 'NEIN') { valid = false; }
+    antworten[frage.frage] = val;
+  });
+
+  if (!valid) {
+    btn.disabled = false;
+    btn.textContent = 'Absenden';
+    alert('Bitte alle Fragen beantworten.');
+    return;
+  }
+
+  try {
+    const payload = {
+      action: 'submitSurvey',
+      surveyName,
+      klasse: selectedKlasse,
+      name: survey.anonym === 'JA' ? 'Anonym' : selectedName,
+      antworten
+    };
+
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      document.getElementById('success_' + sid).style.display = 'block';
+      btn.style.display = 'none';
+      answeredSurveys[surveyName] = true;
+      // Update tag
+      const card = document.querySelector(`.survey-card[data-name="${surveyName}"]`);
+      if (card) {
+        const meta = card.querySelector('.survey-meta');
+        const doneTag = document.createElement('span');
+        doneTag.className = 'tag tag-done';
+        doneTag.textContent = '✓ Beantwortet';
+        meta.appendChild(doneTag);
+      }
+    } else {
+      throw new Error(data.error || 'Unbekannter Fehler');
+    }
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = 'Absenden';
+    alert('Fehler: ' + e.message);
+  }
+}
+
+// ============================================================
+// START
+// ============================================================
+init();
+</script>
+</body>
+</html>
