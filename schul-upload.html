@@ -523,14 +523,25 @@ function initGIS() {
 // ── DATEN LADEN ───────────────────────────────────────
 async function loadData() {
   try {
+    // Umlaute im Tabellennamen korrekt enkodieren
+    const encEinst   = encodeURIComponent('Einstellungen');
+    const encSchueler = encodeURIComponent('Schüler');
+
     const [settingsResp, schuelerResp] = await Promise.all([
-      gFetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}/values/Einstellungen!A2:B10`),
-      gFetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}/values/Schüler!A1:Z200`)
+      gFetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}/values/${encEinst}!A1:B20`),
+      gFetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}/values/${encSchueler}!A1:Z200`)
     ]);
 
-    // Einstellungen parsen
+    // Einstellungen parsen (alle Zeilen, auch Headerzeile überspringen falls vorhanden)
     const sRows = settingsResp.values || [];
-    sRows.forEach(([key, val]) => { if (key) settings[key.trim()] = (val||'').trim(); });
+    sRows.forEach(row => {
+      const key = (row[0]||'').trim();
+      const val = (row[1]||'').trim();
+      if (key && key !== 'Einstellung') settings[key] = val;
+    });
+
+    // Debug-Ausgabe in Konsole (F12 → Console)
+    console.log('Einstellungen geladen:', settings);
 
     // Schüler parsen (erste Zeile = Spaltenüberschriften = Klassennamen)
     const rows = schuelerResp.values || [];
