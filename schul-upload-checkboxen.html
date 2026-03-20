@@ -329,7 +329,7 @@
 // ══════════════════════════════════════════════
 // KONFIGURATION
 // ══════════════════════════════════════════════
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxScwv2tz1k8HORVa_Ilm25Krr9R_4vzH_CMcLeenWhKa3SbmpgVtcoN1XEVjBnhQqsfQ/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxqMTTeBaLSR-A46TKtljn8zc6a_eLrAyfVJl1s58Ou6gMuiDzyJb-QJgov-PS6G0_r/exec';
 // ══════════════════════════════════════════════
 
 // Logo (eingebettet)
@@ -409,7 +409,6 @@ function renderCheckboxen(settings) {
   container.innerHTML = '';
   let count = 0;
 
-  // Alle Schlüssel die mit "Checkbox" beginnen
   Object.keys(settings).forEach(key => {
     if (!key.toLowerCase().startsWith('checkbox')) return;
     const text = (settings[key]||'').trim();
@@ -419,8 +418,26 @@ function renderCheckboxen(settings) {
     const div = document.createElement('div');
     div.className = 'checkbox-item';
     div.innerHTML = `
-      <input type="checkbox" id="${id}" onchange="checkReady()">
-      <label for="${id}">${text}</label>
+      <div style="display:flex; gap:8px; margin-bottom:6px;">
+        <span style="color:var(--silver); font-size:0.9rem; flex:1;">${text}</span>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button type="button" class="janein-btn" id="${id}_ja"
+          onclick="selectJaNein('${id}', 'ja')"
+          style="flex:1; padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.2);
+                 background:rgba(255,255,255,0.07); color:var(--silver); cursor:pointer;
+                 font-family:inherit; font-size:0.9rem; transition:all 0.15s;">
+          👍 Ja
+        </button>
+        <button type="button" class="janein-btn" id="${id}_nein"
+          onclick="selectJaNein('${id}', 'nein')"
+          style="flex:1; padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.2);
+                 background:rgba(255,255,255,0.07); color:var(--silver); cursor:pointer;
+                 font-family:inherit; font-size:0.9rem; transition:all 0.15s;">
+          👎 Nein
+        </button>
+      </div>
+      <input type="hidden" id="${id}_val" value="">
     `;
     container.appendChild(div);
     count++;
@@ -429,6 +446,28 @@ function renderCheckboxen(settings) {
   if (count > 0) {
     container.style.display = 'block';
   }
+}
+
+function selectJaNein(id, val) {
+  document.getElementById(id + '_val').value = val;
+  const ja   = document.getElementById(id + '_ja');
+  const nein = document.getElementById(id + '_nein');
+  if (val === 'ja') {
+    ja.style.background   = '#4a9e6b';
+    ja.style.color        = 'white';
+    ja.style.borderColor  = '#4a9e6b';
+    nein.style.background = 'rgba(255,255,255,0.07)';
+    nein.style.color      = 'var(--silver)';
+    nein.style.borderColor= 'rgba(255,255,255,0.2)';
+  } else {
+    nein.style.background = '#c0392b';
+    nein.style.color      = 'white';
+    nein.style.borderColor= '#c0392b';
+    ja.style.background   = 'rgba(255,255,255,0.07)';
+    ja.style.color        = 'var(--silver)';
+    ja.style.borderColor  = 'rgba(255,255,255,0.2)';
+  }
+  checkReady();
 }
 
 // ── KLASSE WÄHLEN ─────────────────────────────
@@ -479,11 +518,8 @@ function checkReady() {
   const name   = document.getElementById('sel-name').value;
   const files  = document.getElementById('file-input').files;
 
-  // Alle Pflicht-Checkboxen müssen angehakt sein
-  const checkboxes = document.querySelectorAll('#checkboxen-container input[type="checkbox"]');
-  const allChecked = Array.from(checkboxes).every(cb => cb.checked);
-
-  document.getElementById('btn-upload').disabled = !(klasse && name && files.length > 0 && allChecked);
+  // JA/NEIN-Felder sind optional
+  document.getElementById('btn-upload').disabled = !(klasse && name && files.length > 0);
 }
 
 // ── UPLOAD ────────────────────────────────────
@@ -503,13 +539,21 @@ async function doUpload() {
 
       const base64 = await fileToBase64(file);
 
+      // JA/NEIN Antworten sammeln
+      const janeinAntworten = {};
+      document.querySelectorAll('#checkboxen-container input[type="hidden"]').forEach((f, i) => {
+        const label = document.querySelector(`#checkboxen-container .checkbox-item:nth-child(${i+1}) span`);
+        if (label) janeinAntworten[label.textContent.trim()] = f.value.toUpperCase();
+      });
+
       const payload = {
         action:   'upload',
         klasse,
         name,
         filename: file.name,
         filedata: base64.split(',')[1],
-        mimetype: file.type || 'application/octet-stream'
+        mimetype: file.type || 'application/octet-stream',
+        antworten: janeinAntworten
       };
 
       const resp = await fetch(APPS_SCRIPT_URL, {
