@@ -245,6 +245,7 @@
       <div>
         <strong>Upload geschlossen</strong><br>
         <span id="closed-reason"></span>
+        <span id="closed-zeitraum" style="display:none; margin-top:6px; display:block; font-size:0.85rem; opacity:0.85;"></span>
       </div>
     </div>
 
@@ -378,6 +379,16 @@ function renderPage(data) {
     else if (start && now < start) reason = `Öffnet am ${formatDatum(startStr)}.`;
     else if (end   && now > end)   reason = `Abgabefrist war am ${formatDatum(endStr)}.`;
     document.getElementById('closed-reason').textContent = reason;
+    // Zeitraum anzeigen wenn vorhanden
+    if (startStr || endStr) {
+      let zeitraum = '';
+      if (startStr && endStr) zeitraum = `📅 ${formatDatum(startStr)} bis ${formatDatum(endStr)}`;
+      else if (startStr)      zeitraum = `📅 Ab ${formatDatum(startStr)}`;
+      else if (endStr)        zeitraum = `📅 Bis ${formatDatum(endStr)}`;
+      const z = document.getElementById('closed-zeitraum');
+      z.textContent = zeitraum;
+      z.style.display = 'block';
+    }
     document.getElementById('closed-notice').style.display = 'flex';
     return;
   }
