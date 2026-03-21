@@ -333,16 +333,11 @@ function renderPage(data) {
   const settings     = data.settings || {};
   schuelerData       = data.schueler || {};
 
-  const offen        = (settings['Bestellung offen']||'').toUpperCase() === 'JA';
   const startStr     = settings['Start-Datum'] || '';
   const endStr       = settings['End-Datum']   || '';
   const klassenOffen = (settings['Klassen offen']||'').split(',').map(s=>s.trim()).filter(Boolean);
-
-  const now   = new Date();
-  const start = parseDateDE(startStr);
-  const end   = parseDateDE(endStr);
-  const inTime = (!start || now >= start) && (!end || now <= end);
-  const isOpen = offen && inTime;
+  // Offenstatus kommt direkt vom Script (bereits korrekt berechnet)
+  const isOpen = (settings['Bestellung offen']||'').toUpperCase() === 'JA';
 
   // Status-Badge
   document.getElementById('status-dot').className = 'status-dot' + (isOpen ? '' : ' closed');
