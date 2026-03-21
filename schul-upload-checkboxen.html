@@ -250,8 +250,8 @@
 
     <!-- FORM -->
     <div id="upload-form" style="display:none">
-      <p class="card-title">Datei einreichen</p>
-      <p class="card-subtitle">Wähle deine Klasse und deinen Namen aus, dann lade deine Datei hoch.</p>
+      <p class="card-title" id="card-title">Datei einreichen</p>
+      <p class="card-subtitle" id="card-subtitle">Wähle deine Klasse und deinen Namen aus, dann lade deine Datei hoch.</p>
 
       <div class="notice info" id="open-info" style="display:none">
         <span class="notice-icon">📅</span>
@@ -399,6 +399,14 @@ function renderPage(data) {
   }
 
   document.getElementById('upload-form').style.display = 'block';
+
+  // Titel und Untertitel aus Admin-Einstellungen
+  if (settings['Titel']) {
+    document.getElementById('card-title').textContent = settings['Titel'];
+  }
+  if (settings['Untertitel']) {
+    document.getElementById('card-subtitle').textContent = settings['Untertitel'];
+  }
 
   // Dynamische Checkboxen rendern
   renderCheckboxen(settings);
