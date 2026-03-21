@@ -382,9 +382,9 @@ function renderPage(data) {
     // Zeitraum anzeigen wenn vorhanden
     if (startStr || endStr) {
       let zeitraum = '';
-      if (startStr && endStr) zeitraum = `📅 ${formatDatum(startStr)} bis ${formatDatum(endStr)}`;
-      else if (startStr)      zeitraum = `📅 Ab ${formatDatum(startStr)}`;
-      else if (endStr)        zeitraum = `📅 Bis ${formatDatum(endStr)}`;
+      if (startStr && endStr) zeitraum = `Der Upload ist möglich von ${formatDatum(startStr)} bis ${formatDatum(endStr)}`;
+      else if (startStr)      zeitraum = `Der Upload ist möglich ab ${formatDatum(startStr)}`;
+      else if (endStr)        zeitraum = `Der Upload ist möglich bis ${formatDatum(endStr)}`;
       const z = document.getElementById('closed-zeitraum');
       z.textContent = zeitraum;
       z.style.display = 'block';
