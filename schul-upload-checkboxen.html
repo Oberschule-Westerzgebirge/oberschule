@@ -411,15 +411,22 @@ function renderCheckboxen(settings) {
 
   Object.keys(settings).forEach(key => {
     if (!key.toLowerCase().startsWith('checkbox')) return;
+    if (key.toLowerCase().includes('typ')) return; // Typ-Felder überspringen
     const text = (settings[key]||'').trim();
     if (!text) return;
+
+    // Pflicht-Status aus "Checkbox X Typ" lesen
+    const typKey = key + ' Typ';
+    const pflicht = (settings[typKey]||'Optional').toString().trim().toLowerCase() === 'pflicht';
 
     const id = 'cb_' + count;
     const div = document.createElement('div');
     div.className = 'checkbox-item';
+    div.dataset.pflicht = pflicht ? 'ja' : 'nein';
     div.innerHTML = `
-      <div style="display:flex; gap:8px; margin-bottom:6px;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
         <span style="color:var(--silver); font-size:0.9rem; flex:1;">${text}</span>
+        ${pflicht ? '<span style="font-size:0.7rem; background:#c0392b; color:white; padding:2px 7px; border-radius:10px; font-weight:600;">Pflicht</span>' : '<span style="font-size:0.7rem; background:rgba(255,255,255,0.15); color:var(--silver); padding:2px 7px; border-radius:10px;">Optional</span>'}
       </div>
       <div style="display:flex; gap:8px;">
         <button type="button" class="janein-btn" id="${id}_ja"
@@ -518,8 +525,11 @@ function checkReady() {
   const name   = document.getElementById('sel-name').value;
   const files  = document.getElementById('file-input').files;
 
-  // JA/NEIN-Felder sind optional
-  document.getElementById('btn-upload').disabled = !(klasse && name && files.length > 0);
+  // Nur Pflicht-Felder müssen beantwortet sein
+  const pflichtFelder = document.querySelectorAll('#checkboxen-container .checkbox-item[data-pflicht="ja"] input[type="hidden"]');
+  const allPflichtBeantwortet = Array.from(pflichtFelder).every(f => f.value !== '');
+
+  document.getElementById('btn-upload').disabled = !(klasse && name && files.length > 0 && allPflichtBeantwortet);
 }
 
 // ── UPLOAD ────────────────────────────────────
