@@ -1092,6 +1092,19 @@
             document.getElementById('printOrderTable').innerHTML = tableHTML;
         }
 
-        document.getElementById('emailConfirm').addEventListener('input', function() {
+          document.getElementById('emailConfirm').addEventListener('input', function() {
             const email = document.getElementById('email').value;
-            const emailConfirm
+            const emailConfirm = this.value;
+            const errorMsg = document.getElementById('emailMatchError');
+            
+            if (emailConfirm.length > 0 && email !== emailConfirm) {
+                errorMsg.style.display = 'block';
+            } else {
+                errorMsg.style.display = 'none';
+            }
+        });
+
+        loadArtikel();
+    </script>
+</body>
+</html>
