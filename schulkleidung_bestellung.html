@@ -543,14 +543,14 @@
             
             <div id="errorMessage" class="error-box" style="display: none;">
                 <strong>⚠️ Fehler beim Laden!</strong>
-                <p>Bitte kontaktieren Sie das Sekretariat: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="ed829e9a88c39e8e859881868188848998838aad8a808c8481c38e8280">[email&#160;protected]</a></p>
+                <p>Bitte kontaktieren Sie das Sekretariat: oswe.schulkleidung@gmail.com</p>
             </div>
             
             <div class="closed-message" id="closedMessage">
                 <h2>🔒 Bestellungen derzeit geschlossen</h2>
                 <p id="closedMessageText">Das Bestellformular ist aktuell nicht verfügbar.</p>
                 <p style="margin-top: 20px;">Bei Fragen wenden Sie sich bitte an:<br>
-                <strong><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="d5baa6a2b0fba6b6bda0b9beb9b0bcb1a0bbb295b2b8b4bcb9fbb6bab8">[email&#160;protected]</a></strong></p>
+                <strong>oswe.schulkleidung@gmail.com</strong></p>
             </div>
             
             <div class="success-message" id="successMessage">
@@ -622,7 +622,7 @@
         </div>
     </div>
 
-    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+    <script>
         const scriptURL = 'https://script.google.com/macros/s/AKfycbzheLy6YZNKjsWvWa_wcLqZ_tkDDoHhUalTQtEES8wGUtAS6-j0ThX8ZI1qAQ4jqEgjMw/exec';
         
         let products = [];
@@ -721,37 +721,12 @@
             return true;
         }
         
-        // Parst deutschen Datums-String ("dd.MM.yyyy" oder "dd.MM.yyyy / HH:mm Uhr") zu Date
-        function parseDatum(str) {
-            if (!str) return null;
-            const datePart = str.toString().match(/(\d{2})\.(\d{2})\.(\d{4})/);
-            if (!datePart) return null;
-            const hourPart = str.toString().match(/(\d{1,2}):(\d{2})/);
-            const hour   = hourPart ? parseInt(hourPart[1]) : 0;
-            const minute = hourPart ? parseInt(hourPart[2]) : 0;
-            return new Date(
-                parseInt(datePart[3]),
-                parseInt(datePart[2]) - 1,
-                parseInt(datePart[1]),
-                hour, minute, 0
-            );
-        }
-
-        // Versteht deutschen String ("dd.MM.yyyy") UND ISO-String ("2025-05-09T...")
-        function formatDate(val) {
-            if (!val) return '';
-            // Bereits ein deutscher Datums-String
-            const germanMatch = val.toString().match(/(\d{2})\.(\d{2})\.(\d{4})/);
-            if (germanMatch) return germanMatch[0];
-            // ISO-String oder andere Date-Formate
-            const d = new Date(val);
-            if (!isNaN(d)) {
-                const day   = String(d.getDate()).padStart(2, '0');
-                const month = String(d.getMonth() + 1).padStart(2, '0');
-                const year  = d.getFullYear();
-                return `${day}.${month}.${year}`;
-            }
-            return val.toString();
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}.${month}.${year}`;
         }
         
         function updateHeaderAndDeadline() {
@@ -1099,4 +1074,17 @@
 
         document.getElementById('emailConfirm').addEventListener('input', function() {
             const email = document.getElementById('email').value;
-            const emailConfirm
+            const emailConfirm = this.value;
+            const errorMsg = document.getElementById('emailMatchError');
+            
+            if (emailConfirm.length > 0 && email !== emailConfirm) {
+                errorMsg.style.display = 'block';
+            } else {
+                errorMsg.style.display = 'none';
+            }
+        });
+
+        loadArtikel();
+    </script>
+</body>
+</html>
