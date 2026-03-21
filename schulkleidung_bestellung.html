@@ -543,14 +543,14 @@
             
             <div id="errorMessage" class="error-box" style="display: none;">
                 <strong>⚠️ Fehler beim Laden!</strong>
-                <p>Bitte kontaktieren Sie das Sekretariat: <a href="mailto:oswe.schulkleidung@gmail.com">oswe.schulkleidung@gmail.com</a></p>
+                <p>Bitte kontaktieren Sie das Sekretariat: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="ef809c988ac19c8c879a8384838a868b9a8188af88828e8683c18c8082">[email&#160;protected]</a></p>
             </div>
             
             <div class="closed-message" id="closedMessage">
                 <h2>🔒 Bestellungen derzeit geschlossen</h2>
                 <p id="closedMessageText">Das Bestellformular ist aktuell nicht verfügbar.</p>
                 <p style="margin-top: 20px;">Bei Fragen wenden Sie sich bitte an:<br>
-                <strong><a href="mailto:oswe.schulkleidung@gmail.com">oswe.schulkleidung@gmail.com</a></strong></p>
+                <strong><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="9ff0ece8fab1ecfcf7eaf3f4f3faf6fbeaf1f8dff8f2fef6f3b1fcf0f2">[email&#160;protected]</a></strong></p>
             </div>
             
             <div class="success-message" id="successMessage">
@@ -622,7 +622,7 @@
         </div>
     </div>
 
-    <script>
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
         const scriptURL = 'https://script.google.com/macros/s/AKfycbzheLy6YZNKjsWvWa_wcLqZ_tkDDoHhUalTQtEES8wGUtAS6-j0ThX8ZI1qAQ4jqEgjMw/exec';
         
         let products = [];
@@ -646,26 +646,9 @@
             'dunkelgrau': 'darkgray'
         };
 
-        // Fetch mit Timeout (Standard: 15 Sekunden) – verhindert endloses Hängen
-        async function fetchWithTimeout(url, timeoutMs = 15000) {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), timeoutMs);
-            try {
-                const response = await fetch(url, { signal: controller.signal });
-                clearTimeout(timer);
-                return response;
-            } catch (err) {
-                clearTimeout(timer);
-                if (err.name === 'AbortError') {
-                    throw new Error('Zeitüberschreitung: Der Server antwortet nicht (>' + (timeoutMs/1000) + 's). Bitte Seite neu laden.');
-                }
-                throw err;
-            }
-        }
-
         async function loadArtikel() {
             try {
-                const einstellungenResponse = await fetchWithTimeout(scriptURL + '?action=getEinstellungen');
+                const einstellungenResponse = await fetch(scriptURL + '?action=getEinstellungen');
                 const einstellungenText = await einstellungenResponse.text();
                 einstellungen = JSON.parse(einstellungenText);
                 
@@ -677,7 +660,7 @@
                 
                 updateHeaderAndDeadline();
                 
-                const artikelResponse = await fetchWithTimeout(scriptURL + '?action=getArtikel');
+                const artikelResponse = await fetch(scriptURL + '?action=getArtikel');
                 const artikelText = await artikelResponse.text();
                 const artikelData = JSON.parse(artikelText);
                 
@@ -691,7 +674,7 @@
                 products.forEach(p => p.colors.forEach(c => colorSet.add(c)));
                 allColors = Array.from(colorSet);
                 
-                const schuelerResponse = await fetchWithTimeout(scriptURL + '?action=getSchueler');
+                const schuelerResponse = await fetch(scriptURL + '?action=getSchueler');
                 const schuelerText = await schuelerResponse.text();
                 schuelerData = JSON.parse(schuelerText);
                 
@@ -705,16 +688,11 @@
             } catch (error) {
                 console.error('Fehler beim Laden:', error);
                 document.getElementById('loadingMessage').style.display = 'none';
-                document.getElementById('errorMessage').innerHTML =
-                    '<strong>\u26a0\ufe0f Fehler beim Laden!</strong>' +
-                    '<p style="margin-top:8px">' + error.message + '</p>' +
-                    '<p>Bitte kontaktieren Sie das Sekretariat: <a href="mailto:oswe.schulkleidung@gmail.com">oswe.schulkleidung@gmail.com</a></p>';
                 document.getElementById('errorMessage').style.display = 'block';
             }
         }
         
-        // Parst einen deutschen Datums-String ("dd.MM.yyyy" oder "dd.MM.yyyy / HH:mm Uhr")
-        // zu einem Date-Objekt. Spiegelt parseDatumGAS() im Apps Script wider.
+        // Parst deutschen Datums-String ("dd.MM.yyyy" oder "dd.MM.yyyy / HH:mm Uhr") zu Date
         function parseDatum(str) {
             if (!str) return null;
             const datePart = str.match(/(\d{2})\.(\d{2})\.(\d{4})/);
@@ -730,8 +708,6 @@
             );
         }
 
-        // bestellungOffen wird bereits serverseitig (inkl. Start-/Enddatum) berechnet.
-        // Hier nur noch Nachricht anzeigen falls geschlossen.
         function checkIfOpen() {
             if (!einstellungen.bestellungOffen) {
                 const now = new Date();
@@ -755,8 +731,8 @@
             }
             return true;
         }
-
-        // Datum kommt bereits als deutscher String vom Server – keine Umwandlung nötig.
+        
+        // Datum kommt als deutscher String vom Server, direkt verwendbar
         function formatDate(str) {
             return str || '';
         }
