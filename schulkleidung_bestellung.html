@@ -543,14 +543,14 @@
             
             <div id="errorMessage" class="error-box" style="display: none;">
                 <strong>⚠️ Fehler beim Laden!</strong>
-                <p>Bitte kontaktieren Sie das Sekretariat: oswe.schulkleidung@gmail.com</p>
+                <p>Bitte kontaktieren Sie das Sekretariat: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="7c130f0b19520f1f140910171019151809121b3c1b111d1510521f1311">[email&#160;protected]</a></p>
             </div>
             
             <div class="closed-message" id="closedMessage">
                 <h2>🔒 Bestellungen derzeit geschlossen</h2>
                 <p id="closedMessageText">Das Bestellformular ist aktuell nicht verfügbar.</p>
                 <p style="margin-top: 20px;">Bei Fragen wenden Sie sich bitte an:<br>
-                <strong>oswe.schulkleidung@gmail.com</strong></p>
+                <strong><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="1c736f6b79326f7f746970777079757869727b5c7b717d7570327f7371">[email&#160;protected]</a></strong></p>
             </div>
             
             <div class="success-message" id="successMessage">
@@ -622,7 +622,7 @@
         </div>
     </div>
 
-    <script>
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
         const scriptURL = 'https://script.google.com/macros/s/AKfycbzheLy6YZNKjsWvWa_wcLqZ_tkDDoHhUalTQtEES8wGUtAS6-j0ThX8ZI1qAQ4jqEgjMw/exec';
         
         let products = [];
@@ -694,6 +694,17 @@
         
         function checkIfOpen() {
             if (!einstellungen.bestellungOffen) {
+                const start = einstellungen.startDatum ? formatDate(einstellungen.startDatum) : null;
+                const end   = einstellungen.endDatum   ? formatDate(einstellungen.endDatum)   : null;
+                let msg = 'Das Bestellformular ist aktuell nicht verfügbar.';
+                if (start && end) {
+                    msg = `Der Bestellzeitraum ist vom <strong>${start}</strong> bis zum <strong>${end}</strong>.<br>Bitte versuchen Sie es innerhalb dieses Zeitraums erneut.`;
+                } else if (start) {
+                    msg = `Das Bestellformular ist ab dem <strong>${start}</strong> verfügbar.<br>Bitte versuchen Sie es zu diesem Zeitpunkt erneut.`;
+                } else if (end) {
+                    msg = `Der Bestellzeitraum ist abgelaufen.<br>Bestellungen waren bis zum <strong>${end}</strong> möglich.`;
+                }
+                document.getElementById('closedMessageText').innerHTML = msg;
                 return false;
             }
             
@@ -702,9 +713,11 @@
             if (einstellungen.startDatum) {
                 const startDate = new Date(einstellungen.startDatum);
                 if (now < startDate) {
-                    const startFormatted = formatDate(einstellungen.startDatum);
-                    document.getElementById('closedMessageText').innerHTML = 
-                        `Das Bestellformular ist ab dem <strong>${startFormatted}</strong> verfügbar.<br>Bitte versuchen Sie es zu diesem Zeitpunkt erneut.`;
+                    const start = formatDate(einstellungen.startDatum);
+                    const end   = einstellungen.endDatum ? formatDate(einstellungen.endDatum) : null;
+                    document.getElementById('closedMessageText').innerHTML = end
+                        ? `Der Bestellzeitraum ist vom <strong>${start}</strong> bis zum <strong>${end}</strong>.<br>Bitte versuchen Sie es innerhalb dieses Zeitraums erneut.`
+                        : `Das Bestellformular ist ab dem <strong>${start}</strong> verfügbar.<br>Bitte versuchen Sie es zu diesem Zeitpunkt erneut.`;
                     return false;
                 }
             }
@@ -721,12 +734,19 @@
             return true;
         }
         
-        function formatDate(dateString) {
-            const date = new Date(dateString);
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const year = date.getFullYear();
-            return `${day}.${month}.${year}`;
+        function formatDate(val) {
+            if (!val) return '';
+            // Bereits deutsches Format dd.MM.yyyy → direkt zurückgeben
+            const dm = val.toString().match(/^(\d{2})\.(\d{2})\.(\d{4})/);
+            if (dm) return dm[0];
+            // ISO oder anderes Format → über Date-Objekt umwandeln
+            const d = new Date(val);
+            if (!isNaN(d)) {
+                return String(d.getDate()).padStart(2,'0') + '.' +
+                       String(d.getMonth()+1).padStart(2,'0') + '.' +
+                       d.getFullYear();
+            }
+            return val.toString();
         }
         
         function updateHeaderAndDeadline() {
@@ -1074,17 +1094,4 @@
 
         document.getElementById('emailConfirm').addEventListener('input', function() {
             const email = document.getElementById('email').value;
-            const emailConfirm = this.value;
-            const errorMsg = document.getElementById('emailMatchError');
-            
-            if (emailConfirm.length > 0 && email !== emailConfirm) {
-                errorMsg.style.display = 'block';
-            } else {
-                errorMsg.style.display = 'none';
-            }
-        });
-
-        loadArtikel();
-    </script>
-</body>
-</html>
+            const emailConfirm
