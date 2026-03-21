@@ -543,14 +543,14 @@
             
             <div id="errorMessage" class="error-box" style="display: none;">
                 <strong>⚠️ Fehler beim Laden!</strong>
-                <p>Bitte kontaktieren Sie das Sekretariat: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="ef809c988ac19c8c879a8384838a868b9a8188af88828e8683c18c8082">[email&#160;protected]</a></p>
+                <p>Bitte kontaktieren Sie das Sekretariat: oswe.schulkleidung@gmail.com</p>
             </div>
             
             <div class="closed-message" id="closedMessage">
                 <h2>🔒 Bestellungen derzeit geschlossen</h2>
                 <p id="closedMessageText">Das Bestellformular ist aktuell nicht verfügbar.</p>
                 <p style="margin-top: 20px;">Bei Fragen wenden Sie sich bitte an:<br>
-                <strong><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="9ff0ece8fab1ecfcf7eaf3f4f3faf6fbeaf1f8dff8f2fef6f3b1fcf0f2">[email&#160;protected]</a></strong></p>
+                <strong>oswe.schulkleidung@gmail.com</strong></p>
             </div>
             
             <div class="success-message" id="successMessage">
@@ -622,7 +622,7 @@
         </div>
     </div>
 
-    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+    <script>
         const scriptURL = 'https://script.google.com/macros/s/AKfycbzheLy6YZNKjsWvWa_wcLqZ_tkDDoHhUalTQtEES8wGUtAS6-j0ThX8ZI1qAQ4jqEgjMw/exec';
         
         let products = [];
@@ -692,58 +692,52 @@
             }
         }
         
-        // Parst deutschen Datums-String ("dd.MM.yyyy" oder "dd.MM.yyyy / HH:mm Uhr") zu Date
-        function parseDatum(str) {
-            if (!str) return null;
-            const datePart = str.match(/(\d{2})\.(\d{2})\.(\d{4})/);
-            if (!datePart) return null;
-            const hourPart = str.match(/(\d{1,2}):(\d{2})/);
-            const hour   = hourPart ? parseInt(hourPart[1]) : 0;
-            const minute = hourPart ? parseInt(hourPart[2]) : 0;
-            return new Date(
-                parseInt(datePart[3]),
-                parseInt(datePart[2]) - 1,
-                parseInt(datePart[1]),
-                hour, minute, 0
-            );
-        }
-
         function checkIfOpen() {
             if (!einstellungen.bestellungOffen) {
-                const now = new Date();
-                if (einstellungen.startDatum) {
-                    const startDate = parseDatum(einstellungen.startDatum);
-                    if (startDate && now < startDate) {
-                        document.getElementById('closedMessageText').innerHTML =
-                            `Das Bestellformular ist ab dem <strong>${einstellungen.startDatum}</strong> verfügbar.<br>Bitte versuchen Sie es zu diesem Zeitpunkt erneut.`;
-                        return false;
-                    }
-                }
-                if (einstellungen.endDatum) {
-                    const endDate = parseDatum(einstellungen.endDatum);
-                    if (endDate && now > endDate) {
-                        document.getElementById('closedMessageText').innerHTML =
-                            `Der Bestellzeitraum ist abgelaufen.<br>Bestellungen waren bis zum <strong>${einstellungen.endDatum}</strong> möglich.`;
-                        return false;
-                    }
-                }
                 return false;
             }
+            
+            const now = new Date();
+            
+            if (einstellungen.startDatum) {
+                const startDate = new Date(einstellungen.startDatum);
+                if (now < startDate) {
+                    const startFormatted = formatDate(einstellungen.startDatum);
+                    document.getElementById('closedMessageText').innerHTML = 
+                        `Das Bestellformular ist ab dem <strong>${startFormatted}</strong> verfügbar.<br>Bitte versuchen Sie es zu diesem Zeitpunkt erneut.`;
+                    return false;
+                }
+            }
+            
+            if (einstellungen.endDatum) {
+                const endDate = new Date(einstellungen.endDatum);
+                if (now > endDate) {
+                    document.getElementById('closedMessageText').innerHTML = 
+                        `Der Bestellzeitraum ist abgelaufen.<br>Bestellungen waren bis zum <strong>${formatDate(einstellungen.endDatum)}</strong> möglich.`;
+                    return false;
+                }
+            }
+            
             return true;
         }
         
-        // Datum kommt als deutscher String vom Server, direkt verwendbar
-        function formatDate(str) {
-            return str || '';
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}.${month}.${year}`;
         }
         
         function updateHeaderAndDeadline() {
             if (einstellungen.schuljahr) {
                 document.getElementById('schuljahrDisplay').textContent = 'Schuljahr ' + einstellungen.schuljahr;
             }
+            
             if (einstellungen.abgabetermin) {
-                document.getElementById('deadlineDisplay').innerHTML =
-                    `⚠️ Letzter Abgabetermin: ${einstellungen.abgabetermin} - Spätere Abgabe kann bei Bestellung nicht berücksichtigt werden! Bestellung verpflichtet zum Kauf!`;
+                const deadline = formatDate(einstellungen.abgabetermin);
+                document.getElementById('deadlineDisplay').innerHTML = 
+                    `⚠️ Letzter Abgabetermin: ${deadline} - Spätere Abgabe kann bei Bestellung nicht berücksichtigt werden! Bestellung verpflichtet zum Kauf!`;
             }
         }
         
@@ -1080,4 +1074,17 @@
 
         document.getElementById('emailConfirm').addEventListener('input', function() {
             const email = document.getElementById('email').value;
-            const emailConfirm
+            const emailConfirm = this.value;
+            const errorMsg = document.getElementById('emailMatchError');
+            
+            if (emailConfirm.length > 0 && email !== emailConfirm) {
+                errorMsg.style.display = 'block';
+            } else {
+                errorMsg.style.display = 'none';
+            }
+        });
+
+        loadArtikel();
+    </script>
+</body>
+</html>
