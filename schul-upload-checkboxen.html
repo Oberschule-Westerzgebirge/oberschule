@@ -629,11 +629,17 @@ function formatDatum(str) {
 function parseDateDE(str) {
   if (!str) return null;
   if (str instanceof Date) return str;
-  // Format: "13.03.2026 19:00:00" oder "17.11.2025 - 19Uhr" oder "17.11.2025"
-  const datePart = str.toString().match(/(\d{2})\.(\d{2})\.(\d{4})/);
+  const s = str.toString();
+  // ISO Format: "2026-03-21T07:35:00.000Z"
+  if (s.match(/^\d{4}-\d{2}-\d{2}T/)) {
+    const d = new Date(s);
+    return isNaN(d) ? null : d;
+  }
+  // Deutsches Format: "21.03.2026" oder "21.03.2026 - 19Uhr" oder "21.03.2026 19:00"
+  const datePart = s.match(/(\d{2})\.(\d{2})\.(\d{4})/);
   if (!datePart) return null;
-  const hourPart = str.toString().match(/(\d{1,2}):(\d{2})/);
-  const uhrPart  = str.toString().match(/[-–]?\s*(\d{1,2})\s*Uhr/i);
+  const hourPart = s.match(/(\d{1,2}):(\d{2})/);
+  const uhrPart  = s.match(/[-–]?\s*(\d{1,2})\s*Uhr/i);
   const hour   = hourPart ? parseInt(hourPart[1], 10) : (uhrPart ? parseInt(uhrPart[1], 10) : 0);
   const minute = hourPart ? parseInt(hourPart[2], 10) : 0;
   return new Date(
