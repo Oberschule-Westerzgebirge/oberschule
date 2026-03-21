@@ -646,9 +646,26 @@
             'dunkelgrau': 'darkgray'
         };
 
+        // Fetch mit Timeout (Standard: 15 Sekunden) – verhindert endloses Hängen
+        async function fetchWithTimeout(url, timeoutMs = 15000) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                const response = await fetch(url, { signal: controller.signal });
+                clearTimeout(timer);
+                return response;
+            } catch (err) {
+                clearTimeout(timer);
+                if (err.name === 'AbortError') {
+                    throw new Error('Zeitüberschreitung: Der Server antwortet nicht (>' + (timeoutMs/1000) + 's). Bitte Seite neu laden.');
+                }
+                throw err;
+            }
+        }
+
         async function loadArtikel() {
             try {
-                const einstellungenResponse = await fetch(scriptURL + '?action=getEinstellungen');
+                const einstellungenResponse = await fetchWithTimeout(scriptURL + '?action=getEinstellungen');
                 const einstellungenText = await einstellungenResponse.text();
                 einstellungen = JSON.parse(einstellungenText);
                 
@@ -660,7 +677,7 @@
                 
                 updateHeaderAndDeadline();
                 
-                const artikelResponse = await fetch(scriptURL + '?action=getArtikel');
+                const artikelResponse = await fetchWithTimeout(scriptURL + '?action=getArtikel');
                 const artikelText = await artikelResponse.text();
                 const artikelData = JSON.parse(artikelText);
                 
@@ -674,7 +691,7 @@
                 products.forEach(p => p.colors.forEach(c => colorSet.add(c)));
                 allColors = Array.from(colorSet);
                 
-                const schuelerResponse = await fetch(scriptURL + '?action=getSchueler');
+                const schuelerResponse = await fetchWithTimeout(scriptURL + '?action=getSchueler');
                 const schuelerText = await schuelerResponse.text();
                 schuelerData = JSON.parse(schuelerText);
                 
@@ -688,6 +705,10 @@
             } catch (error) {
                 console.error('Fehler beim Laden:', error);
                 document.getElementById('loadingMessage').style.display = 'none';
+                document.getElementById('errorMessage').innerHTML =
+                    '<strong>\u26a0\ufe0f Fehler beim Laden!</strong>' +
+                    '<p style="margin-top:8px">' + error.message + '</p>' +
+                    '<p>Bitte kontaktieren Sie das Sekretariat: <a href="mailto:oswe.schulkleidung@gmail.com">oswe.schulkleidung@gmail.com</a></p>';
                 document.getElementById('errorMessage').style.display = 'block';
             }
         }
