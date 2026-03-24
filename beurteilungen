@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beurteilungsbogen – OSWE</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600;700&display=swap');
+
+  :root {
+    --primary: #1a3a6b;
+    --accent: #c0392b;
+    --border: #ccc;
+    --bg: #f5f5f5;
+    --card: #ffffff;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Source Sans 3', Arial, sans-serif;
+    background: var(--bg);
+    color: #222;
+    font-size: 14px;
+  }
+
+  /* ── TOOLBAR ── */
+  .toolbar {
+    background: var(--primary);
+    color: white;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .toolbar h1 { font-size: 16px; font-weight: 700; flex: 1; }
+  .toolbar button {
+    padding: 8px 18px;
+    border: none;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .toolbar button:hover { opacity: 0.85; }
+  .btn-save   { background: #27ae60; color: white; }
+  .btn-print  { background: #2980b9; color: white; }
+  .btn-new    { background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.4) !important; }
+
+  /* ── SELECTOR ── */
+  .selector-bar {
+    background: white;
+    border-bottom: 2px solid var(--primary);
+    padding: 14px 24px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+  .field-group { display: flex; flex-direction: column; gap: 4px; }
+  .field-group label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #666; letter-spacing: 0.5px; }
+  .field-group select,
+  .field-group input {
+    padding: 8px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    min-width: 160px;
+  }
+  .field-group select:focus,
+  .field-group input:focus { border-color: var(--primary); }
+
+  .status-msg {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 13px;
+    display: none;
+    margin-left: auto;
+  }
+  .status-msg.success { background: #d5f5e3; color: #1e8449; display: block; }
+  .status-msg.error   { background: #fde8e8; color: #c0392b; display: block; }
+
+  /* ── BOGEN ── */
+  .bogen-wrap {
+    max-width: 900px;
+    margin: 24px auto;
+    padding: 0 16px 60px;
+  }
+
+  .bogen {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 40px 48px;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+  }
+
+  /* Header */
+  .bogen-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--primary);
+  }
+  .bogen-header-left h2 {
+    font-size: 20px;
+    color: var(--primary);
+    font-weight: 700;
+  }
+  .bogen-header-left p { color: #555; margin-top: 4px; font-size: 13px; }
+  .bogen-logo { height: 60px; }
+
+  /* Skala-Legende */
+  .skala-legende {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+    margin-bottom: 20px;
+    background: #f0f4f9;
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .skala-legende-item {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--primary);
+    line-height: 1.3;
+  }
+
+  /* Kriterium */
+  .kriterium {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .kriterium-header {
+    background: #f8f9fb;
+    padding: 10px 16px;
+    font-weight: 600;
+    font-size: 13.5px;
+    color: #333;
+    border-bottom: 1px solid #e8e8e8;
+  }
+  .kriterium-body { padding: 12px 16px; }
+
+  /* Radio-Buttons */
+  .radio-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .radio-option { position: relative; }
+  .radio-option input[type="radio"] { display: none; }
+  .radio-option label {
+    display: block;
+    text-align: center;
+    padding: 10px 4px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.12s;
+    font-size: 12px;
+    color: #555;
+    line-height: 1.2;
+  }
+  .radio-option label:hover { border-color: var(--primary); background: #f0f4f9; }
+  .radio-option input:checked + label {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: white;
+    font-weight: 600;
+  }
+
+  /* Emoji-Indikatoren */
+  .radio-option:nth-child(1) input:checked + label { background: #1a8a4a; border-color: #1a8a4a; }
+  .radio-option:nth-child(2) input:checked + label { background: #27ae60; border-color: #27ae60; }
+  .radio-option:nth-child(3) input:checked + label { background: #f39c12; border-color: #f39c12; }
+  .radio-option:nth-child(4) input:checked + label { background: #e67e22; border-color: #e67e22; }
+  .radio-option:nth-child(5) input:checked + label { background: #c0392b; border-color: #c0392b; }
+
+  /* Begründung */
+  .begruendung-row { display: flex; align-items: flex-start; gap: 8px; }
+  .begruendung-row label {
+    font-size: 11px;
+    color: #888;
+    white-space: nowrap;
+    padding-top: 8px;
+    font-weight: 600;
+  }
+  .begruendung-row textarea {
+    flex: 1;
+    padding: 7px 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-family: inherit;
+    font-size: 13px;
+    resize: vertical;
+    min-height: 38px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .begruendung-row textarea:focus { border-color: var(--primary); }
+
+  /* Unterschrift */
+  .unterschrift-row {
+    margin-top: 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+  }
+  .unterschrift-ort { flex: 1; }
+  .unterschrift-ort label {
+    display: block;
+    font-size: 11px;
+    color: #888;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .unterschrift-ort input {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+  }
+  .unterschrift-line {
+    flex: 1;
+    border-bottom: 1.5px solid #333;
+    padding-bottom: 4px;
+    text-align: center;
+    font-size: 11px;
+    color: #888;
+    font-weight: 600;
+    padding-top: 24px;
+  }
+
+  /* Loading */
+  .loading {
+    text-align: center;
+    padding: 60px;
+    color: #888;
+    font-size: 16px;
+  }
+
+  /* ── PRINT ── */
+  @media print {
+    .toolbar, .selector-bar { display: none !important; }
+    body { background: white; }
+    .bogen-wrap { margin: 0; padding: 0; max-width: 100%; }
+    .bogen { border: none; box-shadow: none; padding: 20px 24px; border-radius: 0; }
+    .kriterium { break-inside: avoid; }
+    .radio-option label { border: 1.5px solid #ccc !important; }
+    .radio-option input:checked + label {
+      border-color: #333 !important;
+      background: #e8e8e8 !important;
+      color: #000 !important;
+    }
+    textarea { border: none !important; border-bottom: 1px solid #ccc !important; border-radius: 0 !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <h1>📋 Beurteilungsbogen – Oberschule Westerzgebirge</h1>
+  <button class="btn-new" onclick="resetForm()">✦ Neuer Bogen</button>
+  <button class="btn-save" onclick="saveBogen()">💾 Speichern</button>
+  <button class="btn-print" onclick="window.print()">🖨️ Drucken / PDF</button>
+</div>
+
+<div class="selector-bar">
+  <div class="field-group">
+    <label>Klassenleiter/in</label>
+    <select id="sel-lehrer" onchange="onLehrerChange()">
+      <option value="">— Lehrer wählen —</option>
+    </select>
+  </div>
+  <div class="field-group">
+    <label>Klasse</label>
+    <select id="sel-klasse" disabled onchange="onKlasseChange()">
+      <option value="">— erst Lehrer wählen —</option>
+    </select>
+  </div>
+  <div class="field-group">
+    <label>Schüler / Schülerin</label>
+    <select id="sel-schueler" disabled onchange="onSchuelerChange()">
+      <option value="">— erst Klasse wählen —</option>
+    </select>
+  </div>
+  <div class="field-group">
+    <label>Schuljahr</label>
+    <input type="text" id="inp-schuljahr" value="2025/2026" style="width:110px;">
+  </div>
+  <div class="status-msg" id="status-msg"></div>
+</div>
+
+<div class="bogen-wrap">
+  <div class="loading" id="loading">Daten werden geladen…</div>
+  <div class="bogen" id="bogen" style="display:none;">
+
+    <div class="bogen-header">
+      <div class="bogen-header-left">
+        <h2>Einschätzung</h2>
+        <p id="bogen-subtitle">Bitte Klasse und Schüler auswählen</p>
+      </div>
+      <img class="bogen-logo" src="https://raw.githubusercontent.com/Oberschule-Westerzgebirge/oberschule/main/logo.png"
+           onerror="this.style.display='none'" alt="OSWE">
+    </div>
+
+    <div class="skala-legende">
+      <div class="skala-legende-item">⭐ vorbildlich ausgeprägt</div>
+      <div class="skala-legende-item">✅ gut ausgeprägt</div>
+      <div class="skala-legende-item">〰️ schwankend</div>
+      <div class="skala-legende-item">⚠️ noch optimierbar / verbesserungswürdig</div>
+      <div class="skala-legende-item">❗ noch große Reserven vorhanden</div>
+    </div>
+
+    <div id="kriterien-container"></div>
+
+    <div class="unterschrift-row">
+      <div class="unterschrift-ort">
+        <label>Ort, Datum</label>
+        <input type="text" id="inp-ort" value="Aue-Bad Schlema, ">
+      </div>
+      <div class="unterschrift-line">Unterschrift Klassenleiter/in</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const KRITERIEN = [
+  'Freundlichkeit / Auftreten im Schulalltag',
+  'Toleranz und Rücksichtnahme gegenüber anderen',
+  'Hilfsbereitschaft/Zivilcourage',
+  'Ausdauer und Zielstrebigkeit im Unterricht',
+  'Übernehmen zusätzlicher Aufgaben im Schulleben',
+  'Teamfähigkeit in Arbeitsgruppen',
+  'Pünktlichkeit',
+  'angemessener Umgang mit/bei Konflikten',
+  'Zuverlässigkeit',
+  'Einhalten von Regeln (Hausordnung etc.)'
+];
+
+const SKALA = [
+  'vorbildlich ausgeprägt',
+  'gut ausgeprägt',
+  'schwankend',
+  'noch optimierbar / verbesserungswürdig',
+  'noch große Reserven vorhanden'
+];
+
+let lehrerDaten = {}; // { "Müller": { "5a": ["Schüler1",...] } }
+
+// ── INIT ──────────────────────────────────────
+window.onload = function() {
+  baueKriterien();
+  google.script.run
+    .withSuccessHandler(data => {
+      lehrerDaten = data;
+      const sel = document.getElementById('sel-lehrer');
+      Object.keys(data).sort().forEach(l => {
+        sel.appendChild(new Option(l, l));
+      });
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('bogen').style.display = 'block';
+    })
+    .withFailureHandler(err => {
+      document.getElementById('loading').textContent = 'Fehler: ' + err.message;
+    })
+    .getLehrerUndKlassen();
+
+  google.script.run
+    .withSuccessHandler(sj => {
+      document.getElementById('inp-schuljahr').value = sj;
+    })
+    .getSchuljahr();
+};
+
+// ── KRITERIEN AUFBAUEN ──────────────────────
+function baueKriterien() {
+  const container = document.getElementById('kriterien-container');
+  KRITERIEN.forEach((name, i) => {
+    const div = document.createElement('div');
+    div.className = 'kriterium';
+    let radios = SKALA.map((s, j) => `
+      <div class="radio-option">
+        <input type="radio" name="k${i}" id="k${i}_${j}" value="${s}">
+        <label for="k${i}_${j}">${s}</label>
+      </div>`).join('');
+    div.innerHTML = `
+      <div class="kriterium-header">${i+1}. ${name}</div>
+      <div class="kriterium-body">
+        <div class="radio-row">${radios}</div>
+        <div class="begruendung-row">
+          <label>Begründung:</label>
+          <textarea id="b${i}" rows="1" placeholder="optional…"></textarea>
+        </div>
+      </div>`;
+    container.appendChild(div);
+  });
+}
+
+// ── LEHRER WÄHLEN ────────────────────────────
+function onLehrerChange() {
+  const lehrer = document.getElementById('sel-lehrer').value;
+  const selKlasse = document.getElementById('sel-klasse');
+  const selSchueler = document.getElementById('sel-schueler');
+
+  selKlasse.innerHTML = '';
+  selSchueler.innerHTML = '<option value="">— erst Klasse wählen —</option>';
+  selKlasse.disabled = !lehrer;
+  selSchueler.disabled = true;
+  resetBewertungen();
+
+  if (!lehrer) {
+    selKlasse.appendChild(new Option('— erst Lehrer wählen —', ''));
+    return;
+  }
+
+  selKlasse.appendChild(new Option('— Klasse wählen —', ''));
+  const klassen = Object.keys(lehrerDaten[lehrer] || {}).sort(sortKlassen);
+  klassen.forEach(k => selKlasse.appendChild(new Option(k, k)));
+  updateSubtitle();
+}
+
+// ── KLASSE WÄHLEN ───────────────────────────
+function onKlasseChange() {
+  const lehrer = document.getElementById('sel-lehrer').value;
+  const klasse = document.getElementById('sel-klasse').value;
+  const sel = document.getElementById('sel-schueler');
+
+  sel.innerHTML = '';
+  sel.disabled = !klasse;
+  resetBewertungen();
+
+  if (!klasse) {
+    sel.appendChild(new Option('— erst Klasse wählen —', ''));
+    return;
+  }
+
+  sel.appendChild(new Option('— Schüler wählen —', ''));
+  (lehrerDaten[lehrer]?.[klasse] || []).forEach(n => sel.appendChild(new Option(n, n)));
+  updateSubtitle();
+}
+
+// ── SCHÜLER WÄHLEN ───────────────────────────
+function onSchuelerChange() {
+  const lehrer   = document.getElementById('sel-lehrer').value;
+  const klasse   = document.getElementById('sel-klasse').value;
+  const schueler = document.getElementById('sel-schueler').value;
+  const schuljahr= document.getElementById('inp-schuljahr').value;
+  if (!schueler) return;
+
+  updateSubtitle();
+
+  google.script.run
+    .withSuccessHandler(saved => {
+      if (saved) {
+        ladeBewertungen(saved);
+        zeigeStatus('Gespeicherte Beurteilung geladen ✓', 'success');
+      } else {
+        resetBewertungen();
+      }
+    })
+    .loadBeurteilung(lehrer, klasse, schueler, schuljahr);
+}
+
+function updateSubtitle() {
+  const lehrer   = document.getElementById('sel-lehrer').value;
+  const schueler = document.getElementById('sel-schueler').value;
+  const schuljahr= document.getElementById('inp-schuljahr').value;
+  let text = 'Bitte Lehrer und Schüler auswählen';
+  if (lehrer && schueler) {
+    text = `für ${schueler} im Schuljahr ${schuljahr} · KL: ${lehrer}`;
+  } else if (lehrer) {
+    text = `Klassenleiter: ${lehrer}`;
+  }
+  document.getElementById('bogen-subtitle').textContent = text;
+}
+
+// ── BEWERTUNGEN LADEN / RESET ────────────────
+function ladeBewertungen(saved) {
+  saved.bewertungen.forEach((b, i) => {
+    if (b.rating) {
+      const radio = document.querySelector(`input[name="k${i}"][value="${b.rating}"]`);
+      if (radio) radio.checked = true;
+    }
+    document.getElementById(`b${i}`).value = b.begruendung || '';
+  });
+}
+
+function resetBewertungen() {
+  KRITERIEN.forEach((_, i) => {
+    document.querySelectorAll(`input[name="k${i}"]`).forEach(r => r.checked = false);
+    document.getElementById(`b${i}`).value = '';
+  });
+}
+
+function resetForm() {
+  document.getElementById('sel-lehrer').value = '';
+  document.getElementById('sel-klasse').innerHTML = '<option value="">— erst Lehrer wählen —</option>';
+  document.getElementById('sel-klasse').disabled = true;
+  document.getElementById('sel-schueler').innerHTML = '<option value="">— erst Klasse wählen —</option>';
+  document.getElementById('sel-schueler').disabled = true;
+  document.getElementById('bogen-subtitle').textContent = 'Bitte Lehrer und Schüler auswählen';
+  resetBewertungen();
+  zeigeStatus('', '');
+}
+
+// ── SPEICHERN ────────────────────────────────
+function saveBogen() {
+  const lehrer   = document.getElementById('sel-lehrer').value;
+  const klasse   = document.getElementById('sel-klasse').value;
+  const schueler = document.getElementById('sel-schueler').value;
+  const schuljahr= document.getElementById('inp-schuljahr').value;
+
+  if (!lehrer || !klasse || !schueler) {
+    zeigeStatus('Bitte Lehrer, Klasse und Schüler auswählen!', 'error');
+    return;
+  }
+
+  const bewertungen = KRITERIEN.map((_, i) => {
+    const checked = document.querySelector(`input[name="k${i}"]:checked`);
+    return {
+      rating: checked ? checked.value : '',
+      begruendung: document.getElementById(`b${i}`).value
+    };
+  });
+
+  zeigeStatus('Wird gespeichert…', 'success');
+
+  google.script.run
+    .withSuccessHandler(result => {
+      zeigeStatus(result.message, 'success');
+    })
+    .withFailureHandler(err => {
+      zeigeStatus('Fehler: ' + err.message, 'error');
+    })
+    .saveBeurteilung({ lehrer, klasse, schueler, schuljahr, bewertungen });
+}
+
+// ── HELPERS ──────────────────────────────────
+function zeigeStatus(msg, typ) {
+  const el = document.getElementById('status-msg');
+  el.className = 'status-msg' + (typ ? ' ' + typ : '');
+  el.textContent = msg;
+  if (msg && typ === 'success') {
+    setTimeout(() => { el.className = 'status-msg'; el.textContent = ''; }, 4000);
+  }
+}
+
+function sortKlassen(a, b) {
+  const num = s => parseInt(s) || 0;
+  const letter = s => s.replace(/\d/g, '');
+  return num(a) - num(b) || letter(a).localeCompare(letter(b));
+}
+</script>
+</body>
+</html>
