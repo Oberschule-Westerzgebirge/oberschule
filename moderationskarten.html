@@ -6,140 +6,41 @@
   <title>Moderationskarten – Aufnahmefeier</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #f5f4f0;
-      color: #1a1a1a;
-      min-height: 100vh;
-      padding: 2rem 1rem;
-    }
-
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f5f4f0; color: #1a1a1a; min-height: 100vh; padding: 2rem 1rem; }
     .page { max-width: 720px; margin: 0 auto; }
-
     h1 { font-size: 22px; font-weight: 500; margin-bottom: 4px; }
     .subtitle { font-size: 14px; color: #666; margin-bottom: 1.5rem; }
-
-    .step-box {
-      background: #eeedf0;
-      border-radius: 8px;
-      padding: 10px 14px;
-      margin-bottom: 1.5rem;
-      font-size: 13px;
-      color: #555;
-      line-height: 1.6;
-    }
+    .step-box { background: #eeedf0; border-radius: 8px; padding: 10px 14px; margin-bottom: 1.5rem; font-size: 13px; color: #555; line-height: 1.6; }
     .step-box strong { color: #1a1a1a; font-weight: 500; }
-
     .field-row { display: flex; gap: 10px; margin-bottom: 10px; }
     .field-row > div { flex: 1; }
-
     label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
-
-    input, textarea {
-      width: 100%;
-      font-size: 14px;
-      padding: 8px 10px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      background: #fff;
-      color: #1a1a1a;
-      outline: none;
-      font-family: inherit;
-    }
-    input:focus, textarea:focus {
-      border-color: #7f77dd;
-      box-shadow: 0 0 0 2px rgba(127,119,221,0.15);
-    }
+    input, textarea { width: 100%; font-size: 14px; padding: 8px 10px; border-radius: 8px; border: 1px solid #ccc; background: #fff; color: #1a1a1a; outline: none; font-family: inherit; }
+    input:focus, textarea:focus { border-color: #7f77dd; box-shadow: 0 0 0 2px rgba(127,119,221,0.15); }
     textarea { min-height: 90px; resize: vertical; }
-
     .char-hint { font-size: 12px; color: #aaa; text-align: right; margin-top: 3px; }
-
     .btn-row { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
-
-    button {
-      cursor: pointer;
-      font-size: 13px;
-      padding: 8px 18px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      background: #fff;
-      color: #1a1a1a;
-      font-family: inherit;
-      transition: background 0.15s;
-    }
+    button { cursor: pointer; font-size: 13px; padding: 8px 18px; border-radius: 8px; border: 1px solid #ccc; background: #fff; color: #1a1a1a; font-family: inherit; transition: background 0.15s; }
     button:hover { background: #f0f0f0; }
     button.primary { background: #eeedfe; border-color: #afa9ec; color: #3c3489; }
     button.primary:hover { background: #cecbf6; }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .card-preview {
-      margin-top: 1.5rem;
-      border-radius: 12px;
-      border: 1px solid #e0e0e0;
-      background: #fff;
-      padding: 1.5rem;
-      display: none;
-    }
+    .card-preview { margin-top: 1.5rem; border-radius: 12px; border: 1px solid #e0e0e0; background: #fff; padding: 1.5rem; display: none; }
     .card-preview.visible { display: block; }
-
-    .card-tag {
-      display: inline-block;
-      background: #eeedfe;
-      color: #3c3489;
-      font-size: 12px;
-      font-weight: 500;
-      padding: 3px 10px;
-      border-radius: 20px;
-      margin-bottom: 12px;
-    }
+    .card-tag { display: inline-block; background: #eeedfe; color: #3c3489; font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 20px; margin-bottom: 12px; }
     .card-title { font-size: 18px; font-weight: 500; margin-bottom: 12px; }
     .card-text { font-size: 15px; line-height: 1.75; border-left: 3px solid #afa9ec; padding-left: 14px; }
     .card-footer { margin-top: 14px; font-size: 12px; color: #aaa; }
-
     hr.divider { border: none; border-top: 1px solid #eee; margin: 1rem 0 0.75rem; }
-
     .saved-list { margin-top: 2rem; }
     .saved-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
     .saved-title { font-size: 14px; font-weight: 500; color: #666; }
-
-    .live-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 12px;
-      color: #3b6d11;
-      background: #eaf3de;
-      border-radius: 20px;
-      padding: 3px 10px;
-    }
-    .live-dot {
-      width: 7px; height: 7px;
-      border-radius: 50%;
-      background: #639922;
-      animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
-    }
-
-    .saved-item {
-      background: #fff;
-      border: 1px solid #e8e8e8;
-      border-radius: 10px;
-      padding: 12px 16px;
-      margin-bottom: 10px;
-    }
+    .live-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #3b6d11; background: #eaf3de; border-radius: 20px; padding: 3px 10px; }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #639922; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .saved-item { background: #fff; border: 1px solid #e8e8e8; border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; }
     .saved-item-header { display: flex; align-items: flex-start; gap: 10px; }
-    .saved-num {
-      width: 24px; height: 24px;
-      border-radius: 50%;
-      background: #eeedfe; color: #3c3489;
-      font-size: 12px; font-weight: 500;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0; margin-top: 1px;
-    }
+    .saved-num { width: 24px; height: 24px; border-radius: 50%; background: #eeedfe; color: #3c3489; font-size: 12px; font-weight: 500; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
     .saved-info { flex: 1; }
     .saved-group { font-size: 13px; font-weight: 500; }
     .saved-topic { font-size: 12px; color: #666; margin-top: 1px; }
@@ -148,34 +49,27 @@
     .small-btn { font-size: 12px; padding: 4px 10px; }
     .delete-btn { color: #a32d2d; border-color: #f09595; }
     .delete-btn:hover { background: #fcebeb; }
-
+    .edit-btn { color: #185fa5; border-color: #85b7eb; }
+    .edit-btn:hover { background: #e6f1fb; }
     .empty-state { text-align: center; padding: 2rem 0; color: #aaa; font-size: 13px; }
-
     .status-bar { font-size: 12px; color: #888; margin-top: 6px; min-height: 18px; }
     .status-bar.ok { color: #3b6d11; }
     .status-bar.err { color: #a32d2d; }
-
-    .admin-bar {
-      margin-top: 2rem;
-      border-top: 1px solid #e8e8e8;
-      padding-top: 1rem;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    .admin-bar input {
-      width: 180px;
-      font-size: 13px;
-      padding: 6px 10px;
-    }
+    .admin-bar { margin-top: 2rem; border-top: 1px solid #e8e8e8; padding-top: 1rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .admin-bar input { width: 180px; font-size: 13px; padding: 6px 10px; }
     .admin-status { font-size: 12px; }
     .admin-status.ok { color: #3b6d11; }
     .admin-status.err { color: #a32d2d; }
-
-    @media (max-width: 520px) {
-      .field-row { flex-direction: column; }
-    }
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; }
+    .modal-overlay.visible { display: flex; }
+    .modal { background: #fff; border-radius: 12px; padding: 1.5rem; width: 90%; max-width: 480px; }
+    .modal h2 { font-size: 16px; font-weight: 500; margin-bottom: 1rem; }
+    .modal label { margin-top: 10px; }
+    .modal-btn-row { display: flex; gap: 8px; margin-top: 1rem; }
+    .modal-status { font-size: 12px; margin-top: 8px; min-height: 16px; }
+    .modal-status.err { color: #a32d2d; }
+    .modal-status.ok { color: #3b6d11; }
+    @media (max-width: 520px) { .field-row { flex-direction: column; } }
   </style>
 </head>
 <body>
@@ -185,7 +79,7 @@
   <p class="subtitle">Aufnahmefeier der neuen 5. Klassen – Gruppenarbeit Klasse 9</p>
 
   <div class="step-box">
-    <strong>So geht's:</strong> Tragt euren Gruppennamen und euer Thema ein, schreibt euren Moderationstext und klickt auf „Vorschau". Wenn ihr zufrieden seid, speichert die Karte – sie erscheint sofort bei allen anderen Gruppen!
+    <strong>So geht's:</strong> Tragt euren Gruppennamen, euer Thema und ein Gruppenpasswort ein. Mit dem Passwort könnt ihr eure Karte später bearbeiten. Klickt auf „Vorschau" und dann „Speichern" – die Karte erscheint sofort bei allen!
   </div>
 
   <div class="field-row">
@@ -202,6 +96,17 @@
   <label>Euer Moderationstext</label>
   <textarea id="modtext" placeholder="Schreibt hier euren Moderationstext. Denkt an: Wer seid ihr? Was passiert jetzt? Wie klingt es einladend für die Neuen?" oninput="updateChar()"></textarea>
   <div class="char-hint" id="charcount">0 Zeichen</div>
+
+  <div class="field-row" style="margin-top:10px;">
+    <div>
+      <label>Gruppenpasswort <span style="color:#aaa;">(zum späteren Bearbeiten)</span></label>
+      <input type="password" id="grouppw" placeholder="Passwort frei wählen">
+    </div>
+    <div>
+      <label>Passwort wiederholen</label>
+      <input type="password" id="grouppw2" placeholder="Nochmal eingeben">
+    </div>
+  </div>
 
   <div class="btn-row">
     <button class="primary" onclick="showPreview()">Vorschau anzeigen</button>
@@ -238,9 +143,33 @@
 
 </div>
 
+<!-- Bearbeiten-Modal -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <h2>Karte bearbeiten</h2>
+    <label>Gruppenpasswort zur Verifikation</label>
+    <input type="password" id="edit-pw" placeholder="Euer Gruppenpasswort">
+    <div id="edit-pw-status" class="modal-status"></div>
+    <div id="edit-fields" style="display:none;">
+      <label style="margin-top:12px;">Gruppenname</label>
+      <input type="text" id="edit-group">
+      <label>Programmpunkt / Thema</label>
+      <input type="text" id="edit-topic" style="margin-top:6px;">
+      <label>Moderationstext</label>
+      <textarea id="edit-text" style="margin-top:6px; min-height:80px;"></textarea>
+    </div>
+    <div class="modal-btn-row">
+      <button class="primary" id="edit-check-btn" onclick="verifyEditPw()">Passwort prüfen</button>
+      <button id="edit-save-btn" style="display:none;" onclick="submitEdit()">Änderungen speichern</button>
+      <button onclick="closeEditModal()">Abbrechen</button>
+    </div>
+    <div id="edit-status" class="modal-status"></div>
+  </div>
+</div>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, updateDoc, doc, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBYubfEPbipWGWrpvMZAoMZNlF98p0jiw4",
@@ -256,6 +185,9 @@
   const cardsCol = collection(db, "moderationskarten");
 
   let isAdmin = false;
+  let lastSnapshot = null;
+  let editDocId = null;
+  let editDocPassword = null;
 
   window.checkAdmin = function() {
     const pw = document.getElementById('admin-pw').value;
@@ -273,15 +205,18 @@
   };
 
   window.updateChar = function() {
-    const t = document.getElementById('modtext').value;
-    document.getElementById('charcount').textContent = t.length + ' Zeichen';
+    document.getElementById('charcount').textContent = document.getElementById('modtext').value.length + ' Zeichen';
   };
 
   window.showPreview = function() {
     const g = document.getElementById('group').value.trim();
     const tp = document.getElementById('topic').value.trim();
     const tx = document.getElementById('modtext').value.trim();
-    if (!g || !tp || !tx) { alert('Bitte alle drei Felder ausfüllen!'); return; }
+    const pw = document.getElementById('grouppw').value;
+    const pw2 = document.getElementById('grouppw2').value;
+    if (!g || !tp || !tx) { alert('Bitte Gruppenname, Thema und Text ausfüllen!'); return; }
+    if (!pw) { alert('Bitte ein Gruppenpasswort festlegen!'); return; }
+    if (pw !== pw2) { alert('Die Passwörter stimmen nicht überein!'); return; }
     document.getElementById('prev-group').textContent = g;
     document.getElementById('prev-topic').textContent = tp;
     document.getElementById('prev-text').textContent = tx;
@@ -298,16 +233,17 @@
     const g = document.getElementById('prev-group').textContent;
     const tp = document.getElementById('prev-topic').textContent;
     const tx = document.getElementById('prev-text').textContent;
+    const pw = document.getElementById('grouppw').value;
     btn.disabled = true;
     btn.textContent = 'Wird gespeichert...';
     try {
-      await addDoc(cardsCol, { group: g, topic: tp, text: tx, timestamp: serverTimestamp() });
+      await addDoc(cardsCol, { group: g, topic: tp, text: tx, password: pw, timestamp: serverTimestamp() });
       status.className = 'status-bar ok';
-      status.textContent = 'Karte wurde gespeichert!';
+      status.textContent = 'Karte gespeichert! Passwort gut merken!';
       setTimeout(() => {
         document.getElementById('preview').classList.remove('visible');
         clearForm();
-      }, 800);
+      }, 1200);
     } catch(e) {
       status.className = 'status-bar err';
       status.textContent = 'Fehler beim Speichern – bitte nochmal versuchen.';
@@ -323,10 +259,71 @@
     }
   };
 
+  window.openEditModal = function(id, password) {
+    editDocId = id;
+    editDocPassword = password;
+    document.getElementById('edit-pw').value = '';
+    document.getElementById('edit-pw-status').textContent = '';
+    document.getElementById('edit-fields').style.display = 'none';
+    document.getElementById('edit-save-btn').style.display = 'none';
+    document.getElementById('edit-check-btn').style.display = 'inline-block';
+    document.getElementById('edit-status').textContent = '';
+    document.getElementById('edit-modal').classList.add('visible');
+  };
+
+  window.verifyEditPw = function() {
+    const entered = document.getElementById('edit-pw').value;
+    const pwStatus = document.getElementById('edit-pw-status');
+    if (entered === editDocPassword) {
+      pwStatus.className = 'modal-status ok';
+      pwStatus.textContent = 'Passwort korrekt!';
+      const card = getCardById(editDocId);
+      if (card) {
+        document.getElementById('edit-group').value = card.group || '';
+        document.getElementById('edit-topic').value = card.topic || '';
+        document.getElementById('edit-text').value = card.text || '';
+      }
+      document.getElementById('edit-fields').style.display = 'block';
+      document.getElementById('edit-save-btn').style.display = 'inline-block';
+      document.getElementById('edit-check-btn').style.display = 'none';
+    } else {
+      pwStatus.className = 'modal-status err';
+      pwStatus.textContent = 'Falsches Passwort.';
+    }
+  };
+
+  window.submitEdit = async function() {
+    const g = document.getElementById('edit-group').value.trim();
+    const tp = document.getElementById('edit-topic').value.trim();
+    const tx = document.getElementById('edit-text').value.trim();
+    const editStatus = document.getElementById('edit-status');
+    if (!g || !tp || !tx) { editStatus.className = 'modal-status err'; editStatus.textContent = 'Bitte alle Felder ausfüllen.'; return; }
+    try {
+      await updateDoc(doc(db, 'moderationskarten', editDocId), { group: g, topic: tp, text: tx });
+      editStatus.className = 'modal-status ok';
+      editStatus.textContent = 'Änderungen gespeichert!';
+      setTimeout(closeEditModal, 800);
+    } catch(e) {
+      editStatus.className = 'modal-status err';
+      editStatus.textContent = 'Fehler beim Speichern.';
+    }
+  };
+
+  window.closeEditModal = function() {
+    document.getElementById('edit-modal').classList.remove('visible');
+    editDocId = null;
+    editDocPassword = null;
+  };
+
+  function getCardById(id) {
+    if (!lastSnapshot) return null;
+    let found = null;
+    lastSnapshot.forEach(d => { if (d.id === id) found = d.data(); });
+    return found;
+  }
+
   function clearForm() {
-    document.getElementById('group').value = '';
-    document.getElementById('topic').value = '';
-    document.getElementById('modtext').value = '';
+    ['group','topic','modtext','grouppw','grouppw2'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('charcount').textContent = '0 Zeichen';
   }
   window.clearForm = clearForm;
@@ -334,8 +331,6 @@
   function esc(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
-
-  let lastSnapshot = null;
 
   function renderCards(snapshot) {
     const c = document.getElementById('cards-container');
@@ -349,9 +344,7 @@
       const card = docSnap.data();
       const div = document.createElement('div');
       div.className = 'saved-item';
-      const deleteBtn = isAdmin
-        ? '<button class="small-btn delete-btn" onclick="deleteCard(\'' + docSnap.id + '\')">Löschen</button>'
-        : '';
+      const deleteBtn = isAdmin ? '<button class="small-btn delete-btn" onclick="deleteCard(\'' + docSnap.id + '\')">Löschen</button>' : '';
       div.innerHTML =
         '<div class="saved-item-header">' +
           '<div class="saved-num">' + i + '</div>' +
@@ -359,7 +352,10 @@
             '<div class="saved-group">' + esc(card.group) + '</div>' +
             '<div class="saved-topic">' + esc(card.topic) + '</div>' +
           '</div>' +
-          '<div class="saved-actions">' + deleteBtn + '</div>' +
+          '<div class="saved-actions">' +
+            '<button class="small-btn edit-btn" onclick="openEditModal(\'' + docSnap.id + '\', \'' + esc(card.password) + '\')">Bearbeiten</button>' +
+            deleteBtn +
+          '</div>' +
         '</div>' +
         '<div class="saved-text">' + esc(card.text) + '</div>';
       c.appendChild(div);
