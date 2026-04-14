@@ -155,6 +155,24 @@
     .status-bar.ok { color: #3b6d11; }
     .status-bar.err { color: #a32d2d; }
 
+    .admin-bar {
+      margin-top: 2rem;
+      border-top: 1px solid #e8e8e8;
+      padding-top: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .admin-bar input {
+      width: 180px;
+      font-size: 13px;
+      padding: 6px 10px;
+    }
+    .admin-status { font-size: 12px; }
+    .admin-status.ok { color: #3b6d11; }
+    .admin-status.err { color: #a32d2d; }
+
     @media (max-width: 520px) {
       .field-row { flex-direction: column; }
     }
@@ -211,6 +229,13 @@
     <div id="cards-container"><div class="empty-state">Verbinde mit Datenbank...</div></div>
   </div>
 
+  <div class="admin-bar">
+    <span style="font-size:13px; color:#666;">Lehrerzugang:</span>
+    <input type="password" id="admin-pw" placeholder="Passwort eingeben">
+    <button onclick="checkAdmin()">Entsperren</button>
+    <span class="admin-status" id="admin-status"></span>
+  </div>
+
 </div>
 
 <script type="module">
@@ -229,6 +254,23 @@
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
   const cardsCol = collection(db, "moderationskarten");
+
+  let isAdmin = false;
+
+  window.checkAdmin = function() {
+    const pw = document.getElementById('admin-pw').value;
+    const status = document.getElementById('admin-status');
+    if (pw === 'Admin-OSWE') {
+      isAdmin = true;
+      status.className = 'admin-status ok';
+      status.textContent = 'Lehrerzugang aktiv – Löschen freigeschaltet.';
+      document.getElementById('admin-pw').value = '';
+      renderCards(lastSnapshot);
+    } else {
+      status.className = 'admin-status err';
+      status.textContent = 'Falsches Passwort.';
+    }
+  };
 
   window.updateChar = function() {
     const t = document.getElementById('modtext').value;
@@ -275,6 +317,7 @@
   };
 
   window.deleteCard = async function(id) {
+    if (!isAdmin) return;
     if (confirm('Karte wirklich löschen?')) {
       await deleteDoc(doc(db, 'moderationskarten', id));
     }
@@ -292,10 +335,11 @@
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
-  const q = query(cardsCol, orderBy('timestamp', 'asc'));
-  onSnapshot(q, (snapshot) => {
+  let lastSnapshot = null;
+
+  function renderCards(snapshot) {
     const c = document.getElementById('cards-container');
-    if (snapshot.empty) {
+    if (!snapshot || snapshot.empty) {
       c.innerHTML = '<div class="empty-state">Noch keine Karten gespeichert.</div>';
       return;
     }
@@ -305,6 +349,9 @@
       const card = docSnap.data();
       const div = document.createElement('div');
       div.className = 'saved-item';
+      const deleteBtn = isAdmin
+        ? '<button class="small-btn delete-btn" onclick="deleteCard(\'' + docSnap.id + '\')">Löschen</button>'
+        : '';
       div.innerHTML =
         '<div class="saved-item-header">' +
           '<div class="saved-num">' + i + '</div>' +
@@ -312,15 +359,19 @@
             '<div class="saved-group">' + esc(card.group) + '</div>' +
             '<div class="saved-topic">' + esc(card.topic) + '</div>' +
           '</div>' +
-          '<div class="saved-actions">' +
-            '<button class="small-btn delete-btn" onclick="deleteCard(\'' + docSnap.id + '\')">Löschen</button>' +
-          '</div>' +
+          '<div class="saved-actions">' + deleteBtn + '</div>' +
         '</div>' +
         '<div class="saved-text">' + esc(card.text) + '</div>';
       c.appendChild(div);
       i++;
     });
-  }, (error) => {
+  }
+
+  const q = query(cardsCol, orderBy('timestamp', 'asc'));
+  onSnapshot(q, (snapshot) => {
+    lastSnapshot = snapshot;
+    renderCards(snapshot);
+  }, () => {
     document.getElementById('cards-container').innerHTML =
       '<div class="empty-state" style="color:#a32d2d;">Verbindungsfehler zur Datenbank.</div>';
   });
