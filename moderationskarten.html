@@ -15,22 +15,10 @@
       padding: 2rem 1rem;
     }
 
-    .page {
-      max-width: 720px;
-      margin: 0 auto;
-    }
+    .page { max-width: 720px; margin: 0 auto; }
 
-    h1 {
-      font-size: 22px;
-      font-weight: 500;
-      margin-bottom: 4px;
-    }
-
-    .subtitle {
-      font-size: 14px;
-      color: #666;
-      margin-bottom: 1.5rem;
-    }
+    h1 { font-size: 22px; font-weight: 500; margin-bottom: 4px; }
+    .subtitle { font-size: 14px; color: #666; margin-bottom: 1.5rem; }
 
     .step-box {
       background: #eeedf0;
@@ -41,23 +29,12 @@
       color: #555;
       line-height: 1.6;
     }
-
     .step-box strong { color: #1a1a1a; font-weight: 500; }
 
-    .field-row {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-
+    .field-row { display: flex; gap: 10px; margin-bottom: 10px; }
     .field-row > div { flex: 1; }
 
-    label {
-      display: block;
-      font-size: 13px;
-      color: #666;
-      margin-bottom: 4px;
-    }
+    label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
 
     input, textarea {
       width: 100%;
@@ -70,30 +47,15 @@
       outline: none;
       font-family: inherit;
     }
-
     input:focus, textarea:focus {
       border-color: #7f77dd;
       box-shadow: 0 0 0 2px rgba(127,119,221,0.15);
     }
+    textarea { min-height: 90px; resize: vertical; }
 
-    textarea {
-      min-height: 90px;
-      resize: vertical;
-    }
+    .char-hint { font-size: 12px; color: #aaa; text-align: right; margin-top: 3px; }
 
-    .char-hint {
-      font-size: 12px;
-      color: #aaa;
-      text-align: right;
-      margin-top: 3px;
-    }
-
-    .btn-row {
-      display: flex;
-      gap: 8px;
-      margin-top: 14px;
-      flex-wrap: wrap;
-    }
+    .btn-row { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 
     button {
       cursor: pointer;
@@ -106,16 +68,10 @@
       font-family: inherit;
       transition: background 0.15s;
     }
-
     button:hover { background: #f0f0f0; }
-
-    button.primary {
-      background: #eeedfe;
-      border-color: #afa9ec;
-      color: #3c3489;
-    }
-
+    button.primary { background: #eeedfe; border-color: #afa9ec; color: #3c3489; }
     button.primary:hover { background: #cecbf6; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
 
     .card-preview {
       margin-top: 1.5rem;
@@ -125,7 +81,6 @@
       padding: 1.5rem;
       display: none;
     }
-
     .card-preview.visible { display: block; }
 
     .card-tag {
@@ -138,87 +93,67 @@
       border-radius: 20px;
       margin-bottom: 12px;
     }
+    .card-title { font-size: 18px; font-weight: 500; margin-bottom: 12px; }
+    .card-text { font-size: 15px; line-height: 1.75; border-left: 3px solid #afa9ec; padding-left: 14px; }
+    .card-footer { margin-top: 14px; font-size: 12px; color: #aaa; }
 
-    .card-title {
-      font-size: 18px;
-      font-weight: 500;
-      margin-bottom: 12px;
-    }
-
-    .card-text {
-      font-size: 15px;
-      line-height: 1.75;
-      border-left: 3px solid #afa9ec;
-      padding-left: 14px;
-    }
-
-    .card-footer {
-      margin-top: 14px;
-      font-size: 12px;
-      color: #aaa;
-    }
-
-    hr.divider {
-      border: none;
-      border-top: 1px solid #eee;
-      margin: 1rem 0 0.75rem;
-    }
+    hr.divider { border: none; border-top: 1px solid #eee; margin: 1rem 0 0.75rem; }
 
     .saved-list { margin-top: 2rem; }
+    .saved-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .saved-title { font-size: 14px; font-weight: 500; color: #666; }
 
-    .saved-title {
-      font-size: 14px;
-      font-weight: 500;
-      color: #666;
-      margin-bottom: 10px;
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      color: #3b6d11;
+      background: #eaf3de;
+      border-radius: 20px;
+      padding: 3px 10px;
+    }
+    .live-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #639922;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
     }
 
     .saved-item {
-      background: #f5f4f0;
-      border-radius: 8px;
-      padding: 10px 14px;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
+      background: #fff;
+      border: 1px solid #e8e8e8;
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 10px;
     }
-
+    .saved-item-header { display: flex; align-items: flex-start; gap: 10px; }
     .saved-num {
-      width: 24px;
-      height: 24px;
+      width: 24px; height: 24px;
       border-radius: 50%;
-      background: #eeedfe;
-      color: #3c3489;
-      font-size: 12px;
-      font-weight: 500;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      margin-top: 1px;
+      background: #eeedfe; color: #3c3489;
+      font-size: 12px; font-weight: 500;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; margin-top: 1px;
     }
-
     .saved-info { flex: 1; }
     .saved-group { font-size: 13px; font-weight: 500; }
-    .saved-topic { font-size: 12px; color: #666; }
-
-    .saved-actions { display: flex; gap: 6px; align-items: center; }
-
+    .saved-topic { font-size: 12px; color: #666; margin-top: 1px; }
+    .saved-text { font-size: 13px; color: #444; margin-top: 8px; padding-top: 8px; border-top: 1px solid #f0f0f0; line-height: 1.6; }
+    .saved-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
     .small-btn { font-size: 12px; padding: 4px 10px; }
+    .delete-btn { color: #a32d2d; border-color: #f09595; }
+    .delete-btn:hover { background: #fcebeb; }
 
-    .empty-state {
-      text-align: center;
-      padding: 2rem 0;
-      color: #aaa;
-      font-size: 13px;
-    }
+    .empty-state { text-align: center; padding: 2rem 0; color: #aaa; font-size: 13px; }
 
-    @media print {
-      body { background: #fff; padding: 0; }
-      .step-box, .field-row, .char-hint, .btn-row, #input-section, .saved-actions { display: none !important; }
-      .card-preview { display: block !important; border: 1px solid #ccc; page-break-inside: avoid; }
-      .saved-item { border: 1px solid #eee; background: #fff; page-break-inside: avoid; }
-    }
+    .status-bar { font-size: 12px; color: #888; margin-top: 6px; min-height: 18px; }
+    .status-bar.ok { color: #3b6d11; }
+    .status-bar.err { color: #a32d2d; }
 
     @media (max-width: 520px) {
       .field-row { flex-direction: column; }
@@ -232,29 +167,27 @@
   <p class="subtitle">Aufnahmefeier der neuen 5. Klassen – Gruppenarbeit Klasse 9</p>
 
   <div class="step-box">
-    <strong>So geht's:</strong> Tragt euren Gruppennamen und euer Thema ein, schreibt euren Moderationstext und klickt auf „Vorschau". Wenn ihr zufrieden seid, speichert die Karte!
+    <strong>So geht's:</strong> Tragt euren Gruppennamen und euer Thema ein, schreibt euren Moderationstext und klickt auf „Vorschau". Wenn ihr zufrieden seid, speichert die Karte – sie erscheint sofort bei allen anderen Gruppen!
   </div>
 
-  <div id="input-section">
-    <div class="field-row">
-      <div>
-        <label>Gruppenname</label>
-        <input type="text" id="group" placeholder="z.B. Gruppe 1 oder eure Namen">
-      </div>
-      <div>
-        <label>Programmpunkt / Thema</label>
-        <input type="text" id="topic" placeholder="z.B. Begrüßung der neuen Klassen">
-      </div>
+  <div class="field-row">
+    <div>
+      <label>Gruppenname</label>
+      <input type="text" id="group" placeholder="z.B. Gruppe 1 oder eure Namen">
     </div>
-
-    <label>Euer Moderationstext</label>
-    <textarea id="modtext" placeholder="Schreibt hier euren Moderationstext. Denkt an: Wer seid ihr? Was passiert jetzt? Wie klingt es einladend für die Neuen?" oninput="updateChar()"></textarea>
-    <div class="char-hint" id="charcount">0 Zeichen</div>
-
-    <div class="btn-row">
-      <button class="primary" onclick="showPreview()">Vorschau anzeigen</button>
-      <button onclick="clearForm()">Leeren</button>
+    <div>
+      <label>Programmpunkt / Thema</label>
+      <input type="text" id="topic" placeholder="z.B. Begrüßung der neuen Klassen">
     </div>
+  </div>
+
+  <label>Euer Moderationstext</label>
+  <textarea id="modtext" placeholder="Schreibt hier euren Moderationstext. Denkt an: Wer seid ihr? Was passiert jetzt? Wie klingt es einladend für die Neuen?" oninput="updateChar()"></textarea>
+  <div class="char-hint" id="charcount">0 Zeichen</div>
+
+  <div class="btn-row">
+    <button class="primary" onclick="showPreview()">Vorschau anzeigen</button>
+    <button onclick="clearForm()">Leeren</button>
   </div>
 
   <div class="card-preview" id="preview">
@@ -264,98 +197,88 @@
     <div class="card-footer">Moderationskarte – Aufnahmefeier</div>
     <hr class="divider">
     <div class="btn-row">
-      <button class="primary" onclick="saveCard()">Karte speichern</button>
+      <button class="primary" id="save-btn" onclick="saveCard()">Karte speichern</button>
       <button onclick="document.getElementById('preview').classList.remove('visible')">Schließen</button>
     </div>
+    <div class="status-bar" id="status"></div>
   </div>
 
   <div class="saved-list">
-    <div class="saved-title">Gespeicherte Moderationskarten</div>
-    <div id="cards-container"><div class="empty-state">Noch keine Karten gespeichert.</div></div>
-    <div class="btn-row" id="print-btn-row" style="display:none; margin-top:1rem;">
-      <button onclick="window.print()">Alle Karten drucken</button>
+    <div class="saved-header">
+      <div class="saved-title">Alle gespeicherten Karten</div>
+      <div class="live-badge"><div class="live-dot"></div> Live</div>
     </div>
+    <div id="cards-container"><div class="empty-state">Verbinde mit Datenbank...</div></div>
   </div>
 
 </div>
 
-<script>
-  var cards = [];
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-  function updateChar() {
-    var t = document.getElementById('modtext').value;
+  const firebaseConfig = {
+    apiKey: "AIzaSyBYubfEPbipWGWrpvMZAoMZNlF98p0jiw4",
+    authDomain: "oberschule-moderation.firebaseapp.com",
+    projectId: "oberschule-moderation",
+    storageBucket: "oberschule-moderation.firebasestorage.app",
+    messagingSenderId: "224718576254",
+    appId: "1:224718576254:web:54a9aa2e8690f44e44162f"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const cardsCol = collection(db, "moderationskarten");
+
+  window.updateChar = function() {
+    const t = document.getElementById('modtext').value;
     document.getElementById('charcount').textContent = t.length + ' Zeichen';
-  }
+  };
 
-  function showPreview() {
-    var g = document.getElementById('group').value.trim();
-    var tp = document.getElementById('topic').value.trim();
-    var tx = document.getElementById('modtext').value.trim();
-    if (!g || !tp || !tx) {
-      alert('Bitte alle drei Felder ausfüllen!');
-      return;
-    }
+  window.showPreview = function() {
+    const g = document.getElementById('group').value.trim();
+    const tp = document.getElementById('topic').value.trim();
+    const tx = document.getElementById('modtext').value.trim();
+    if (!g || !tp || !tx) { alert('Bitte alle drei Felder ausfüllen!'); return; }
     document.getElementById('prev-group').textContent = g;
     document.getElementById('prev-topic').textContent = tp;
     document.getElementById('prev-text').textContent = tx;
-    var p = document.getElementById('preview');
+    document.getElementById('status').textContent = '';
+    document.getElementById('status').className = 'status-bar';
+    const p = document.getElementById('preview');
     p.classList.add('visible');
     p.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
+  };
 
-  function saveCard() {
-    var g = document.getElementById('prev-group').textContent;
-    var tp = document.getElementById('prev-topic').textContent;
-    var tx = document.getElementById('prev-text').textContent;
-    cards.push({ group: g, topic: tp, text: tx });
-    renderCards();
-    document.getElementById('preview').classList.remove('visible');
-    clearForm();
-  }
-
-  function renderCards() {
-    var c = document.getElementById('cards-container');
-    var pb = document.getElementById('print-btn-row');
-    if (cards.length === 0) {
-      c.innerHTML = '<div class="empty-state">Noch keine Karten gespeichert.</div>';
-      pb.style.display = 'none';
-      return;
+  window.saveCard = async function() {
+    const btn = document.getElementById('save-btn');
+    const status = document.getElementById('status');
+    const g = document.getElementById('prev-group').textContent;
+    const tp = document.getElementById('prev-topic').textContent;
+    const tx = document.getElementById('prev-text').textContent;
+    btn.disabled = true;
+    btn.textContent = 'Wird gespeichert...';
+    try {
+      await addDoc(cardsCol, { group: g, topic: tp, text: tx, timestamp: serverTimestamp() });
+      status.className = 'status-bar ok';
+      status.textContent = 'Karte wurde gespeichert!';
+      setTimeout(() => {
+        document.getElementById('preview').classList.remove('visible');
+        clearForm();
+      }, 800);
+    } catch(e) {
+      status.className = 'status-bar err';
+      status.textContent = 'Fehler beim Speichern – bitte nochmal versuchen.';
     }
-    pb.style.display = 'flex';
-    c.innerHTML = '';
-    cards.forEach(function(card, i) {
-      var div = document.createElement('div');
-      div.className = 'saved-item';
-      div.innerHTML =
-        '<div class="saved-num">' + (i + 1) + '</div>' +
-        '<div class="saved-info">' +
-          '<div class="saved-group">' + esc(card.group) + '</div>' +
-          '<div class="saved-topic">' + esc(card.topic) + '</div>' +
-        '</div>' +
-        '<div class="saved-actions">' +
-          '<button class="small-btn" onclick="viewCard(' + i + ')">Anzeigen</button>' +
-          '<button class="small-btn" onclick="deleteCard(' + i + ')">Löschen</button>' +
-        '</div>';
-      c.appendChild(div);
-    });
-  }
+    btn.disabled = false;
+    btn.textContent = 'Karte speichern';
+  };
 
-  function viewCard(i) {
-    var card = cards[i];
-    document.getElementById('group').value = card.group;
-    document.getElementById('topic').value = card.topic;
-    document.getElementById('modtext').value = card.text;
-    updateChar();
-    showPreview();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  function deleteCard(i) {
-    if (confirm('Karte löschen?')) {
-      cards.splice(i, 1);
-      renderCards();
+  window.deleteCard = async function(id) {
+    if (confirm('Karte wirklich löschen?')) {
+      await deleteDoc(doc(db, 'moderationskarten', id));
     }
-  }
+  };
 
   function clearForm() {
     document.getElementById('group').value = '';
@@ -363,10 +286,44 @@
     document.getElementById('modtext').value = '';
     document.getElementById('charcount').textContent = '0 Zeichen';
   }
+  window.clearForm = clearForm;
 
   function esc(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
+
+  const q = query(cardsCol, orderBy('timestamp', 'asc'));
+  onSnapshot(q, (snapshot) => {
+    const c = document.getElementById('cards-container');
+    if (snapshot.empty) {
+      c.innerHTML = '<div class="empty-state">Noch keine Karten gespeichert.</div>';
+      return;
+    }
+    c.innerHTML = '';
+    let i = 1;
+    snapshot.forEach((docSnap) => {
+      const card = docSnap.data();
+      const div = document.createElement('div');
+      div.className = 'saved-item';
+      div.innerHTML =
+        '<div class="saved-item-header">' +
+          '<div class="saved-num">' + i + '</div>' +
+          '<div class="saved-info">' +
+            '<div class="saved-group">' + esc(card.group) + '</div>' +
+            '<div class="saved-topic">' + esc(card.topic) + '</div>' +
+          '</div>' +
+          '<div class="saved-actions">' +
+            '<button class="small-btn delete-btn" onclick="deleteCard(\'' + docSnap.id + '\')">Löschen</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="saved-text">' + esc(card.text) + '</div>';
+      c.appendChild(div);
+      i++;
+    });
+  }, (error) => {
+    document.getElementById('cards-container').innerHTML =
+      '<div class="empty-state" style="color:#a32d2d;">Verbindungsfehler zur Datenbank.</div>';
+  });
 </script>
 </body>
 </html>
