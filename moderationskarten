@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Moderationskarten – Aufnahmefeier</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f4f0;
+      color: #1a1a1a;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .page {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 1.5rem;
+    }
+
+    .step-box {
+      background: #eeedf0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 1.5rem;
+      font-size: 13px;
+      color: #555;
+      line-height: 1.6;
+    }
+
+    .step-box strong { color: #1a1a1a; font-weight: 500; }
+
+    .field-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .field-row > div { flex: 1; }
+
+    label {
+      display: block;
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    input, textarea {
+      width: 100%;
+      font-size: 14px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      background: #fff;
+      color: #1a1a1a;
+      outline: none;
+      font-family: inherit;
+    }
+
+    input:focus, textarea:focus {
+      border-color: #7f77dd;
+      box-shadow: 0 0 0 2px rgba(127,119,221,0.15);
+    }
+
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+
+    .char-hint {
+      font-size: 12px;
+      color: #aaa;
+      text-align: right;
+      margin-top: 3px;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      cursor: pointer;
+      font-size: 13px;
+      padding: 8px 18px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      background: #fff;
+      color: #1a1a1a;
+      font-family: inherit;
+      transition: background 0.15s;
+    }
+
+    button:hover { background: #f0f0f0; }
+
+    button.primary {
+      background: #eeedfe;
+      border-color: #afa9ec;
+      color: #3c3489;
+    }
+
+    button.primary:hover { background: #cecbf6; }
+
+    .card-preview {
+      margin-top: 1.5rem;
+      border-radius: 12px;
+      border: 1px solid #e0e0e0;
+      background: #fff;
+      padding: 1.5rem;
+      display: none;
+    }
+
+    .card-preview.visible { display: block; }
+
+    .card-tag {
+      display: inline-block;
+      background: #eeedfe;
+      color: #3c3489;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 3px 10px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 500;
+      margin-bottom: 12px;
+    }
+
+    .card-text {
+      font-size: 15px;
+      line-height: 1.75;
+      border-left: 3px solid #afa9ec;
+      padding-left: 14px;
+    }
+
+    .card-footer {
+      margin-top: 14px;
+      font-size: 12px;
+      color: #aaa;
+    }
+
+    hr.divider {
+      border: none;
+      border-top: 1px solid #eee;
+      margin: 1rem 0 0.75rem;
+    }
+
+    .saved-list { margin-top: 2rem; }
+
+    .saved-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: #666;
+      margin-bottom: 10px;
+    }
+
+    .saved-item {
+      background: #f5f4f0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .saved-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #eeedfe;
+      color: #3c3489;
+      font-size: 12px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .saved-info { flex: 1; }
+    .saved-group { font-size: 13px; font-weight: 500; }
+    .saved-topic { font-size: 12px; color: #666; }
+
+    .saved-actions { display: flex; gap: 6px; align-items: center; }
+
+    .small-btn { font-size: 12px; padding: 4px 10px; }
+
+    .empty-state {
+      text-align: center;
+      padding: 2rem 0;
+      color: #aaa;
+      font-size: 13px;
+    }
+
+    @media print {
+      body { background: #fff; padding: 0; }
+      .step-box, .field-row, .char-hint, .btn-row, #input-section, .saved-actions { display: none !important; }
+      .card-preview { display: block !important; border: 1px solid #ccc; page-break-inside: avoid; }
+      .saved-item { border: 1px solid #eee; background: #fff; page-break-inside: avoid; }
+    }
+
+    @media (max-width: 520px) {
+      .field-row { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Moderationskarten</h1>
+  <p class="subtitle">Aufnahmefeier der neuen 5. Klassen – Gruppenarbeit Klasse 9</p>
+
+  <div class="step-box">
+    <strong>So geht's:</strong> Tragt euren Gruppennamen und euer Thema ein, schreibt euren Moderationstext und klickt auf „Vorschau". Wenn ihr zufrieden seid, speichert die Karte!
+  </div>
+
+  <div id="input-section">
+    <div class="field-row">
+      <div>
+        <label>Gruppenname</label>
+        <input type="text" id="group" placeholder="z.B. Gruppe 1 oder eure Namen">
+      </div>
+      <div>
+        <label>Programmpunkt / Thema</label>
+        <input type="text" id="topic" placeholder="z.B. Begrüßung der neuen Klassen">
+      </div>
+    </div>
+
+    <label>Euer Moderationstext</label>
+    <textarea id="modtext" placeholder="Schreibt hier euren Moderationstext. Denkt an: Wer seid ihr? Was passiert jetzt? Wie klingt es einladend für die Neuen?" oninput="updateChar()"></textarea>
+    <div class="char-hint" id="charcount">0 Zeichen</div>
+
+    <div class="btn-row">
+      <button class="primary" onclick="showPreview()">Vorschau anzeigen</button>
+      <button onclick="clearForm()">Leeren</button>
+    </div>
+  </div>
+
+  <div class="card-preview" id="preview">
+    <div class="card-tag" id="prev-group">Gruppe</div>
+    <div class="card-title" id="prev-topic">Thema</div>
+    <div class="card-text" id="prev-text">Text erscheint hier...</div>
+    <div class="card-footer">Moderationskarte – Aufnahmefeier</div>
+    <hr class="divider">
+    <div class="btn-row">
+      <button class="primary" onclick="saveCard()">Karte speichern</button>
+      <button onclick="document.getElementById('preview').classList.remove('visible')">Schließen</button>
+    </div>
+  </div>
+
+  <div class="saved-list">
+    <div class="saved-title">Gespeicherte Moderationskarten</div>
+    <div id="cards-container"><div class="empty-state">Noch keine Karten gespeichert.</div></div>
+    <div class="btn-row" id="print-btn-row" style="display:none; margin-top:1rem;">
+      <button onclick="window.print()">Alle Karten drucken</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  var cards = [];
+
+  function updateChar() {
+    var t = document.getElementById('modtext').value;
+    document.getElementById('charcount').textContent = t.length + ' Zeichen';
+  }
+
+  function showPreview() {
+    var g = document.getElementById('group').value.trim();
+    var tp = document.getElementById('topic').value.trim();
+    var tx = document.getElementById('modtext').value.trim();
+    if (!g || !tp || !tx) {
+      alert('Bitte alle drei Felder ausfüllen!');
+      return;
+    }
+    document.getElementById('prev-group').textContent = g;
+    document.getElementById('prev-topic').textContent = tp;
+    document.getElementById('prev-text').textContent = tx;
+    var p = document.getElementById('preview');
+    p.classList.add('visible');
+    p.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function saveCard() {
+    var g = document.getElementById('prev-group').textContent;
+    var tp = document.getElementById('prev-topic').textContent;
+    var tx = document.getElementById('prev-text').textContent;
+    cards.push({ group: g, topic: tp, text: tx });
+    renderCards();
+    document.getElementById('preview').classList.remove('visible');
+    clearForm();
+  }
+
+  function renderCards() {
+    var c = document.getElementById('cards-container');
+    var pb = document.getElementById('print-btn-row');
+    if (cards.length === 0) {
+      c.innerHTML = '<div class="empty-state">Noch keine Karten gespeichert.</div>';
+      pb.style.display = 'none';
+      return;
+    }
+    pb.style.display = 'flex';
+    c.innerHTML = '';
+    cards.forEach(function(card, i) {
+      var div = document.createElement('div');
+      div.className = 'saved-item';
+      div.innerHTML =
+        '<div class="saved-num">' + (i + 1) + '</div>' +
+        '<div class="saved-info">' +
+          '<div class="saved-group">' + esc(card.group) + '</div>' +
+          '<div class="saved-topic">' + esc(card.topic) + '</div>' +
+        '</div>' +
+        '<div class="saved-actions">' +
+          '<button class="small-btn" onclick="viewCard(' + i + ')">Anzeigen</button>' +
+          '<button class="small-btn" onclick="deleteCard(' + i + ')">Löschen</button>' +
+        '</div>';
+      c.appendChild(div);
+    });
+  }
+
+  function viewCard(i) {
+    var card = cards[i];
+    document.getElementById('group').value = card.group;
+    document.getElementById('topic').value = card.topic;
+    document.getElementById('modtext').value = card.text;
+    updateChar();
+    showPreview();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function deleteCard(i) {
+    if (confirm('Karte löschen?')) {
+      cards.splice(i, 1);
+      renderCards();
+    }
+  }
+
+  function clearForm() {
+    document.getElementById('group').value = '';
+    document.getElementById('topic').value = '';
+    document.getElementById('modtext').value = '';
+    document.getElementById('charcount').textContent = '0 Zeichen';
+  }
+
+  function esc(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+</script>
+</body>
+</html>
