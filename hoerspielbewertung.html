@@ -9,11 +9,11 @@
   <!-- ════════════════════════════════════════════════
        FIREBASE KONFIGURATION – hier deine Daten eintragen!
        ════════════════════════════════════════════════ -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp }
-      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  <!-- Firebase Compat SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
+  <script>
     const firebaseConfig = {
       apiKey:            "AIzaSyBYubfEPbipWGWrpvMZAoMZN1F98p0jiw4",
       authDomain:        "oberschule-moderation.firebaseapp.com",
@@ -23,48 +23,35 @@
       appId:             "1:224718576254:web:54a9aa2e8690f44e44162f"
     };
 
-    // Prüfe ob Config ausgefüllt ist
-    const configFehlt = false;
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
 
-    let app, db;
-    try {
-      app = initializeApp(firebaseConfig);
-      db  = getFirestore(app);
-    } catch(e) {
-      console.warn("Firebase Init Fehler:", e);
-    }
+    const GRUPPEN_COL   = "hoerspiel_gruppen";
+    const BEWERTUNG_COL = "hoerspiel_bewertungen";
+    const ADMIN_PW      = "Admin-OSWE";
 
-    // ── Collections ──────────────────────────────────
-    const GRUPPEN_COL    = "hoerspiel_gruppen";
-    const BEWERTUNG_COL  = "hoerspiel_bewertungen";
-    const ADMIN_PW       = "Admin-OSWE"; // Lehrer-Passwort
-
-    // ── Kriterien ────────────────────────────────────
     const KRITERIEN = [
-      { id:"story",   label:"📖 Drehbuch & Story",       desc:"Spannung, roter Faden, Originalität" },
-      { id:"sprechen",label:"🎤 Sprachqualität",          desc:"Deutlichkeit, Ausdruck, Betonung" },
-      { id:"sounds",  label:"🎵 Soundeffekte & Musik",    desc:"Passende Geräusche, Atmosphäre" },
-      { id:"schnitt", label:"✂️ Schnitt & Abmischung",    desc:"Übergänge, Lautstärken, Qualität" },
-      { id:"laenge",  label:"⏱️ Länge",                   desc:"5–10 Minuten eingehalten?" },
+      { id:"story",    label:"📖 Drehbuch & Story",     desc:"Spannung, roter Faden, Originalität" },
+      { id:"sprechen", label:"🎤 Sprachqualität",        desc:"Deutlichkeit, Ausdruck, Betonung" },
+      { id:"sounds",   label:"🎵 Soundeffekte & Musik",  desc:"Passende Geräusche, Atmosphäre" },
+      { id:"schnitt",  label:"✂️ Schnitt & Abmischung",  desc:"Übergänge, Lautstärken, Qualität" },
+      { id:"laenge",   label:"⏱️ Länge",                 desc:"5–10 Minuten eingehalten?" },
     ];
 
-    // ══════════════════════════════════════════════════
-    // STATE
-    // ══════════════════════════════════════════════════
-    let currentUser  = null; // { name, gruppe, rolle }
-    let gruppen      = [];   // [{id, name, driveLink}]
-    let bewertungen  = [];   // alle docs aus Firestore
+    let currentUser = null;
+    let gruppen     = [];
+    let bewertungen = [];
 
-    // ══════════════════════════════════════════════════
-    // HELPERS
-    // ══════════════════════════════════════════════════
-    const $  = (sel) => document.querySelector(sel);
-    const $$ = (sel) => [...document.querySelectorAll(sel)];
+    const $$  = (sel) => [...document.querySelectorAll(sel)];
     const show = (...ids) => ids.forEach(id => {
       const el = document.getElementById(id);
-      el.style.display = el.classList.contains("modal-overlay") ? "flex" : "";
+      if (!el) return;
+      el.style.display = el.classList.contains("modal-overlay") ? "flex" : "block";
     });
-    const hide = (...ids) => ids.forEach(id => document.getElementById(id).style.display = "none");
+    const hide = (...ids) => ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = "none";
+    });
     const toast = (msg, type="info") => {
       const t = document.createElement("div");
       t.className = `toast toast-${type}`;
@@ -74,37 +61,33 @@
       setTimeout(() => { t.classList.remove("show"); setTimeout(() => t.remove(), 400); }, 3000);
     };
 
-    // ══════════════════════════════════════════════════
-    // LOAD GRUPPEN
-    // ══════════════════════════════════════════════════
+    // ── Daten laden ──────────────────────────────────
     async function ladeGruppen() {
-      if (!db) return;
       try {
-        const snap = await getDocs(collection(db, GRUPPEN_COL));
+        const snap = await db.collection(GRUPPEN_COL).get();
         gruppen = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        gruppen.sort((a,b) => a.name.localeCompare(b.name));
-      } catch(e) { console.warn("ladeGruppen Fehler:", e); }
+        gruppen.sort((a,b) => (a.name||"").localeCompare(b.name||""));
+      } catch(e) { console.warn("ladeGruppen:", e); }
     }
 
     async function ladeBewertungen() {
-      if (!db) return;
       try {
-        const snap = await getDocs(collection(db, BEWERTUNG_COL));
+        const snap = await db.collection(BEWERTUNG_COL).get();
         bewertungen = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      } catch(e) { console.warn("ladeBewertungen Fehler:", e); }
+      } catch(e) { console.warn("ladeBewertungen:", e); }
     }
 
-    // ══════════════════════════════════════════════════
-    // SCREEN 1 – STARTSEITE
-    // ══════════════════════════════════════════════════
-    window.zeigeStart = function() {
-      try {
-        $$(".screen").forEach(s => s.style.display = "none");
-        show("screen-start");
-      } catch(e) {
-        document.getElementById("screen-start").style.display = "block";
-      }
-    };
+    // ── START ────────────────────────────────────────
+    function zeigeStart() {
+      hide("screen-schueler","screen-bewertung","screen-lehrer");
+      show("screen-start");
+      // Dropdown befüllen
+      ladeGruppen().then(() => {
+        const sel = document.getElementById("inp-gruppe");
+        sel.innerHTML = '<option value="">– Gruppe wählen –</option>';
+        gruppen.forEach(g => sel.innerHTML += `<option value="${g.name}">${g.name}</option>`);
+      });
+    }
 
     window.startSchueler = async function() {
       const name   = document.getElementById("inp-name").value.trim();
@@ -125,29 +108,20 @@
       zeigeLehrer();
     };
 
-    // ══════════════════════════════════════════════════
-    // SCREEN 2 – DOWNLOADS & SCHÜLER-BEWERTUNG
-    // ══════════════════════════════════════════════════
+    // ── SCHÜLER: Downloads & Bewertung ───────────────
     function zeigeDownloads() {
-      $$(".screen").forEach(s => s.style.display = "none");
+      hide("screen-start","screen-bewertung","screen-lehrer");
       show("screen-schueler");
-
       const container = document.getElementById("gruppen-liste");
       container.innerHTML = "";
-
-      const eigeneGruppe = currentUser.gruppe;
-
-      // Prüfe welche Gruppen der Nutzer schon bewertet hat
       const bereitsBewertet = new Set(
         bewertungen
-          .filter(b => b.bewerterName === currentUser.name && b.bewerterGruppe === eigeneGruppe)
+          .filter(b => b.bewerterName === currentUser.name && b.bewerterGruppe === currentUser.gruppe)
           .map(b => b.gruppeId)
       );
-
       gruppen.forEach(g => {
-        const istEigene = g.name === eigeneGruppe;
+        const istEigene = g.name === currentUser.gruppe;
         const bewertet  = bereitsBewertet.has(g.id);
-
         const card = document.createElement("div");
         card.className = "gruppe-card" + (istEigene ? " eigene" : "");
         card.innerHTML = `
@@ -157,74 +131,70 @@
             ${bewertet && !istEigene ? '<span class="badge-ok">✓ Bewertet</span>' : ""}
           </div>
           ${g.driveLink ? `<a class="drive-btn" href="${g.driveLink}" target="_blank">⬇️ Hörspiel anhören / herunterladen</a>` : '<p class="no-link">Link folgt noch…</p>'}
-          ${!istEigene ? `<button class="btn-bewerten" onclick="zeigeBewertungsformular('${g.id}','${g.name}')">
+          ${!istEigene ? `<button class="btn-bewerten" onclick="zeigeBewertungsformular('${g.id}','${g.name.replace(/'/g,"\'")}')">
             ${bewertet ? "Bewertung ändern" : "Jetzt bewerten ⭐"}
           </button>` : ""}
         `;
         container.appendChild(card);
       });
-
-      if (gruppen.length === 0) {
-        container.innerHTML = "<p class='muted'>Noch keine Gruppen eingetragen. Der Lehrer richtet das gleich ein!</p>";
-      }
+      if (gruppen.length === 0)
+        container.innerHTML = "<p class='muted'>Noch keine Gruppen eingetragen.</p>";
     }
 
     window.zeigeBewertungsformular = async function(gruppeId, gruppeName) {
-      $$(".screen").forEach(s => s.style.display = "none");
+      hide("screen-schueler","screen-start","screen-lehrer");
       show("screen-bewertung");
-
       document.getElementById("bew-titel").textContent = `Bewertung: ${gruppeName}`;
-      document.getElementById("bew-gruppe-id").value  = gruppeId;
+      document.getElementById("bew-gruppe-id").value   = gruppeId;
       document.getElementById("bew-gruppe-name").value = gruppeName;
-
-      // Lade vorhandene Bewertung
+      document.getElementById("bew-zurueck-btn").onclick = () => {
+        if (currentUser.rolle === "lehrer") zeigeLehrer(); else zeigeDownloads();
+      };
       const vorhandene = bewertungen.find(
-        b => b.gruppeId === gruppeId &&
-             b.bewerterName === currentUser.name &&
-             b.bewerterGruppe === currentUser.gruppe
+        b => b.gruppeId === gruppeId && b.bewerterName === currentUser.name && b.bewerterGruppe === currentUser.gruppe
       );
-
-      // Render Kriterien
-      const kContainer = document.getElementById("kriterien-container");
-      kContainer.innerHTML = "";
-      KRITERIEN.forEach(k => {
-        const wert = vorhandene?.kriterien?.[k.id] ?? 0;
-        kContainer.innerHTML += `
-          <div class="kriterium-block">
-            <div class="krit-label">${k.label}</div>
-            <div class="krit-desc">${k.desc}</div>
-            <div class="stars-wrap" data-id="${k.id}">
-              ${[1,2,3,4,5].map(n => `
-                <span class="star ${n <= wert ? 'active' : ''}" data-val="${n}" onclick="setStar('${k.id}',${n})">★</span>
-              `).join("")}
-              <span class="star-label" id="slabel-${k.id}">${wert > 0 ? sterneText(wert) : "– noch nicht bewertet"}</span>
-            </div>
-          </div>
-        `;
-      });
-
+      renderKriterien(vorhandene);
       document.getElementById("bew-kommentar").value = vorhandene?.kommentar ?? "";
     };
 
+    function renderKriterien(vorhandene) {
+      const c = document.getElementById("kriterien-container");
+      c.innerHTML = "";
+      KRITERIEN.forEach(k => {
+        const wert = vorhandene?.kriterien?.[k.id] ?? 0;
+        const div = document.createElement("div");
+        div.className = "kriterium-block";
+        div.innerHTML = `
+          <div class="krit-label">${k.label}</div>
+          <div class="krit-desc">${k.desc}</div>
+          <div class="stars-wrap" data-id="${k.id}" data-val="${wert}">
+            ${[1,2,3,4,5].map(n => `<span class="star ${n<=wert?'active':''}" data-val="${n}">★</span>`).join("")}
+            <span class="star-label" id="slabel-${k.id}">${wert > 0 ? sterneText(wert) : "– noch nicht bewertet"}</span>
+          </div>
+        `;
+        div.querySelectorAll(".star").forEach(s => {
+          s.addEventListener("click", () => setStar(k.id, parseInt(s.dataset.val)));
+        });
+        c.appendChild(div);
+      });
+    }
+
     window.setStar = function(kritId, val) {
       const wrap = document.querySelector(`.stars-wrap[data-id="${kritId}"]`);
-      wrap.querySelectorAll(".star[data-val]").forEach(s => {
-        s.classList.toggle("active", parseInt(s.dataset.val) <= val);
-      });
+      wrap.querySelectorAll(".star").forEach(s => s.classList.toggle("active", parseInt(s.dataset.val) <= val));
       document.getElementById(`slabel-${kritId}`).textContent = sterneText(val);
       wrap.dataset.val = val;
     };
 
     function sterneText(v) {
-      return ["","⭐ Ungenügend","⭐⭐ Ausreichend","⭐⭐⭐ Gut","⭐⭐⭐⭐ Sehr gut","⭐⭐⭐⭐⭐ Hervorragend"][v] || "";
+      return ["","⭐ Ungenügend","⭐⭐ Ausreichend","⭐⭐⭐ Gut","⭐⭐⭐⭐ Sehr gut","⭐⭐⭐⭐⭐ Hervorragend"][v]||"";
     }
 
     window.bewertungSpeichern = async function() {
       const gruppeId   = document.getElementById("bew-gruppe-id").value;
       const gruppeName = document.getElementById("bew-gruppe-name").value;
       const kommentar  = document.getElementById("bew-kommentar").value.trim();
-
-      const kriterien = {};
+      const kriterien  = {};
       let komplett = true;
       KRITERIEN.forEach(k => {
         const wrap = document.querySelector(`.stars-wrap[data-id="${k.id}"]`);
@@ -232,31 +202,24 @@
         if (!val) komplett = false;
         kriterien[k.id] = val;
       });
-
       if (!komplett) { toast("Bitte alle Kriterien bewerten!", "error"); return; }
-
-      const docId = `${gruppeId}_${currentUser.name}_${currentUser.gruppe}`.replace(/\s/g,"_");
-      await setDoc(doc(db, BEWERTUNG_COL, docId), {
-        gruppeId,
-        gruppeName,
-        bewerterName:   currentUser.name,
-        bewerterGruppe: currentUser.gruppe,
-        rolle:          currentUser.rolle,
-        kriterien,
-        kommentar,
-        timestamp:      serverTimestamp()
-      });
-
-      toast("Bewertung gespeichert! ✓", "success");
-      await ladeBewertungen();
-      zeigeDownloads();
+      const docId = `${gruppeId}_${currentUser.name}_${currentUser.gruppe||'lehrer'}`.replace(/\s/g,"_");
+      try {
+        await db.collection(BEWERTUNG_COL).doc(docId).set({
+          gruppeId, gruppeName,
+          bewerterName: currentUser.name, bewerterGruppe: currentUser.gruppe,
+          rolle: currentUser.rolle, kriterien, kommentar,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        toast("Bewertung gespeichert! ✓", "success");
+        await ladeBewertungen();
+        if (currentUser.rolle === "lehrer") zeigeLehrer(); else zeigeDownloads();
+      } catch(e) { toast("Fehler beim Speichern!", "error"); console.error(e); }
     };
 
-    // ══════════════════════════════════════════════════
-    // SCREEN 3 – LEHRER-ANSICHT
-    // ══════════════════════════════════════════════════
+    // ── LEHRER ───────────────────────────────────────
     function zeigeLehrer() {
-      $$(".screen").forEach(s => s.style.display = "none");
+      hide("screen-start","screen-schueler","screen-bewertung");
       show("screen-lehrer");
       renderLehrerGruppen();
       renderBewertungsUebersicht();
@@ -264,93 +227,67 @@
 
     function renderLehrerGruppen() {
       const c = document.getElementById("lehrer-gruppen");
-      c.innerHTML = "";
-      gruppen.forEach(g => {
-        c.innerHTML += `
-          <div class="lehrer-gruppe-row">
-            <span class="lg-name">🎙️ ${g.name}</span>
-            <a href="${g.driveLink || '#'}" target="_blank" class="lg-link ${g.driveLink ? '' : 'no-link'}">${g.driveLink ? "🔗 Drive-Link" : "Kein Link"}</a>
-            <button class="btn-sm btn-edit" onclick="gruppeBearbeiten('${g.id}','${g.name}','${g.driveLink||''}')">✏️ Bearbeiten</button>
-            <button class="btn-sm btn-del" onclick="gruppeLoeschen('${g.id}','${g.name}')">🗑️</button>
-          </div>
-        `;
-      });
+      c.innerHTML = gruppen.map(g => `
+        <div class="lehrer-gruppe-row">
+          <span class="lg-name">🎙️ ${g.name}</span>
+          <a href="${g.driveLink||'#'}" target="_blank" class="lg-link ${g.driveLink?'':'no-link'}">${g.driveLink?"🔗 Drive-Link":"Kein Link"}</a>
+          <button class="btn-sm btn-edit" onclick="gruppeBearbeiten('${g.id}','${g.name.replace(/'/g,"\'")}','${(g.driveLink||'').replace(/'/g,"\'")}')">✏️</button>
+          <button class="btn-sm btn-del"  onclick="gruppeLoeschen('${g.id}','${g.name.replace(/'/g,"\'")}')">🗑️</button>
+        </div>
+      `).join("") || "<p class='muted'>Noch keine Gruppen.</p>";
     }
 
     function renderBewertungsUebersicht() {
       const c = document.getElementById("bewertungs-uebersicht");
-      c.innerHTML = "";
-
-      gruppen.forEach(g => {
+      c.innerHTML = gruppen.map(g => {
         const bews = bewertungen.filter(b => b.gruppeId === g.id);
-        const schuelerBews = bews.filter(b => b.rolle === "schueler");
-        const lehrerBew    = bews.find(b => b.rolle === "lehrer");
-
-        // Durchschnitte
-        const avg = (kritId) => {
-          const vals = bews.map(b => b.kriterien?.[kritId] ?? 0).filter(v => v > 0);
-          return vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1) : "–";
+        const sBews = bews.filter(b => b.rolle === "schueler");
+        const lBew  = bews.find(b => b.rolle === "lehrer");
+        const avg = (kid, list) => {
+          const v = list.map(b=>b.kriterien?.[kid]??0).filter(x=>x>0);
+          return v.length ? (v.reduce((a,b)=>a+b,0)/v.length).toFixed(1) : "–";
         };
-
-        const avgSchueler = (kritId) => {
-          const vals = schuelerBews.map(b => b.kriterien?.[kritId] ?? 0).filter(v => v > 0);
-          return vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1) : "–";
-        };
-
-        c.innerHTML += `
+        return `
           <div class="bew-card">
             <div class="bew-card-header">
               <span>🎙️ ${g.name}</span>
-              <span class="bew-count">${schuelerBews.length} Schüler-Bewertung(en)</span>
+              <span class="bew-count">${sBews.length} Schüler-Bewertung(en)</span>
             </div>
             <table class="bew-table">
-              <thead><tr>
-                <th>Kriterium</th>
-                <th>Ø Schüler</th>
-                <th>Lehrer</th>
-                <th>Ø Gesamt</th>
-              </tr></thead>
+              <thead><tr><th>Kriterium</th><th>Ø Schüler</th><th>Lehrer</th><th>Ø Gesamt</th></tr></thead>
               <tbody>
-                ${KRITERIEN.map(k => `
-                  <tr>
-                    <td>${k.label}</td>
-                    <td>${avgSchueler(k.id)}</td>
-                    <td>${lehrerBew?.kriterien?.[k.id] ?? "–"}</td>
-                    <td><strong>${avg(k.id)}</strong></td>
-                  </tr>
-                `).join("")}
+                ${KRITERIEN.map(k=>`<tr>
+                  <td>${k.label}</td>
+                  <td>${avg(k.id,sBews)}</td>
+                  <td>${lBew?.kriterien?.[k.id]??"–"}</td>
+                  <td><strong>${avg(k.id,bews)}</strong></td>
+                </tr>`).join("")}
               </tbody>
             </table>
             <div class="lehrer-bewertung-section">
-              <button class="btn-sm btn-lehrerbew" onclick="zeigeLehrerBewertung('${g.id}','${g.name}')">
-                ${lehrerBew ? "✏️ Lehrerbewertung bearbeiten" : "➕ Lehrerbewertung hinzufügen"}
+              <button class="btn-sm btn-lehrerbew" onclick="zeigeLehrerBewertung('${g.id}','${g.name.replace(/'/g,"\'")}')">
+                ${lBew?"✏️ Lehrerbewertung bearbeiten":"➕ Lehrerbewertung hinzufügen"}
               </button>
-              ${bews.length > 0 ? `<button class="btn-sm btn-detail" onclick="zeigeDetails('${g.id}','${g.name}')">📋 Alle Bewertungen ansehen</button>` : ""}
+              ${bews.length>0?`<button class="btn-sm btn-detail" onclick="zeigeDetails('${g.id}','${g.name.replace(/'/g,"\'")}')">📋 Details</button>`:""}
             </div>
-            ${lehrerBew?.kommentar ? `<div class="lehrer-kommentar"><strong>Lehrerkommentar:</strong> ${lehrerBew.kommentar}</div>` : ""}
-          </div>
-        `;
-      });
-
-      if (gruppen.length === 0) {
-        c.innerHTML = "<p class='muted'>Noch keine Gruppen angelegt.</p>";
-      }
+            ${lBew?.kommentar?`<div class="lehrer-kommentar"><strong>Kommentar:</strong> ${lBew.kommentar}</div>`:""}
+          </div>`;
+      }).join("") || "<p class='muted'>Noch keine Gruppen angelegt.</p>";
     }
 
-    // ── Gruppe hinzufügen/bearbeiten ─────────────────
     window.gruppeHinzufuegen = async function() {
       const name = document.getElementById("neue-gruppe-name").value.trim();
       const link = document.getElementById("neue-gruppe-link").value.trim();
       if (!name) { toast("Bitte Gruppenname eingeben!", "error"); return; }
-
-      const id = "gruppe_" + Date.now();
-      await setDoc(doc(db, GRUPPEN_COL, id), { name, driveLink: link, timestamp: serverTimestamp() });
-      toast(`Gruppe "${name}" hinzugefügt! ✓`, "success");
-      document.getElementById("neue-gruppe-name").value = "";
-      document.getElementById("neue-gruppe-link").value = "";
-      await ladeGruppen();
-      renderLehrerGruppen();
-      renderBewertungsUebersicht();
+      try {
+        await db.collection(GRUPPEN_COL).add({ name, driveLink: link, timestamp: firebase.firestore.FieldValue.serverTimestamp() });
+        toast(`Gruppe "${name}" hinzugefügt! ✓`, "success");
+        document.getElementById("neue-gruppe-name").value = "";
+        document.getElementById("neue-gruppe-link").value = "";
+        await ladeGruppen();
+        renderLehrerGruppen();
+        renderBewertungsUebersicht();
+      } catch(e) { toast("Fehler!", "error"); console.error(e); }
     };
 
     window.gruppeBearbeiten = function(id, name, link) {
@@ -365,124 +302,68 @@
       const name = document.getElementById("edit-gruppe-name").value.trim();
       const link = document.getElementById("edit-gruppe-link").value.trim();
       if (!name) { toast("Name darf nicht leer sein!", "error"); return; }
-      await updateDoc(doc(db, GRUPPEN_COL, id), { name, driveLink: link });
-      toast("Gespeichert ✓", "success");
-      hide("modal-edit");
-      await ladeGruppen();
-      renderLehrerGruppen();
-      renderBewertungsUebersicht();
+      try {
+        await db.collection(GRUPPEN_COL).doc(id).update({ name, driveLink: link });
+        toast("Gespeichert ✓", "success");
+        hide("modal-edit");
+        await ladeGruppen();
+        renderLehrerGruppen();
+        renderBewertungsUebersicht();
+      } catch(e) { toast("Fehler!", "error"); console.error(e); }
     };
 
     window.gruppeLoeschen = async function(id, name) {
       if (!confirm(`Gruppe "${name}" wirklich löschen?`)) return;
-      await deleteDoc(doc(db, GRUPPEN_COL, id));
-      toast(`Gruppe gelöscht`, "info");
-      await ladeGruppen();
-      renderLehrerGruppen();
-      renderBewertungsUebersicht();
+      try {
+        await db.collection(GRUPPEN_COL).doc(id).delete();
+        toast("Gruppe gelöscht", "info");
+        await ladeGruppen();
+        renderLehrerGruppen();
+        renderBewertungsUebersicht();
+      } catch(e) { toast("Fehler!", "error"); }
     };
 
-    // ── Lehrerbewertung ──────────────────────────────
     window.zeigeLehrerBewertung = async function(gruppeId, gruppeName) {
       currentUser = { name: "Lehrer", gruppe: null, rolle: "lehrer" };
-
-      $$(".screen").forEach(s => s.style.display = "none");
+      hide("screen-lehrer","screen-start","screen-schueler");
       show("screen-bewertung");
-
       document.getElementById("bew-titel").textContent = `Lehrerbewertung: ${gruppeName}`;
       document.getElementById("bew-gruppe-id").value   = gruppeId;
       document.getElementById("bew-gruppe-name").value = gruppeName;
-
+      document.getElementById("bew-zurueck-btn").onclick = zeigeLehrer;
       const vorhandene = bewertungen.find(b => b.gruppeId === gruppeId && b.rolle === "lehrer");
-
-      const kContainer = document.getElementById("kriterien-container");
-      kContainer.innerHTML = "";
-      KRITERIEN.forEach(k => {
-        const wert = vorhandene?.kriterien?.[k.id] ?? 0;
-        kContainer.innerHTML += `
-          <div class="kriterium-block">
-            <div class="krit-label">${k.label}</div>
-            <div class="krit-desc">${k.desc}</div>
-            <div class="stars-wrap" data-id="${k.id}">
-              ${[1,2,3,4,5].map(n => `
-                <span class="star ${n <= wert ? 'active' : ''}" data-val="${n}" onclick="setStar('${k.id}',${n})">★</span>
-              `).join("")}
-              <span class="star-label" id="slabel-${k.id}">${wert > 0 ? sterneText(wert) : "– noch nicht bewertet"}</span>
-            </div>
-          </div>
-        `;
-      });
-
+      renderKriterien(vorhandene);
       document.getElementById("bew-kommentar").value = vorhandene?.kommentar ?? "";
-      document.getElementById("bew-zurueck-btn").setAttribute("onclick", "zeigeLehrer()");
     };
 
-    // ── Detail-Ansicht ───────────────────────────────
     window.zeigeDetails = function(gruppeId, gruppeName) {
       const bews = bewertungen.filter(b => b.gruppeId === gruppeId);
-      const modal = document.getElementById("modal-details");
       document.getElementById("modal-details-titel").textContent = `Bewertungen: ${gruppeName}`;
-
-      const body = document.getElementById("modal-details-body");
-      body.innerHTML = bews.map(b => `
+      document.getElementById("modal-details-body").innerHTML = bews.map(b => `
         <div class="detail-row">
-          <div class="detail-header">
-            <strong>${b.rolle === "lehrer" ? "👩‍🏫 Lehrer" : `👤 ${b.bewerterName} (${b.bewerterGruppe})`}</strong>
-          </div>
-          ${KRITERIEN.map(k => `
-            <div class="detail-krit">
-              <span>${k.label}</span>
-              <span>${"★".repeat(b.kriterien?.[k.id]??0)}${"☆".repeat(5-(b.kriterien?.[k.id]??0))}</span>
-            </div>
-          `).join("")}
-          ${b.kommentar ? `<div class="detail-kommentar">💬 ${b.kommentar}</div>` : ""}
+          <div class="detail-header"><strong>${b.rolle==="lehrer"?"👩‍🏫 Lehrer":`👤 ${b.bewerterName} (${b.bewerterGruppe})`}</strong></div>
+          ${KRITERIEN.map(k=>`<div class="detail-krit"><span>${k.label}</span><span>${"★".repeat(b.kriterien?.[k.id]??0)}${"☆".repeat(5-(b.kriterien?.[k.id]??0))}</span></div>`).join("")}
+          ${b.kommentar?`<div class="detail-kommentar">💬 ${b.kommentar}</div>`:""}
         </div>
       `).join("") || "<p class='muted'>Noch keine Bewertungen.</p>";
-
       show("modal-details");
     };
 
-    // ── Modal schließen ──────────────────────────────
     window.schliesseModal = function(id) { hide(id); };
 
-    // ── Abmelden ────────────────────────────────────
     window.abmelden = function() {
       currentUser = null;
-      document.getElementById("inp-name").value   = "";
-      document.getElementById("inp-gruppe").value = "";
+      document.getElementById("inp-name").value     = "";
+      document.getElementById("inp-gruppe").value   = "";
       document.getElementById("inp-lehrerpw").value = "";
       zeigeStart();
     };
 
-    // ── Zurück von Bewertungsformular ────────────────
-    window.zurueckVonBewertung = function() {
-      if (currentUser.rolle === "lehrer") zeigeLehrer();
-      else zeigeDownloads();
-    };
-
-    // ── Init ─────────────────────────────────────────
-    window.addEventListener("error", () => {
-      try { document.getElementById("screen-start").style.display = "block"; } catch(e){}
+    window.addEventListener("error", (e) => {
+      console.error("JS Fehler:", e);
     });
 
-    document.addEventListener("DOMContentLoaded", () => {
-      if (configFehlt) {
-        const banner = document.createElement("div");
-        banner.style.cssText = "background:#7c2d12;color:#fef3c7;padding:12px 20px;text-align:center;font-size:0.88rem;";
-        banner.innerHTML = "⚠️ <strong>Firebase nicht konfiguriert!</strong> Bitte die Firebase-Config oben in der Datei ausfüllen (apiKey, projectId …)";
-        document.body.insertBefore(banner, document.body.firstChild);
-      }
-      zeigeStart();
-
-      // Gruppen-Dropdown für Schüler befüllen (mit Live-Daten)
-      ladeGruppen().then(() => {
-        const sel = document.getElementById("inp-gruppe");
-        sel.innerHTML = '<option value="">– Gruppe wählen –</option>';
-        gruppen.forEach(g => {
-          sel.innerHTML += `<option value="${g.name}">${g.name}</option>`;
-        });
-      });
-    });
+    document.addEventListener("DOMContentLoaded", zeigeStart);
   </script>
 
   <style>
