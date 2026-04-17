@@ -23,22 +23,8 @@
       appId:             "1:224718576254:web:54a9aa2e8690f44e44162f"
     };
 
-    // Sichtbare Fehleranzeige
-    function zeigeInitFehler(msg) {
-      const div = document.createElement("div");
-      div.style.cssText = "position:fixed;top:0;left:0;right:0;background:#7c1d1d;color:#fef2f2;padding:16px 20px;font-size:0.9rem;z-index:9999;text-align:center;";
-      div.innerHTML = "⚠️ Fehler: " + msg + " – Bitte F12 → Console für Details öffnen.";
-      document.body ? document.body.prepend(div) : document.addEventListener("DOMContentLoaded", () => document.body.prepend(div));
-    }
-
-    let db;
-    try {
-      firebase.initializeApp(firebaseConfig);
-      db = firebase.firestore();
-    } catch(e) {
-      zeigeInitFehler("Firebase Init: " + e.message);
-      console.error("Firebase Init Fehler:", e);
-    }
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
 
     const GRUPPEN_COL   = "hoerspiel_gruppen";
     const BEWERTUNG_COL = "hoerspiel_bewertungen";
@@ -118,7 +104,6 @@
     }
 
     window.startSchueler = async function() {
-      try {
       const name = document.getElementById("inp-name").value.trim();
       if (!name) { toast("Bitte deinen Namen eingeben!", "error"); return; }
 
@@ -137,18 +122,15 @@
       currentUser = { name, gruppe: meineGruppe.name, rolle: "schueler" };
       await ladeBewertungen();
       zeigeDownloads();
-      } catch(e) { zeigeInitFehler("Login: " + e.message); console.error(e); }
     };
 
     window.startLehrer = async function() {
-      try {
       const pw = document.getElementById("inp-lehrerpw").value;
       if (pw !== ADMIN_PW) { toast("Falsches Passwort!", "error"); return; }
       currentUser = { name: "Lehrer", gruppe: null, rolle: "lehrer" };
       await ladeGruppen();
       await ladeBewertungen();
       zeigeLehrer();
-      } catch(e) { zeigeInitFehler("Lehrer-Login: " + e.message); console.error(e); }
     };
 
     // ── SCHÜLER: Downloads & Bewertung ───────────────
@@ -703,14 +685,7 @@
       console.error("JS Fehler:", e);
     });
 
-    document.addEventListener("DOMContentLoaded", () => {
-      try {
-        zeigeStart();
-      } catch(e) {
-        zeigeInitFehler("Start: " + e.message);
-        console.error("zeigeStart Fehler:", e);
-      }
-    });
+    document.addEventListener("DOMContentLoaded", zeigeStart);
   </script>
 
   <style>
