@@ -38,6 +38,19 @@
       { id:"laenge",   label:"⏱️ Länge",                 desc:"5–10 Minuten eingehalten?" },
     ];
 
+    const MITGLIEDER_KRITERIEN = [
+      { id:"informiert",  label:"📋 Informationsstand",   desc:"Hat sich immer über den aktuellen Stand der Aufgabe informiert" },
+      { id:"ideen",       label:"💡 Ideen & Lösungen",    desc:"Hat eigene Ideen und Problemlösungen eingebracht" },
+      { id:"termine",     label:"📅 Termintreue",         desc:"Hat Termine beachtet und die Gruppe auf bevorstehende Ereignisse hingewiesen" },
+      { id:"unterstuetzt",label:"🤝 Unterstützung",       desc:"Hat andere unterstützt und geholfen, wenn jemand nicht weiterkam" },
+      { id:"anwesend",    label:"✅ Anwesenheit",         desc:"War bei Aufnahmen und gemeinsamen Arbeitsphasen zuverlässig anwesend" },
+    ];
+
+    // Gewichtung: 70% Lehrer, 30% Schüler
+    const GEWICHTUNG = { lehrer: 0.70, schueler: 0.30 };
+
+    const MITGLIEDER_COL = "hoerspiel_mitgliederbewertungen";
+
     let currentUser = null;
     let gruppen     = [];
     let bewertungen = [];
@@ -68,6 +81,13 @@
         gruppen = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         gruppen.sort((a,b) => (a.name||"").localeCompare(b.name||""));
       } catch(e) { console.warn("ladeGruppen:", e); }
+    }
+
+    async function ladeMitgliederBewertungen() {
+      try {
+        const snap = await db.collection(MITGLIEDER_COL).get();
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      } catch(e) { console.warn("ladeMitgliederBewertungen:", e); return []; }
     }
 
     async function ladeBewertungen() {
@@ -211,11 +231,97 @@
           rolle: currentUser.rolle, kriterien, kommentar,
           timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
-        toast("Bewertung gespeichert! ✓", "success");
+        toast("Hörspiel bewertet! ✓ Jetzt Gruppe bewerten...", "success");
         await ladeBewertungen();
-        if (currentUser.rolle === "lehrer") zeigeLehrer(); else zeigeDownloads();
+        if (currentUser.rolle === "lehrer") { zeigeLehrer(); return; }
+        // Schüler → weiter zu Seite 2: Gruppenmitglieder bewerten
+        const meineGruppe = gruppen.find(g => g.name === currentUser.gruppe);
+        const mitglieder  = meineGruppe?.mitglieder || [];
+        if (mitglieder.length > 0) {
+          zeigeMitgliederBewertung(mitglieder);
+        } else {
+          zeigeDownloads();
+        }
       } catch(e) { toast("Fehler beim Speichern!", "error"); console.error(e); }
     };
+
+    // ── MITGLIEDER-BEWERTUNG (Seite 2) ──────────────
+    function zeigeMitgliederBewertung(mitglieder) {
+      hide("screen-schueler","screen-start","screen-bewertung","screen-lehrer");
+      show("screen-mitglieder");
+      const container = document.getElementById("mitglieder-container");
+      container.innerHTML = "";
+      // Nur andere Mitglieder bewerten (nicht sich selbst)
+      const andere = mitglieder.filter(m => m.toLowerCase() !== currentUser.name.toLowerCase());
+      if (andere.length === 0) {
+        container.innerHTML = "<p class='muted'>Keine anderen Mitglieder zum Bewerten gefunden.</p>";
+        return;
+      }
+      andere.forEach(mitglied => {
+        const block = document.createElement("div");
+        block.className = "mitglied-block";
+        block.dataset.mitglied = mitglied;
+        block.innerHTML = `
+          <div class="mitglied-name">👤 ${mitglied}</div>
+          ${MITGLIEDER_KRITERIEN.map(k => `
+            <div class="kriterium-block" style="margin-bottom:10px">
+              <div class="krit-label" style="font-size:0.9rem">${k.label}</div>
+              <div class="krit-desc">${k.desc}</div>
+              <div class="stars-wrap" data-mitglied="${mitglied}" data-kid="${k.id}" data-val="0">
+                ${[1,2,3,4,5].map(n=>`<span class="star" data-val="${n}">★</span>`).join("")}
+                <span class="star-label" id="mslabel-${mitglied.replace(/\s/g,'_')}-${k.id}">– noch nicht bewertet</span>
+              </div>
+            </div>
+          `).join("")}
+        `;
+        // Star click handlers
+        block.querySelectorAll(".stars-wrap").forEach(wrap => {
+          wrap.querySelectorAll(".star").forEach(s => {
+            s.addEventListener("click", () => {
+              const val = parseInt(s.dataset.val);
+              wrap.querySelectorAll(".star").forEach(x => x.classList.toggle("active", parseInt(x.dataset.val) <= val));
+              wrap.dataset.val = val;
+              const labelId = `mslabel-${wrap.dataset.mitglied.replace(/\s/g,'_')}-${wrap.dataset.kid}`;
+              document.getElementById(labelId).textContent = sterneText(val);
+            });
+          });
+        });
+        container.appendChild(block);
+      });
+    }
+
+    window.mitgliederBewertungSpeichern = async function() {
+      const blocks = document.querySelectorAll(".mitglied-block");
+      let komplett = true;
+      const ergebnisse = [];
+      blocks.forEach(block => {
+        const mitglied = block.dataset.mitglied;
+        const kriterien = {};
+        block.querySelectorAll(".stars-wrap").forEach(wrap => {
+          const val = parseInt(wrap.dataset.val ?? 0);
+          if (!val) komplett = false;
+          kriterien[wrap.dataset.kid] = val;
+        });
+        ergebnisse.push({ mitglied, kriterien });
+      });
+      if (!komplett) { toast("Bitte alle Kriterien für alle Mitglieder bewerten!", "error"); return; }
+      try {
+        for (const e of ergebnisse) {
+          const docId = `${currentUser.gruppe}_${currentUser.name}_bewertet_${e.mitglied}`.replace(/\s/g,"_");
+          await db.collection(MITGLIEDER_COL).doc(docId).set({
+            gruppe:         currentUser.gruppe,
+            bewerterName:   currentUser.name,
+            mitgliedName:   e.mitglied,
+            kriterien:      e.kriterien,
+            timestamp:      firebase.firestore.FieldValue.serverTimestamp()
+          });
+        }
+        toast("Alle Bewertungen gespeichert! 🎉", "success");
+        zeigeDownloads();
+      } catch(e) { toast("Fehler beim Speichern!", "error"); console.error(e); }
+    };
+
+    window.mitgliederUeberspringen = function() { zeigeDownloads(); };
 
     // ── LEHRER ───────────────────────────────────────
     function zeigeLehrer() {
@@ -230,8 +336,9 @@
       c.innerHTML = gruppen.map(g => `
         <div class="lehrer-gruppe-row">
           <span class="lg-name">🎙️ ${g.name}</span>
+          <span class="lg-mitglieder">${g.mitglieder?.length ? "👥 " + g.mitglieder.join(", ") : "<em style='color:var(--muted)'>Keine Mitglieder</em>"}</span>
           <a href="${g.driveLink||'#'}" target="_blank" class="lg-link ${g.driveLink?'':'no-link'}">${g.driveLink?"🔗 Drive-Link":"Kein Link"}</a>
-          <button class="btn-sm btn-edit" onclick="gruppeBearbeiten('${g.id}','${g.name.replace(/'/g,"\'")}','${(g.driveLink||'').replace(/'/g,"\'")}')">✏️</button>
+          <button class="btn-sm btn-edit" onclick="gruppeBearbeiten('${g.id}','${g.name.replace(/'/g,"\'")}','${(g.driveLink||'').replace(/'/g,"\'")}','${(g.mitglieder||[]).join(",").replace(/'/g,"\'")}')">✏️</button>
           <button class="btn-sm btn-del"  onclick="gruppeLoeschen('${g.id}','${g.name.replace(/'/g,"\'")}')">🗑️</button>
         </div>
       `).join("") || "<p class='muted'>Noch keine Gruppen.</p>";
@@ -243,9 +350,15 @@
         const bews = bewertungen.filter(b => b.gruppeId === g.id);
         const sBews = bews.filter(b => b.rolle === "schueler");
         const lBew  = bews.find(b => b.rolle === "lehrer");
-        const avg = (kid, list) => {
-          const v = list.map(b=>b.kriterien?.[kid]??0).filter(x=>x>0);
-          return v.length ? (v.reduce((a,b)=>a+b,0)/v.length).toFixed(1) : "–";
+        const avg = (kid) => {
+          const sv = sBews.map(b=>b.kriterien?.[kid]??0).filter(x=>x>0);
+          const sAvg = sv.length ? sv.reduce((a,b)=>a+b,0)/sv.length : null;
+          const lVal = lBew?.kriterien?.[kid] ?? null;
+          if (sAvg !== null && lVal !== null)
+            return ((lVal * GEWICHTUNG.lehrer) + (sAvg * GEWICHTUNG.schueler)).toFixed(1) + " <small style='color:var(--muted)'>(gew.)</small>";
+          if (lVal !== null) return lVal.toFixed(1);
+          if (sAvg !== null) return sAvg.toFixed(1);
+          return "–";
         };
         return `
           <div class="bew-card">
@@ -260,7 +373,7 @@
                   <td>${k.label}</td>
                   <td>${avg(k.id,sBews)}</td>
                   <td>${lBew?.kriterien?.[k.id]??"–"}</td>
-                  <td><strong>${avg(k.id,bews)}</strong></td>
+                  <td><strong>${avg(k.id)}</strong></td>
                 </tr>`).join("")}
               </tbody>
             </table>
@@ -290,10 +403,11 @@
       } catch(e) { toast("Fehler!", "error"); console.error(e); }
     };
 
-    window.gruppeBearbeiten = function(id, name, link) {
-      document.getElementById("edit-gruppe-id").value   = id;
-      document.getElementById("edit-gruppe-name").value = name;
-      document.getElementById("edit-gruppe-link").value = link;
+    window.gruppeBearbeiten = function(id, name, link, mitgliederStr) {
+      document.getElementById("edit-gruppe-id").value         = id;
+      document.getElementById("edit-gruppe-name").value       = name;
+      document.getElementById("edit-gruppe-link").value       = link;
+      document.getElementById("edit-gruppe-mitglieder").value = mitgliederStr || "";
       show("modal-edit");
     };
 
@@ -303,7 +417,9 @@
       const link = document.getElementById("edit-gruppe-link").value.trim();
       if (!name) { toast("Name darf nicht leer sein!", "error"); return; }
       try {
-        await db.collection(GRUPPEN_COL).doc(id).update({ name, driveLink: link });
+        const mitgliederRaw = document.getElementById("edit-gruppe-mitglieder").value;
+        const mitglieder = mitgliederRaw.split(",").map(m=>m.trim()).filter(Boolean);
+        await db.collection(GRUPPEN_COL).doc(id).update({ name, driveLink: link, mitglieder });
         toast("Gespeichert ✓", "success");
         hide("modal-edit");
         await ladeGruppen();
@@ -350,6 +466,31 @@
     };
 
     window.schliesseModal = function(id) { hide(id); };
+
+    window.zeigeMitgliederUebersicht = async function() {
+      const bews = await ladeMitgliederBewertungen();
+      const modal = document.getElementById("modal-details");
+      document.getElementById("modal-details-titel").textContent = "Gruppenmitglieder-Bewertungen";
+      const body = document.getElementById("modal-details-body");
+      if (bews.length === 0) { body.innerHTML = "<p class='muted'>Noch keine Bewertungen.</p>"; show("modal-details"); return; }
+      // Gruppiere nach bewertetem Mitglied
+      const byMitglied = {};
+      bews.forEach(b => {
+        if (!byMitglied[b.mitgliedName]) byMitglied[b.mitgliedName] = [];
+        byMitglied[b.mitgliedName].push(b);
+      });
+      body.innerHTML = Object.entries(byMitglied).map(([name, list]) => {
+        const avg = (kid) => {
+          const v = list.map(b=>b.kriterien?.[kid]??0).filter(x=>x>0);
+          return v.length ? (v.reduce((a,b)=>a+b,0)/v.length).toFixed(1) : "–";
+        };
+        return `<div class="detail-row">
+          <div class="detail-header"><strong>👤 ${name}</strong> <small style="color:var(--muted)">(${list[0].gruppe} · ${list.length} Bewertung(en))</small></div>
+          ${MITGLIEDER_KRITERIEN.map(k=>`<div class="detail-krit"><span>${k.label}</span><span>Ø ${avg(k.id)}</span></div>`).join("")}
+        </div>`;
+      }).join("");
+      show("modal-details");
+    };
 
     window.abmelden = function() {
       currentUser = null;
@@ -710,6 +851,39 @@
 
     /* ── MISC ── */
     .muted { color: var(--muted); font-style: italic; font-size: 0.9rem; }
+
+    .badge-seite {
+      display: inline-block;
+      background: rgba(245,166,35,0.15);
+      color: var(--amber);
+      font-size: 0.75rem;
+      padding: 3px 10px;
+      border-radius: 20px;
+      margin-right: 8px;
+      font-weight: 600;
+    }
+
+    .mitglied-block {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .mitglied-name {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--amber);
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .lg-mitglieder {
+      font-size: 0.8rem;
+      color: var(--muted);
+      flex: 2;
+    }
     .section-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 6px; }
 
     .divider { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
@@ -812,7 +986,26 @@
   <!-- Bewertungsübersicht -->
   <div class="lehrer-section">
     <h2>📊 Bewertungsübersicht</h2>
+    <div style="margin-bottom:16px">
+      <button class="btn-sm btn-detail" onclick="zeigeMitgliederUebersicht()">👥 Gruppenmitglieder-Bewertungen ansehen</button>
+    </div>
     <div id="bewertungs-uebersicht"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: MITGLIEDER-BEWERTUNG (Seite 2)
+══════════════════════════════════════ -->
+<div id="screen-mitglieder" class="screen" style="display:none">
+  <div class="screen-title">👥 Eure Gruppe bewerten</div>
+  <div class="screen-sub">
+    <span class="badge-seite">Seite 2 von 2</span>
+    Bewertet jetzt die Mitarbeit jedes Gruppenmitglieds – ehrlich und fair! 😊
+  </div>
+  <div id="mitglieder-container"></div>
+  <div class="bew-actions" style="margin-top:24px">
+    <button class="btn-secondary" onclick="mitgliederUeberspringen()">Überspringen</button>
+    <button class="btn-primary" style="flex:1" onclick="mitgliederBewertungSpeichern()">Bewertungen abschicken 🎉</button>
   </div>
 </div>
 
@@ -831,6 +1024,8 @@
       <input id="edit-gruppe-name" type="text" placeholder="Gruppenname">
       <label>Google Drive Link</label>
       <input id="edit-gruppe-link" type="url" placeholder="https://drive.google.com/...">
+      <label>Mitglieder <small style="color:var(--muted)">(kommagetrennt, z.B.: Max Mustermann, Lisa Schmidt)</small></label>
+      <input id="edit-gruppe-mitglieder" type="text" placeholder="Max Mustermann, Lisa Schmidt, ...">
     </div>
     <div style="display:flex;gap:10px;margin-top:16px">
       <button class="btn-secondary" onclick="schliesseModal('modal-edit')">Abbrechen</button>
