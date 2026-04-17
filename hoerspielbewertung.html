@@ -16,7 +16,7 @@
 
     const firebaseConfig = {
       apiKey:            "AIzaSyBYubfEPbipWGWrpvMZAoMZN1F98p0jiw4",
-      authDomain:        "https://oberschule-moderation.firebaseapp.com",
+      authDomain:        "oberschule-moderation.firebaseapp.com",
       projectId:         "oberschule-moderation",
       storageBucket:     "oberschule-moderation.firebasestorage.app",
       messagingSenderId: "224718576254",
@@ -98,8 +98,12 @@
     // SCREEN 1 – STARTSEITE
     // ══════════════════════════════════════════════════
     window.zeigeStart = function() {
-      $$(".screen").forEach(s => s.style.display = "none");
-      show("screen-start");
+      try {
+        $$(".screen").forEach(s => s.style.display = "none");
+        show("screen-start");
+      } catch(e) {
+        document.getElementById("screen-start").style.display = "block";
+      }
     };
 
     window.startSchueler = async function() {
@@ -457,6 +461,10 @@
     };
 
     // ── Init ─────────────────────────────────────────
+    window.addEventListener("error", () => {
+      try { document.getElementById("screen-start").style.display = "block"; } catch(e){}
+    });
+
     document.addEventListener("DOMContentLoaded", () => {
       if (configFehlt) {
         const banner = document.createElement("div");
