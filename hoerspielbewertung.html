@@ -382,6 +382,7 @@
                 ${lBew?"✏️ Lehrerbewertung bearbeiten":"➕ Lehrerbewertung hinzufügen"}
               </button>
               ${bews.length>0?`<button class="btn-sm btn-detail" onclick="zeigeDetails('${g.id}','${g.name.replace(/'/g,"\'")}')">📋 Details</button>`:""}
+              ${bews.length>0?`<button class="btn-sm btn-del-bew" onclick="loescheBewertungen('${g.id}','${g.name.replace(/'/g,"\'")}','hoerspiel')">🗑️ Bewertungen löschen</button>`:""}
             </div>
             ${lBew?.kommentar?`<div class="lehrer-kommentar"><strong>Kommentar:</strong> ${lBew.kommentar}</div>`:""}
           </div>`;
@@ -490,6 +491,35 @@
         </div>`;
       }).join("");
       show("modal-details");
+    };
+
+    window.loescheBewertungen = async function(gruppeId, gruppeName, typ) {
+      const msg = typ === "mitglieder"
+        ? "Wirklich ALLE Mitglieder-Bewertungen löschen?"
+        : `Alle Bewertungen für "${gruppeName}" löschen? (Die Gruppe bleibt erhalten!)`;
+      if (!confirm(msg)) return;
+
+      try {
+        const col   = typ === "mitglieder" ? MITGLIEDER_COL : BEWERTUNG_COL;
+        let snap;
+        if (typ === "mitglieder") {
+          snap = await db.collection(col).get();
+        } else {
+          snap = await db.collection(col).where("gruppeId", "==", gruppeId).get();
+        }
+
+        const batch = db.batch();
+        snap.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+
+        toast(`${snap.size} Bewertung(en) gelöscht ✓`, "success");
+        await ladeBewertungen();
+        renderLehrerGruppen();
+        renderBewertungsUebersicht();
+      } catch(e) {
+        toast("Fehler beim Löschen!", "error");
+        console.error(e);
+      }
     };
 
     window.abmelden = function() {
@@ -634,6 +664,8 @@
     .btn-lehrerbew:hover { background: rgba(245,166,35,0.25); }
     .btn-detail { background: var(--bg3); color: var(--muted); border: 1px solid var(--border); }
     .btn-detail:hover { color: var(--text); border-color: var(--amber); }
+    .btn-del-bew { background: rgba(248,113,113,0.08); color: var(--red); border: 1px solid rgba(248,113,113,0.2); }
+    .btn-del-bew:hover { background: rgba(248,113,113,0.2); }
     .btn-bewerten {
       margin-top: 12px;
       background: rgba(245,166,35,0.12);
@@ -988,6 +1020,7 @@
     <h2>📊 Bewertungsübersicht</h2>
     <div style="margin-bottom:16px">
       <button class="btn-sm btn-detail" onclick="zeigeMitgliederUebersicht()">👥 Gruppenmitglieder-Bewertungen ansehen</button>
+      <button class="btn-sm btn-del-bew" onclick="loescheBewertungen(null,null,'mitglieder')">🗑️ Alle Mitglied-Bewertungen löschen</button>
     </div>
     <div id="bewertungs-uebersicht"></div>
   </div>
