@@ -99,22 +99,27 @@
 
     // ── START ────────────────────────────────────────
     function zeigeStart() {
-      hide("screen-schueler","screen-bewertung","screen-lehrer");
+      hide("screen-schueler","screen-bewertung","screen-lehrer","screen-mitglieder");
       show("screen-start");
-      // Dropdown befüllen
-      ladeGruppen().then(() => {
-        const sel = document.getElementById("inp-gruppe");
-        sel.innerHTML = '<option value="">– Gruppe wählen –</option>';
-        gruppen.forEach(g => sel.innerHTML += `<option value="${g.name}">${g.name}</option>`);
-      });
     }
 
     window.startSchueler = async function() {
-      const name   = document.getElementById("inp-name").value.trim();
-      const gruppe = document.getElementById("inp-gruppe").value;
-      if (!name || !gruppe) { toast("Bitte Namen und Gruppe eingeben!", "error"); return; }
-      currentUser = { name, gruppe, rolle: "schueler" };
+      const name = document.getElementById("inp-name").value.trim();
+      if (!name) { toast("Bitte deinen Namen eingeben!", "error"); return; }
+
       await ladeGruppen();
+
+      // Suche Gruppe anhand des Namens in den Mitgliederlisten
+      const meineGruppe = gruppen.find(g =>
+        (g.mitglieder || []).some(m => m.trim().toLowerCase() === name.toLowerCase())
+      );
+
+      if (!meineGruppe) {
+        toast("Name nicht gefunden! Bitte genau so schreiben wie eingetragen.", "error");
+        return;
+      }
+
+      currentUser = { name, gruppe: meineGruppe.name, rolle: "schueler" };
       await ladeBewertungen();
       zeigeDownloads();
     };
@@ -130,8 +135,13 @@
 
     // ── SCHÜLER: Downloads & Bewertung ───────────────
     function zeigeDownloads() {
-      hide("screen-start","screen-bewertung","screen-lehrer");
+      hide("screen-start","screen-bewertung","screen-lehrer","screen-mitglieder");
       show("screen-schueler");
+      // Namen & Gruppe anzeigen
+      const nameEl = document.getElementById("schueler-name-anzeige");
+      const gruppeEl = document.getElementById("schueler-gruppe-anzeige");
+      if (nameEl) nameEl.textContent = currentUser.name;
+      if (gruppeEl) gruppeEl.textContent = currentUser.gruppe;
       const container = document.getElementById("gruppen-liste");
       container.innerHTML = "";
       const bereitsBewertet = new Set(
@@ -247,7 +257,7 @@
 
     // ── MITGLIEDER-BEWERTUNG (Seite 2) ──────────────
     function zeigeMitgliederBewertung(mitglieder) {
-      hide("screen-schueler","screen-start","screen-bewertung","screen-lehrer");
+      hide("screen-schueler","screen-start","screen-bewertung","screen-lehrer","screen-mitglieder");
       show("screen-mitglieder");
       const container = document.getElementById("mitglieder-container");
       container.innerHTML = "";
@@ -442,7 +452,7 @@
 
     window.zeigeLehrerBewertung = async function(gruppeId, gruppeName) {
       currentUser = { name: "Lehrer", gruppe: null, rolle: "lehrer" };
-      hide("screen-lehrer","screen-start","screen-schueler");
+      hide("screen-lehrer","screen-start","screen-schueler","screen-mitglieder");
       show("screen-bewertung");
       document.getElementById("bew-titel").textContent = `Lehrerbewertung: ${gruppeName}`;
       document.getElementById("bew-gruppe-id").value   = gruppeId;
@@ -525,7 +535,6 @@
     window.abmelden = function() {
       currentUser = null;
       document.getElementById("inp-name").value     = "";
-      document.getElementById("inp-gruppe").value   = "";
       document.getElementById("inp-lehrerpw").value = "";
       zeigeStart();
     };
@@ -947,11 +956,8 @@
     <div class="login-card">
       <h3>👤 Ich bin Schüler/in</h3>
       <div class="section-label">Dein Name</div>
-      <input id="inp-name" type="text" placeholder="Vorname Nachname">
-      <div class="section-label">Deine Gruppe</div>
-      <select id="inp-gruppe">
-        <option value="">– Gruppe wählen –</option>
-      </select>
+      <input id="inp-name" type="text" placeholder="Vorname Nachname" onkeydown="if(event.key==='Enter')startSchueler()">
+      <p style="font-size:0.78rem;color:var(--muted);margin:-4px 0 10px">Bitte genau so schreiben, wie der Lehrer dich eingetragen hat.</p>
       <button class="btn-primary" onclick="startSchueler()">Weiter →</button>
     </div>
 
@@ -971,7 +977,11 @@
 ══════════════════════════════════════ -->
 <div id="screen-schueler" class="screen" style="display:none">
   <div class="screen-title">🎧 Alle Hörspiele</div>
-  <div class="screen-sub">Ladet die Hörspiele herunter, hört rein – und bewertet dann die anderen Gruppen!</div>
+  <div class="screen-sub">
+    Hallo <strong id="schueler-name-anzeige"></strong>! 👋
+    Du bist in <strong id="schueler-gruppe-anzeige"></strong>.
+    Hört rein und bewertet die anderen Gruppen!
+  </div>
   <div id="gruppen-liste"></div>
 </div>
 
