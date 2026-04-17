@@ -21,11 +21,18 @@
       storageBucket:     "oberschule-moderation.firebasestorage.app",
       messagingSenderId: "224718576254",
       appId:             "1:224718576254:web:54a9aa2e8690f44e44162f"
-
     };
 
-    const app = initializeApp(firebaseConfig);
-    const db  = getFirestore(app);
+    // Prüfe ob Config ausgefüllt ist
+    const configFehlt = false;
+
+    let app, db;
+    try {
+      app = initializeApp(firebaseConfig);
+      db  = getFirestore(app);
+    } catch(e) {
+      console.warn("Firebase Init Fehler:", e);
+    }
 
     // ── Collections ──────────────────────────────────
     const GRUPPEN_COL    = "hoerspiel_gruppen";
@@ -71,14 +78,20 @@
     // LOAD GRUPPEN
     // ══════════════════════════════════════════════════
     async function ladeGruppen() {
-      const snap = await getDocs(collection(db, GRUPPEN_COL));
-      gruppen = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      gruppen.sort((a,b) => a.name.localeCompare(b.name));
+      if (!db) return;
+      try {
+        const snap = await getDocs(collection(db, GRUPPEN_COL));
+        gruppen = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        gruppen.sort((a,b) => a.name.localeCompare(b.name));
+      } catch(e) { console.warn("ladeGruppen Fehler:", e); }
     }
 
     async function ladeBewertungen() {
-      const snap = await getDocs(collection(db, BEWERTUNG_COL));
-      bewertungen = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (!db) return;
+      try {
+        const snap = await getDocs(collection(db, BEWERTUNG_COL));
+        bewertungen = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      } catch(e) { console.warn("ladeBewertungen Fehler:", e); }
     }
 
     // ══════════════════════════════════════════════════
@@ -445,6 +458,12 @@
 
     // ── Init ─────────────────────────────────────────
     document.addEventListener("DOMContentLoaded", () => {
+      if (configFehlt) {
+        const banner = document.createElement("div");
+        banner.style.cssText = "background:#7c2d12;color:#fef3c7;padding:12px 20px;text-align:center;font-size:0.88rem;";
+        banner.innerHTML = "⚠️ <strong>Firebase nicht konfiguriert!</strong> Bitte die Firebase-Config oben in der Datei ausfüllen (apiKey, projectId …)";
+        document.body.insertBefore(banner, document.body.firstChild);
+      }
       zeigeStart();
 
       // Gruppen-Dropdown für Schüler befüllen (mit Live-Daten)
@@ -821,7 +840,7 @@
 <!-- ══════════════════════════════════════
      SCREEN: START
 ══════════════════════════════════════ -->
-<div id="screen-start" class="screen" style="max-width:700px">
+<div id="screen-start" class="screen" style="max-width:700px;display:block">
   <div class="start-hero">
     <div class="start-mic">🎙️</div>
     <div class="start-title">Hörspiel-Premiere</div>
@@ -855,7 +874,7 @@
 <!-- ══════════════════════════════════════
      SCREEN: SCHÜLER – DOWNLOADS & BEWERTUNG
 ══════════════════════════════════════ -->
-<div id="screen-schueler" class="screen">
+<div id="screen-schueler" class="screen" style="display:none">
   <div class="screen-title">🎧 Alle Hörspiele</div>
   <div class="screen-sub">Ladet die Hörspiele herunter, hört rein – und bewertet dann die anderen Gruppen!</div>
   <div id="gruppen-liste"></div>
@@ -864,7 +883,7 @@
 <!-- ══════════════════════════════════════
      SCREEN: BEWERTUNGSFORMULAR
 ══════════════════════════════════════ -->
-<div id="screen-bewertung" class="screen">
+<div id="screen-bewertung" class="screen" style="display:none">
   <div class="screen-title" id="bew-titel">Bewertung</div>
   <div class="screen-sub">Bewertet jedes Kriterium mit 1–5 Sternen.</div>
   <input type="hidden" id="bew-gruppe-id">
@@ -885,7 +904,7 @@
 <!-- ══════════════════════════════════════
      SCREEN: LEHRER
 ══════════════════════════════════════ -->
-<div id="screen-lehrer" class="screen" style="max-width:860px">
+<div id="screen-lehrer" class="screen" style="max-width:860px;display:none">
   <div class="screen-title">👩‍🏫 Lehrer-Verwaltung</div>
   <div class="screen-sub">Gruppen verwalten, Drive-Links eintragen, Bewertungen einsehen.</div>
 
