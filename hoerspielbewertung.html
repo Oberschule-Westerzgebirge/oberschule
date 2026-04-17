@@ -169,6 +169,12 @@
       });
       if (gruppen.length === 0)
         container.innerHTML = "<p class='muted'>Noch keine Gruppen eingetragen.</p>";
+      var mg2 = gruppen.find(function(g){ return g.name === currentUser.gruppe; });
+      var andereM = ((mg2 && mg2.mitglieder)||[]).filter(function(m){
+        return m.trim().toLowerCase() !== currentUser.name.toLowerCase();
+      });
+      var bn = document.getElementById('gruppenarbeit-banner');
+      if (bn) bn.style.display = andereM.length > 0 ? 'block' : 'none';
     }
 
     window.zeigeBewertungsformular = async function(gruppeId, gruppeName) {
@@ -532,6 +538,81 @@
       }
     };
 
+    function avgVal(list, kid) {
+      var v = list.map(function(b){ return (b.kriterien && b.kriterien[kid]) || 0; })
+                  .filter(function(x){ return x > 0; });
+      return v.length ? v.reduce(function(a,b){ return a+b; },0)/v.length : null;
+    }
+
+    window.starteGruppenarbeitsBewertung = function() {
+      var mg = gruppen.find(function(g){ return g.name === currentUser.gruppe; });
+      var mitglieder = (mg && mg.mitglieder) || [];
+      if (mitglieder.length > 0) zeigeMitgliederBewertung(mitglieder);
+      else toast("Keine Mitglieder eingetragen.", "error");
+    };
+
+    window.exportCSV = async function() {
+      await ladeGruppen();
+      await ladeBewertungen();
+      var mitBews = await ladeMitgliederBewertungen();
+      var sep = ";";
+      var zeilen = [];
+      var header = ["Gruppe"];
+      KRITERIEN.forEach(function(k) {
+        header.push(k.label + " Oe Schueler (30%)");
+        header.push(k.label + " Lehrer (70%)");
+        header.push(k.label + " Oe Gewichtet");
+      });
+      header.push("Gesamt Oe Gewichtet"); header.push("NOTE EINTRAGEN");
+      zeilen.push(header.join(sep));
+      gruppen.forEach(function(g) {
+        var bews  = bewertungen.filter(function(b){ return b.gruppeId === g.id; });
+        var sBews = bews.filter(function(b){ return b.rolle === "schueler"; });
+        var lBew  = bews.find(function(b){ return b.rolle === "lehrer"; });
+        var zeile = [g.name];
+        var gewichtete = [];
+        KRITERIEN.forEach(function(k) {
+          var sv = avgVal(sBews, k.id);
+          var lv = (lBew && lBew.kriterien && lBew.kriterien[k.id]) || null;
+          var gw = (sv !== null && lv !== null) ? lv*0.7+sv*0.3 : (lv !== null ? lv : (sv !== null ? sv : null));
+          zeile.push(sv !== null ? sv.toFixed(2).replace(".",",") : "");
+          zeile.push(lv !== null ? Number(lv).toFixed(2).replace(".",",") : "");
+          zeile.push(gw !== null ? gw.toFixed(2).replace(".",",") : "");
+          if (gw !== null) gewichtete.push(gw);
+        });
+        var gs = gewichtete.length ? (gewichtete.reduce(function(a,b){return a+b;},0)/gewichtete.length).toFixed(2).replace(".",",") : "";
+        zeile.push(gs); zeile.push(""); zeilen.push(zeile.join(sep));
+      });
+      zeilen.push(""); zeilen.push("MITGLIEDER-BEWERTUNG");
+      var mh = ["Gruppe","Mitglied","Bewertet von"];
+      MITGL_KRITERIEN.forEach(function(k){ mh.push(k.label); });
+      mh.push("Oe Gesamt"); mh.push("NOTE EINTRAGEN");
+      zeilen.push(mh.join(sep));
+      var byM = {};
+      mitBews.forEach(function(b){ var key = b.gruppe+"||"+b.mitgliedName; if(!byM[key])byM[key]=[]; byM[key].push(b); });
+      Object.keys(byM).forEach(function(key) {
+        var list = byM[key]; var parts = key.split("||");
+        var zeile = [parts[0], parts[1], list.map(function(b){return b.bewerterName;}).join(" / ")];
+        var vals = [];
+        MITGL_KRITERIEN.forEach(function(k) {
+          var v = list.map(function(b){return (b.kriterien&&b.kriterien[k.id])||0;}).filter(function(x){return x>0;});
+          var a = v.length ? v.reduce(function(a,b){return a+b;},0)/v.length : null;
+          zeile.push(a !== null ? a.toFixed(2).replace(".",",") : "");
+          if (a !== null) vals.push(a);
+        });
+        var gs = vals.length ? (vals.reduce(function(a,b){return a+b;},0)/vals.length).toFixed(2).replace(".",",") : "";
+        zeile.push(gs); zeile.push(""); zeilen.push(zeile.join(sep));
+      });
+      var bom = "\uFEFF";
+      var blob = new Blob([bom + zeilen.join("\r\n")], {type:"text/csv;charset=utf-8;"});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = "Hoerspiel_" + new Date().toLocaleDateString("de-DE").split(".").join("-") + ".csv";
+      a.click(); URL.revokeObjectURL(url);
+      toast("CSV exportiert!", "success");
+    };
+
     window.abmelden = function() {
       currentUser = null;
       document.getElementById("inp-name").value     = "";
@@ -893,6 +974,11 @@
     /* ── MISC ── */
     .muted { color: var(--muted); font-style: italic; font-size: 0.9rem; }
 
+    .btn-export { background: rgba(74,222,128,.12); color: var(--green); border: 1px solid rgba(74,222,128,.3); padding: 10px 20px; border-radius: 9px; font-family: 'Syne', sans-serif; font-weight: 700; font-size: .9rem; cursor: pointer; transition: all .2s; }
+    .btn-export:hover { background: rgba(74,222,128,.25); }
+
+    .gruppenarbeit-box { background: rgba(245,166,35,.08); border: 1px solid rgba(245,166,35,.3); border-radius: var(--r); padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
     .badge-seite {
       display: inline-block;
       background: rgba(245,166,35,0.15);
@@ -982,6 +1068,15 @@
     Du bist in <strong id="schueler-gruppe-anzeige"></strong>.
     Hört rein und bewertet die anderen Gruppen!
   </div>
+  <div id="gruppenarbeit-banner" style="display:none;margin-bottom:20px">
+    <div class="gruppenarbeit-box">
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;margin-bottom:4px">&#x1F465; Gruppenarbeit bewerten</div>
+        <div style="font-size:.85rem;color:var(--muted)">Bewertet die Mitarbeit eurer Gruppenmitglieder</div>
+      </div>
+      <button class="btn-primary" style="width:auto;padding:10px 20px;white-space:nowrap" onclick="starteGruppenarbeitsBewertung()">Jetzt bewerten</button>
+    </div>
+  </div>
   <div id="gruppen-liste"></div>
 </div>
 
@@ -1010,7 +1105,10 @@
      SCREEN: LEHRER
 ══════════════════════════════════════ -->
 <div id="screen-lehrer" class="screen" style="max-width:860px;display:none">
-  <div class="screen-title">👩‍🏫 Lehrer-Verwaltung</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:6px">
+    <div class="screen-title" style="margin:0">👩‍🏫 Lehrer-Verwaltung</div>
+    <button class="btn-export" onclick="exportCSV()">&#x2B07; CSV exportieren</button>
+  </div>
   <div class="screen-sub">Gruppen verwalten, Drive-Links eintragen, Bewertungen einsehen.</div>
 
   <!-- Gruppen verwalten -->
