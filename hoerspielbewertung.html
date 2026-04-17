@@ -549,131 +549,6 @@
       }
     };
 
-    window.exportCSV = async function() {
-      await ladeGruppen();
-      await ladeBewertungen();
-      const mitBews = await ladeMitgliederBewertungen();
-
-      const sep = ";";
-      const rows = [];
-
-      // ── Header ──
-      rows.push([
-        "Gruppe",
-        ...KRITERIEN.flatMap(k => [
-          `${k.label} Ø Schüler (30%)`,
-          `${k.label} Lehrer (70%)`,
-          `${k.label} Ø Gewichtet`
-        ]),
-        "Gesamt Ø Gewichtet",
-        "⭐ NOTE EINTRAGEN",
-        "",
-        "── Gruppenarbeit ──",
-        ...MITGLIEDER_KRITERIEN.map(k => k.label),
-        "Gruppenarbeit Ø",
-      ].join(sep));
-
-      // ── Hörspiel-Zeilen (eine pro Gruppe) ──
-      gruppen.forEach(g => {
-        const bews  = bewertungen.filter(b => b.gruppeId === g.id);
-        const sBews = bews.filter(b => b.rolle === "schueler");
-        const lBew  = bews.find(b => b.rolle === "lehrer");
-
-        const sAvg = (kid) => {
-          const v = sBews.map(b => b.kriterien?.[kid] ?? 0).filter(x => x > 0);
-          return v.length ? (v.reduce((a,b) => a+b, 0) / v.length) : null;
-        };
-        const lVal = (kid) => lBew?.kriterien?.[kid] ?? null;
-        const weighted = (kid) => {
-          const s = sAvg(kid), l = lVal(kid);
-          if (s !== null && l !== null) return (l * 0.7 + s * 0.3);
-          if (l !== null) return l;
-          if (s !== null) return s;
-          return null;
-        };
-
-        const kritCells = KRITERIEN.flatMap(k => [
-          sAvg(k.id) !== null ? sAvg(k.id).toFixed(2).replace(".",",") : "",
-          lVal(k.id) !== null ? lVal(k.id).toFixed(2).replace(".",",") : "",
-          weighted(k.id) !== null ? weighted(k.id).toFixed(2).replace(".",",") : "",
-        ]);
-
-        const allWeighted = KRITERIEN.map(k => weighted(k.id)).filter(x => x !== null);
-        const gesamtAvg = allWeighted.length
-          ? (allWeighted.reduce((a,b) => a+b, 0) / allWeighted.length).toFixed(2).replace(".",",")
-          : "";
-
-        // Gruppenarbeit-Durchschnitte für diese Gruppe
-        const gBews = mitBews.filter(b => b.gruppe === g.name);
-        const mAvg = (kid) => {
-          const v = gBews.map(b => b.kriterien?.[kid] ?? 0).filter(x => x > 0);
-          return v.length ? (v.reduce((a,b) => a+b, 0) / v.length) : null;
-        };
-        const mKritCells = MITGLIEDER_KRITERIEN.map(k =>
-          mAvg(k.id) !== null ? mAvg(k.id).toFixed(2).replace(".",",") : ""
-        );
-        const mAlls = MITGLIEDER_KRITERIEN.map(k => mAvg(k.id)).filter(x => x !== null);
-        const mGesamt = mAlls.length
-          ? (mAlls.reduce((a,b) => a+b, 0) / mAlls.length).toFixed(2).replace(".",",")
-          : "";
-
-        rows.push([
-          g.name,
-          ...kritCells,
-          gesamtAvg,
-          "",   // Note eintragen
-          "",   // Leerfeld Trenner
-          "",   // Gruppenarbeit Header-Zelle (leer in Datenzeile)
-          ...mKritCells,
-          mGesamt,
-        ].join(sep));
-      });
-
-      // ── Leere Trennzeile + Mitglieder-Detail-Block ──
-      rows.push("");
-      rows.push(["── MITGLIEDER-BEWERTUNG DETAIL ──"].join(sep));
-      rows.push(["Gruppe", "Mitglied", "Bewertet von", ...MITGLIEDER_KRITERIEN.map(k=>k.label), "Ø Gesamt", "⭐ NOTE EINTRAGEN"].join(sep));
-
-      // Alle Mitglieder-Bewertungen
-      const byMitglied = {};
-      mitBews.forEach(b => {
-        const key = `${b.gruppe}||${b.mitgliedName}`;
-        if (!byMitglied[key]) byMitglied[key] = [];
-        byMitglied[key].push(b);
-      });
-
-      Object.entries(byMitglied).forEach(([key, list]) => {
-        const [gruppe, mitglied] = key.split("||");
-        const avg = (kid) => {
-          const v = list.map(b => b.kriterien?.[kid] ?? 0).filter(x => x > 0);
-          return v.length ? (v.reduce((a,b) => a+b, 0) / v.length) : null;
-        };
-        const vals = MITGLIEDER_KRITERIEN.map(k => avg(k.id));
-        const gesamt = vals.filter(x=>x!==null);
-        rows.push([
-          gruppe,
-          mitglied,
-          list.map(b=>b.bewerterName).join(" / "),
-          ...vals.map(v => v !== null ? v.toFixed(2).replace(".",",") : ""),
-          gesamt.length ? (gesamt.reduce((a,b)=>a+b,0)/gesamt.length).toFixed(2).replace(".",",") : "",
-          "",
-        ].join(sep));
-      });
-
-      // ── Download ──
-      const bom = "﻿"; // UTF-8 BOM für Excel
-      const csvContent = bom + rows.join("
-");
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement("a");
-      a.href     = url;
-      a.download = `Hoerspiel_Bewertungen_${new Date().toLocaleDateString("de-DE").replace(/\./g,"-")}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast("CSV exportiert ✓", "success");
-    };
-
     window.abmelden = function() {
       currentUser = null;
       document.getElementById("inp-name").value     = "";
@@ -1082,20 +957,6 @@
     .section-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 6px; }
 
     .divider { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
-
-    .btn-export {
-      background: rgba(74,222,128,0.12);
-      color: var(--green);
-      border: 1px solid rgba(74,222,128,0.3);
-      padding: 10px 20px;
-      border-radius: 9px;
-      font-family: 'Syne', sans-serif;
-      font-weight: 700;
-      font-size: 0.9rem;
-      cursor: pointer;
-      transition: all .2s;
-    }
-    .btn-export:hover { background: rgba(74,222,128,0.25); }
   </style>
 </head>
 <body>
@@ -1150,17 +1011,6 @@
     Du bist in <strong id="schueler-gruppe-anzeige"></strong>.
     Hört rein und bewertet die anderen Gruppen!
   </div>
-
-  <div id="gruppenarbeit-banner" style="display:none;margin-bottom:20px">
-    <div class="gruppenarbeit-box">
-      <div>
-        <div style="font-family:'Syne',sans-serif;font-weight:700;margin-bottom:4px">👥 Gruppenarbeit bewerten</div>
-        <div style="font-size:0.85rem;color:var(--muted)">Bewertet jetzt die Mitarbeit eurer Gruppenmitglieder</div>
-      </div>
-      <button class="btn-primary" style="width:auto;padding:10px 20px;white-space:nowrap" onclick="starteGruppenarbeitsBewertung()">Jetzt bewerten →</button>
-    </div>
-  </div>
-
   <div id="gruppen-liste"></div>
 </div>
 
@@ -1189,10 +1039,7 @@
      SCREEN: LEHRER
 ══════════════════════════════════════ -->
 <div id="screen-lehrer" class="screen" style="max-width:860px;display:none">
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:6px">
-    <div class="screen-title" style="margin:0">👩‍🏫 Lehrer-Verwaltung</div>
-    <button class="btn-export" onclick="exportCSV()">⬇️ CSV exportieren</button>
-  </div>
+  <div class="screen-title">👩‍🏫 Lehrer-Verwaltung</div>
   <div class="screen-sub">Gruppen verwalten, Drive-Links eintragen, Bewertungen einsehen.</div>
 
   <!-- Gruppen verwalten -->
@@ -1379,13 +1226,6 @@
       });
       if (gruppen.length === 0)
         container.innerHTML = "<p class='muted'>Noch keine Gruppen eingetragen.</p>";
-
-      // Gruppenarbeit-Banner anzeigen wenn Mitglieder vorhanden
-      const meineGruppe = gruppen.find(g => g.name === currentUser.gruppe);
-      const banner = document.getElementById("gruppenarbeit-banner");
-      const andereMitglieder = (meineGruppe?.mitglieder || [])
-        .filter(m => m.trim().toLowerCase() !== currentUser.name.toLowerCase());
-      banner.style.display = andereMitglieder.length > 0 ? "block" : "none";
     }
 
     window.zeigeBewertungsformular = async function(gruppeId, gruppeName) {
@@ -1549,16 +1389,6 @@
     };
 
     window.mitgliederUeberspringen = function() { zeigeDownloads(); };
-
-    window.starteGruppenarbeitsBewertung = function() {
-      const meineGruppe = gruppen.find(g => g.name === currentUser.gruppe);
-      const mitglieder  = meineGruppe?.mitglieder || [];
-      if (mitglieder.length > 0) {
-        zeigeMitgliederBewertung(mitglieder);
-      } else {
-        toast("Keine Mitglieder für deine Gruppe eingetragen.", "error");
-      }
-    };
 
     // ── LEHRER ───────────────────────────────────────
     function zeigeLehrer() {
@@ -2120,18 +1950,6 @@
     /* ── MISC ── */
     .muted { color: var(--muted); font-style: italic; font-size: 0.9rem; }
 
-    .gruppenarbeit-box {
-      background: rgba(245,166,35,0.08);
-      border: 1px solid rgba(245,166,35,0.3);
-      border-radius: var(--r);
-      padding: 18px 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-
     .badge-seite {
       display: inline-block;
       background: rgba(245,166,35,0.15);
@@ -2221,17 +2039,6 @@
     Du bist in <strong id="schueler-gruppe-anzeige"></strong>.
     Hört rein und bewertet die anderen Gruppen!
   </div>
-
-  <div id="gruppenarbeit-banner" style="display:none;margin-bottom:20px">
-    <div class="gruppenarbeit-box">
-      <div>
-        <div style="font-family:'Syne',sans-serif;font-weight:700;margin-bottom:4px">👥 Gruppenarbeit bewerten</div>
-        <div style="font-size:0.85rem;color:var(--muted)">Bewertet jetzt die Mitarbeit eurer Gruppenmitglieder</div>
-      </div>
-      <button class="btn-primary" style="width:auto;padding:10px 20px;white-space:nowrap" onclick="starteGruppenarbeitsBewertung()">Jetzt bewerten →</button>
-    </div>
-  </div>
-
   <div id="gruppen-liste"></div>
 </div>
 
