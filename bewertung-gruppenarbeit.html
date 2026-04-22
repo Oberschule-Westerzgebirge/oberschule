@@ -168,6 +168,64 @@
     });
   }
 
+  window.zeigeLehrerGruppenbewertung = async function(gruppeId) {
+    var gruppe = gruppen.find(function(g){ return g.id === gruppeId; });
+    if (!gruppe) return;
+    currentUser = { name: "Lehrer", gruppe: gruppe.name, rolle: "lehrer" };
+    hideAll();
+    show("screen-bewertung");
+    document.getElementById("bew-titel").textContent = "Lehrerbewertung";
+    document.getElementById("bew-gruppe-sub").textContent = gruppe.name + " – alle Mitglieder";
+    document.getElementById("btn-zurueck").style.display = "";
+    document.getElementById("btn-abbrechen").style.display = "none";
+    var bews = await ladeBewertungen();
+    var c = document.getElementById("mitglieder-container");
+    c.innerHTML = "";
+    var mitglieder = gruppe.mitglieder || [];
+    if (mitglieder.length === 0) {
+      c.innerHTML = "<p class='muted'>Keine Mitglieder eingetragen.</p>";
+      return;
+    }
+    mitglieder.forEach(function(mitglied) {
+      var vorh = bews.find(function(b){ return b.mitgliedName === mitglied && b.gruppe === gruppe.name && b.rolle === "lehrer"; });
+      var aktWert = (vorh && vorh.kriterien && vorh.kriterien["gesamt"]) || 0;
+      var block = document.createElement("div");
+      block.className = "mitglied-block";
+      block.setAttribute("data-mitglied", mitglied);
+      block.setAttribute("data-gruppe-id", gruppeId);
+      block.setAttribute("data-gruppe-name", gruppe.name);
+      block.setAttribute("data-lehrer-einfach", "1");
+      var nameDiv = document.createElement("div");
+      nameDiv.className = "mitglied-name";
+      nameDiv.textContent = "👤 " + mitglied;
+      block.appendChild(nameDiv);
+      var kDiv = document.createElement("div");
+      kDiv.className = "kriterium-block";
+      kDiv.innerHTML =
+        '<div class="krit-label">🏆 Gruppenarbeit – Gesamtbewertung</div>' +
+        '<div class="krit-desc">Deine Einschätzung der Mitarbeit dieses Mitglieds (1–5 Punkte)</div>' +
+        '<div class="stars-wrap" data-id="gesamt" data-val="' + aktWert + '">' +
+          [1,2,3,4,5].map(function(n){
+            return '<span class="star' + (n <= aktWert ? ' active' : '') + '" data-val="' + n + '">★</span>';
+          }).join("") +
+          '<span class="star-label">' + (aktWert > 0 ? "⭐ " + sterneText(aktWert) : "– noch nicht bewertet") + '</span>' +
+        '</div>';
+      kDiv.querySelectorAll(".star").forEach(function(s) {
+        s.addEventListener("click", function() {
+          var val = parseInt(s.getAttribute("data-val"));
+          var wrap = s.closest(".stars-wrap");
+          wrap.querySelectorAll(".star").forEach(function(x){
+            x.classList.toggle("active", parseInt(x.getAttribute("data-val")) <= val);
+          });
+          wrap.setAttribute("data-val", val);
+          wrap.querySelector(".star-label").textContent = "⭐ " + sterneText(val);
+        });
+      });
+      block.appendChild(kDiv);
+      c.appendChild(block);
+    });
+  };
+
   window.zeigeLehrerBewertungFuer = async function(gruppeId, mitglied) {
     var gruppe = gruppen.find(function(g){ return g.id === gruppeId; });
     if (!gruppe) return;
@@ -301,17 +359,22 @@
           var lBew  = bews.find(function(b){ return b.mitgliedName === m && b.gruppe === g.name && b.rolle === "lehrer"; });
           var sInfo = sBews.length > 0 ? sBews.length + " Schüler-Bew." : "Noch keine Schüler-Bew.";
           var lPunkte = (lBew && lBew.kriterien && lBew.kriterien["gesamt"]) || null;
-          var lBtnClass = lBew ? "btn-sm btn-edit" : "btn-sm btn-lehrerbew";
-          var lBtnLabel = lBew
-            ? "✅ " + lPunkte + "/5 Pkt. – ändern"
-            : "➕ Lehrerbewertung abgeben";
-
           html += "<div class='mitglied-row'>";
           html += "<span class='mr-name'>👤 " + m + "</span>";
           html += "<span class='mr-count'>" + sInfo + "</span>";
-          html += "<button class='" + lBtnClass + "' onclick='zeigeLehrerBewertungFuer(\"" + g.id + "\",\"" + m.replace(/"/g,"&quot;") + "\")'>" + lBtnLabel + "</button>";
+          html += lBew
+            ? "<span class='mr-note'>✅ " + lPunkte + "/5 Pkt.</span>"
+            : "<span class='mr-note mr-offen'>– noch keine Lehrerbew.</span>";
           html += "</div>";
         });
+        // Button: alle Mitglieder dieser Gruppe auf einmal bewerten
+        var alleBew = mitglieder.every(function(m){
+          return bews.some(function(b){ return b.mitgliedName === m && b.gruppe === g.name && b.rolle === "lehrer"; });
+        });
+        html += "<div style='margin-top:12px'>";
+        html += "<button class='" + (alleBew ? "btn-sm btn-edit" : "btn-sm btn-lehrerbew") + "' style='width:100%;padding:10px' onclick='zeigeLehrerGruppenbewertung(\"" + g.id + "\")'>"
+          + (alleBew ? "✏️ Lehrerbewertungen bearbeiten" : "➕ Gruppe jetzt bewerten") + "</button>";
+        html += "</div>";
         html += "</div>";
       }
       html += "</div>";
@@ -507,6 +570,8 @@
     .mitglied-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 10px;background:var(--bg3);border-radius:9px}
     .mr-name{font-weight:600;font-size:.9rem;min-width:150px}
     .mr-count{font-size:.8rem;color:var(--muted);flex:1}
+    .mr-note{font-size:.82rem;font-weight:600;color:var(--green)}
+    .mr-offen{color:var(--muted);font-weight:400}
     .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center;padding:20px}
     .modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:16px;max-width:500px;width:100%;padding:28px}
     .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
