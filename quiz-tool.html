@@ -51,8 +51,25 @@
     S.klassen.sort(function(a,b){return a.name.localeCompare(b.name);});
   }
   async function ladeFragen(klasse){
-    var snap=await db.collection(C_FRAGEN).where("klasse","==",klasse).get();
-    S.fragen=snap.docs.map(function(d){return Object.assign({id:d.id},d.data());});
+    var snap;
+    if(klasse){
+      // Lade Fragen dieser Klasse ODER Fragen ohne Klasse (alte V1-Einträge)
+      var snapKlasse = await db.collection(C_FRAGEN).where("klasse","==",klasse).get();
+      var snapAlle   = await db.collection(C_FRAGEN).get();
+      var alleOhneKlasse = snapAlle.docs.filter(function(d){
+        var data=d.data();
+        return !data.klasse || data.klasse==="" || data.klasse===klasse;
+      });
+      // Merge, keine Duplikate
+      var ids={};
+      snapKlasse.docs.forEach(function(d){ids[d.id]=true;});
+      var merged=snapKlasse.docs.slice();
+      alleOhneKlasse.forEach(function(d){if(!ids[d.id])merged.push(d);});
+      S.fragen=merged.map(function(d){return Object.assign({id:d.id},d.data());});
+    } else {
+      snap=await db.collection(C_FRAGEN).get();
+      S.fragen=snap.docs.map(function(d){return Object.assign({id:d.id},d.data());});
+    }
   }
   async function ladePunkte(klasse){
     var snap=await db.collection(C_PUNKTE).where("klasse","==",klasse).get();
@@ -180,6 +197,12 @@
 
   // ─── TAB KLASSEN ───
   function renderKlassenTab(){
+    // Auch Dropdown im Gruppen-Modal aktualisieren
+    var sel=document.getElementById("sel-kl-zuweisung");
+    if(sel){
+      sel.innerHTML="<option value=''>– Klasse wählen –</option>";
+      S.klassen.forEach(function(k){sel.innerHTML+="<option value='"+k.id+"'>"+k.name+"</option>";});
+    }
     var c=document.getElementById("kl-liste");
     if(!S.klassen.length){c.innerHTML="<p class='muted'>Noch keine Klassen.</p>";return;}
     c.innerHTML=S.klassen.map(function(k){
@@ -200,6 +223,51 @@
     await db.collection(C_KLASSEN).add({name:name,gruppen:gruppen,timestamp:firebase.firestore.FieldValue.serverTimestamp()});
     toast("Klasse hinzugefügt ✓","success");
     document.getElementById("inp-kl-name").value="";document.getElementById("inp-kl-gr").value="";
+    await ladeKlassen();renderKlassenTab();
+    ["dd-kl-s","dd-kl-g","dd-l-kl-fragen","dd-l-kl-quiz","dd-l-kl-aus"].forEach(befuelleKlassenSel);
+  };
+
+  // Bestehende Gruppen aus Fragen-Collection erkennen und anzeigen
+  window.gruppenErkennen=async function(){
+    var snap=await db.collection(C_FRAGEN).get();
+    var gruppenSet={};
+    snap.docs.forEach(function(d){
+      var data=d.data();
+      if(data.gruppe) gruppenSet[data.gruppe]=true;
+    });
+    var gruppen=Object.keys(gruppenSet).sort();
+    if(!gruppen.length){toast("Keine Gruppen in den Fragen gefunden.","error");return;}
+    // Zeige Modal mit Gruppen zum Auswählen
+    var c=document.getElementById("erkannte-gruppen");
+    c.innerHTML=gruppen.map(function(g){
+      return "<label class='gr-check-label'>"+
+        "<input type='checkbox' name='erkannte-gr' value='"+g+"' checked> "+
+        g+" <input type='text' class='pw-inline' placeholder='Passwort' value='1234'>"+
+        "</label>";
+    }).join("");
+    show("modal-gruppen");
+  };
+
+  window.gruppenZuweisen=async function(){
+    var klasseId=document.getElementById("sel-kl-zuweisung").value;
+    if(!klasseId){toast("Klasse wählen!","error");return;}
+    var checkboxen=document.querySelectorAll("input[name='erkannte-gr']:checked");
+    var gruppen=[];
+    checkboxen.forEach(function(cb){
+      var pw=cb.parentElement.querySelector(".pw-inline").value||"1234";
+      gruppen.push({name:cb.value,pw:pw});
+    });
+    if(!gruppen.length){toast("Keine Gruppen ausgewählt!","error");return;}
+    // Bestehende Gruppen laden und ergänzen
+    var k=S.klassen.find(function(x){return x.id===klasseId;});
+    var vorh=(k&&k.gruppen)||[];
+    var vorhandeneNamen=vorh.map(function(g){return g.name;});
+    gruppen.forEach(function(g){
+      if(!vorhandeneNamen.includes(g.name)) vorh.push(g);
+    });
+    await db.collection(C_KLASSEN).doc(klasseId).update({gruppen:vorh});
+    toast(gruppen.length+" Gruppen zugewiesen ✓","success");
+    hide("modal-gruppen");
     await ladeKlassen();renderKlassenTab();
     ["dd-kl-s","dd-kl-g","dd-l-kl-fragen","dd-l-kl-quiz","dd-l-kl-aus"].forEach(befuelleKlassenSel);
   };
@@ -692,6 +760,10 @@
     .muted{color:var(--muted);font-style:italic;font-size:.88rem}
     .divider{border:none;border-top:1px solid var(--border);margin:20px 0}
     .hint{font-size:.78rem;color:var(--muted);margin-top:4px}
+    .gr-check-label{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg3);border-radius:8px;margin-bottom:6px;font-size:.88rem;cursor:pointer}
+    .gr-check-label input[type='checkbox']{width:16px;height:16px;accent-color:var(--gold)}
+    .pw-inline{flex:1;background:var(--bg4);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:6px;font-family:inherit;font-size:.82rem;outline:none;max-width:100px}
+    .pw-inline:focus{border-color:var(--gold)}
   </style>
 </head>
 <body>
@@ -784,10 +856,15 @@
   <div id="tab-klassen">
     <div class="add-form">
       <input id="inp-kl-name" placeholder="Klassenname z.B. 7a">
-      <input id="inp-kl-gr" placeholder="Gruppe1:pw1, Gruppe2:pw2, …" style="flex:2">
+      <input id="inp-kl-gr" placeholder="Gruppe1:pw1, Gruppe2:pw2 (optional)" style="flex:2">
       <button class="btn-primary" style="width:auto;padding:9px 18px" onclick="addKlasse()">+ Klasse</button>
     </div>
-    <p class="hint" style="margin-bottom:14px">Format Gruppen: Name:Passwort, z.B. „Gruppe1:quiz1, Gruppe2:quiz2"</p>
+    <p class="hint" style="margin-bottom:14px">Gruppen optional direkt mitangeben (Name:Passwort) oder unten aus bestehenden Fragen erkennen lassen.</p>
+    <div style="margin-bottom:18px">
+      <button class="btn-secondary" onclick="gruppenErkennen()" style="width:100%;padding:11px">
+        🔍 Bestehende Gruppen aus Fragen erkennen &amp; zuweisen
+      </button>
+    </div>
     <div id="kl-liste"></div>
   </div>
 
@@ -853,6 +930,28 @@
   <div class="tafel-antwort" id="tafel-antwort-box"><span id="tafel-antwort-text"></span></div>
   <div class="tafel-buzzer" id="tafel-buzzer-box"></div>
   <div class="scoreboard" id="scoreboard"></div>
+</div>
+
+<!-- MODAL: GRUPPEN ERKENNEN -->
+<div id="modal-gruppen" class="modal-overlay" style="display:none" onclick="if(event.target===this)schliesseModal('modal-gruppen')">
+  <div class="modal-box" style="max-width:560px">
+    <div class="modal-header">
+      <h3>🔍 Gruppen zuweisen</h3>
+      <button class="modal-close" onclick="schliesseModal('modal-gruppen')">✕</button>
+    </div>
+    <p style="font-size:.85rem;color:var(--muted);margin-bottom:14px">Diese Gruppen wurden in den eingereichten Fragen gefunden. Wähle aus welche du zuweisen möchtest und trage Passwörter ein:</p>
+    <div id="erkannte-gruppen" style="max-height:300px;overflow-y:auto;margin-bottom:16px"></div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:6px">Zu welcher Klasse zuweisen?</label>
+      <select id="sel-kl-zuweisung" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-family:inherit;font-size:.88rem;outline:none">
+        <option value="">– Klasse wählen –</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn-secondary" onclick="schliesseModal('modal-gruppen')">Abbrechen</button>
+      <button class="btn-primary" style="flex:1" onclick="gruppenZuweisen()">Gruppen zuweisen ✓</button>
+    </div>
+  </div>
 </div>
 
 <!-- MODAL: KLASSE BEARBEITEN -->
