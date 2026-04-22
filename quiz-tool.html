@@ -306,12 +306,16 @@
     if(!S.fragen.length){c.innerHTML="<p class='muted'>Keine Einreichungen.</p>";return;}
     c.innerHTML=S.fragen.map(function(sub){
       var rows=sub.fragen.map(function(fq,i){
-        var sc=fq.status==="freigegeben"?"st-frei":fq.status==="abgelehnt"?"st-ab":"st-ein";
+        // V1 nutzte {frage,antwort}, V2 nutzt {f,a} - beide unterstützen
+        var frageText  = fq.f      || fq.frage      || fq.question || "(keine Frage)";
+        var antwortText= fq.a      || fq.antwort     || fq.answer   || "(keine Antwort)";
+        var statusText = fq.status || "eingereicht";
+        var sc=statusText==="freigegeben"?"st-frei":statusText==="abgelehnt"?"st-ab":"st-ein";
         var pkt=fq.punkte>0?"<span class='pkt-b'>+"+fq.punkte+"</span>":"";
-        var btns=(fq.status!=="freigegeben"?"<button class='btn-sm btn-frei' onclick='freigebenFrage(\""+sub.id+"\","+i+")'>✓ +2Pkt</button>":"")+
-          (fq.status!=="abgelehnt"?"<button class='btn-sm btn-ab' onclick='ablehnFrage(\""+sub.id+"\","+i+")'>✗ Löschen</button>":"");
+        var btns=(statusText!=="freigegeben"?"<button class='btn-sm btn-frei' onclick='freigebenFrage(\""+sub.id+"\","+i+")'>✓ +2Pkt</button>":"")+
+          (statusText!=="abgelehnt"?"<button class='btn-sm btn-ab' onclick='ablehnFrage(\""+sub.id+"\","+i+")'>✗ Löschen</button>":"");
         return "<div class='fq-row'><span class='fq-nr'>#"+(i+1)+"</span>"+
-          "<div class='fq-body'><div class='fq-f'>❓ "+fq.f+"</div><div class='fq-a'>💡 "+fq.a+"</div></div>"+
+          "<div class='fq-body'><div class='fq-f'>❓ "+frageText+"</div><div class='fq-a'>💡 "+antwortText+"</div></div>"+
           "<span class='fq-st "+sc+"'>"+fq.status+"</span>"+pkt+
           "<div class='fq-btns'>"+btns+"</div></div>";
       }).join("");
@@ -323,7 +327,15 @@
     var sub=S.fragen.find(function(x){return x.id===subId;});if(!sub)return;
     var anz=sub.fragen.filter(function(f){return f.status==="freigegeben";}).length;
     if(anz>=2){toast("Max. 2 Fragen pro Schüler!","error");return;}
-    var fragen=sub.fragen.map(function(f,i){return i===idx?Object.assign({},f,{status:"freigegeben",punkte:2}):f;});
+    var fragen=sub.fragen.map(function(fq,i){
+      if(i!==idx) return fq;
+      // Normalisiere auf V2-Format beim Freigeben
+      return {
+        f:     fq.f||fq.frage||fq.question||"",
+        a:     fq.a||fq.antwort||fq.answer||"",
+        status:"freigegeben", punkte:2
+      };
+    });
     await db.collection(C_FRAGEN).doc(subId).update({fragen:fragen});
     // Punkte speichern
     var docId=(sub.klasse+"_SCH_"+sub.name).replace(/[\s/]/g,"_");
@@ -358,7 +370,8 @@
     S.fragen.forEach(function(sub){
       sub.fragen.forEach(function(fq,i){
         if(fq.status==="freigegeben"){
-          sel.innerHTML+="<option value='"+sub.id+"__"+i+"'>"+sub.gruppe+"/"+sub.name+": "+fq.f.substring(0,45)+"…</option>";
+          var fqLabel=(fq.f||fq.frage||fq.question||"(Frage)");
+          sel.innerHTML+="<option value='"+sub.id+"__"+i+"'>"+sub.gruppe+"/"+sub.name+": "+fqLabel.substring(0,45)+"…</option>";
         }
       });
     });
@@ -405,9 +418,11 @@
     var parts=fragVal.split("__");
     var sub=S.fragen.find(function(x){return x.id===parts[0];});
     var fq=sub.fragen[parseInt(parts[1])];
+    var fqText   = fq.f||fq.frage||fq.question||"";
+    var fqAntwort= fq.a||fq.antwort||fq.answer||"";
     await db.collection(C_SESSION).doc("current").set({
       aktiv:true,klasse:S.quizKlasse.name,
-      aktuelleFrageText:fq.f,aktuelleAntwort:fq.a,
+      aktuelleFrageText:fqText,aktuelleAntwort:fqAntwort,
       zielGruppe:ziel,buzzerOffen:false,buzzerGedrückt:null
     });
     toast("Frage gestartet!","success");
