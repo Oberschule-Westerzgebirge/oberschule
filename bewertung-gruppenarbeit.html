@@ -115,6 +115,47 @@
     zeigeLehrer();
   };
 
+  window.zeigeLehrerBewertung = function(gruppeId, gruppeName, mitgliedName) {
+    currentUser = { name: "Lehrer", gruppe: gruppeName, rolle: "lehrer" };
+    hideAll();
+    show("screen-bewertung");
+    document.getElementById("bew-gruppe-name").textContent = gruppeName + " – Lehrerbewertung";
+    var c = document.getElementById("mitglieder-container");
+    c.innerHTML = "";
+    var block = document.createElement("div");
+    block.className = "mitglied-block";
+    block.setAttribute("data-mitglied", mitgliedName);
+    block.setAttribute("data-gruppe-id", gruppeId);
+    var nameDiv = document.createElement("div");
+    nameDiv.className = "mitglied-name";
+    nameDiv.textContent = "👤 " + mitgliedName + " (Lehrerbewertung)";
+    block.appendChild(nameDiv);
+    KRITERIEN.forEach(function(k) {
+      var kDiv = document.createElement("div");
+      kDiv.className = "kriterium-block";
+      kDiv.innerHTML =
+        '<div class="krit-label">' + k.emoji + ' ' + k.label + '</div>' +
+        '<div class="krit-desc">' + k.desc + '</div>' +
+        '<div class="stars-wrap" data-id="' + k.id + '" data-val="0">' +
+          [1,2,3,4,5].map(function(n){ return '<span class="star" data-val="' + n + '">&#9733;</span>'; }).join("") +
+          '<span class="star-label">– noch nicht bewertet</span>' +
+        '</div>';
+      kDiv.querySelectorAll(".star").forEach(function(s) {
+        s.addEventListener("click", function() {
+          var val = parseInt(s.getAttribute("data-val"));
+          var wrap = s.closest(".stars-wrap");
+          wrap.querySelectorAll(".star").forEach(function(x){
+            x.classList.toggle("active", parseInt(x.getAttribute("data-val")) <= val);
+          });
+          wrap.setAttribute("data-val", val);
+          wrap.querySelector(".star-label").textContent = sterneText(val);
+        });
+      });
+      block.appendChild(kDiv);
+    });
+    c.appendChild(block);
+  };
+
   window.abmelden = function() {
     currentUser = null;
     document.getElementById("inp-name").value = "";
@@ -203,17 +244,23 @@
     try {
       for (var i = 0; i < ergebnisse.length; i++) {
         var e = ergebnisse[i];
-        var docId = (currentUser.gruppe + "_" + currentUser.name + "_bewertet_" + e.mitglied).replace(/\s/g,"_");
+        var rolle = currentUser.rolle || "schueler";
+        var docId = (currentUser.gruppe + "_" + rolle + "_" + currentUser.name + "_bewertet_" + e.mitglied).replace(/\s/g,"_");
         await db.collection(BEWERTUNG_COL).doc(docId).set({
           gruppe:       currentUser.gruppe,
           bewerterName: currentUser.name,
           mitgliedName: e.mitglied,
+          rolle:        currentUser.rolle || "schueler",
           kriterien:    e.kriterien,
           timestamp:    firebase.firestore.FieldValue.serverTimestamp()
         });
       }
       toast("Bewertungen gespeichert! 🎉", "success");
-      setTimeout(function(){ abmelden(); }, 1500);
+      if (currentUser.rolle === "lehrer") {
+        setTimeout(function(){ zeigeLehrer(); }, 1200);
+      } else {
+        setTimeout(function(){ abmelden(); }, 1500);
+      }
     } catch(e) { toast("Fehler beim Speichern!", "error"); console.error(e); }
   };
 
@@ -309,45 +356,59 @@
       var zeilen = [];
 
       // Header
-      var header = ["Gruppe", "Mitglied", "Bewertet von (Anzahl)"];
-      KRITERIEN.forEach(function(k){ header.push(k.emoji + " " + k.label); });
-      header.push("Oe Gesamt");
+      var header = ["Gruppe", "Mitglied", "Schueler-Bew. (Anzahl)"];
+      KRITERIEN.forEach(function(k){ header.push(k.emoji + " " + k.label + " Oe Schueler (30%)"); });
+      KRITERIEN.forEach(function(k){ header.push(k.emoji + " " + k.label + " Lehrer (70%)"); });
+      KRITERIEN.forEach(function(k){ header.push(k.emoji + " " + k.label + " Oe Gewichtet"); });
+      header.push("Gesamt Oe Gewichtet");
       header.push("NOTE EINTRAGEN");
       zeilen.push(header.join(sep));
 
       // Alle Mitglieder gruppieren
+      // Trenne Schueler- und Lehrerbewertungen
       var byMitglied = {};
       bews.forEach(function(b) {
         var key = b.gruppe + "||" + b.mitgliedName;
-        if (!byMitglied[key]) byMitglied[key] = [];
-        byMitglied[key].push(b);
+        if (!byMitglied[key]) byMitglied[key] = { schueler: [], lehrer: null };
+        if (b.rolle === "lehrer") byMitglied[key].lehrer = b;
+        else byMitglied[key].schueler.push(b);
       });
-
-      // Sortiert nach Gruppe dann Mitglied
+      // Auch Mitglieder ohne Bewertung aus Gruppen hinzufuegen
+      gruppen.forEach(function(g) {
+        (g.mitglieder||[]).forEach(function(m) {
+          var key = g.name + "||" + m;
+          if (!byMitglied[key]) byMitglied[key] = { schueler: [], lehrer: null };
+        });
+      });
       var keys = Object.keys(byMitglied).sort();
       var letzteGruppe = null;
       keys.forEach(function(key) {
-        var list = byMitglied[key];
+        var entry = byMitglied[key];
         var parts = key.split("||");
-        var gruppe = parts[0];
-        var mitglied = parts[1];
-
-        // Leerzeile zwischen Gruppen
+        var gruppe = parts[0]; var mitglied = parts[1];
         if (letzteGruppe && letzteGruppe !== gruppe) zeilen.push("");
         letzteGruppe = gruppe;
-
-        var zeile = [gruppe, mitglied, list.length + " Bewertung(en)"];
-        var vals = [];
-        KRITERIEN.forEach(function(k) {
-          var a = avgVal(list, k.id);
-          zeile.push(a !== null ? a.toFixed(2).replace(".",",") : "");
-          if (a !== null) vals.push(a);
+        var zeile = [gruppe, mitglied, entry.schueler.length + " Bew."];
+        // Schueler-Durchschnitte (30%)
+        var sAvgs = KRITERIEN.map(function(k){ return avgVal(entry.schueler, k.id); });
+        sAvgs.forEach(function(a){ zeile.push(a !== null ? a.toFixed(2).replace(".",",") : ""); });
+        // Lehrer-Werte (70%)
+        var lVals = KRITERIEN.map(function(k){ return (entry.lehrer && entry.lehrer.kriterien && entry.lehrer.kriterien[k.id]) || null; });
+        lVals.forEach(function(v){ zeile.push(v !== null ? Number(v).toFixed(2).replace(".",",") : ""); });
+        // Gewichteter Durchschnitt
+        var gewichtete = [];
+        KRITERIEN.forEach(function(k, i) {
+          var s = sAvgs[i]; var l = lVals[i]; var gw = null;
+          if (s !== null && l !== null) gw = l * 0.7 + s * 0.3;
+          else if (l !== null) gw = l;
+          else if (s !== null) gw = s;
+          zeile.push(gw !== null ? gw.toFixed(2).replace(".",",") : "");
+          if (gw !== null) gewichtete.push(gw);
         });
-        var gesamt = vals.length
-          ? (vals.reduce(function(a,b){return a+b;},0)/vals.length).toFixed(2).replace(".",",")
+        var gesamt = gewichtete.length
+          ? (gewichtete.reduce(function(a,b){return a+b;},0)/gewichtete.length).toFixed(2).replace(".",",")
           : "";
-        zeile.push(gesamt);
-        zeile.push("");
+        zeile.push(gesamt); zeile.push("");
         zeilen.push(zeile.join(sep));
       });
 
@@ -469,6 +530,15 @@
     .toast-success{border-color:var(--green);color:var(--green)}
     .toast-error{border-color:var(--red);color:var(--red)}
     .muted{color:var(--muted);font-style:italic;font-size:.9rem}
+    .gruppe-block{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px 20px;margin-bottom:14px}
+    .mitglied-bewertung-liste{margin-top:12px;border-top:1px solid var(--border);padding-top:12px}
+    .mitglied-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);flex-wrap:wrap}
+    .mitglied-row:last-child{border-bottom:none}
+    .mr-name{font-weight:600;min-width:140px;font-size:.9rem}
+    .mr-count{font-size:.8rem;color:var(--muted);flex:1}
+    .btn-lehrerbew{background:rgba(245,166,35,.12);color:var(--amber);border:1px solid rgba(245,166,35,.3)}
+    .btn-lehrerbew:hover{background:rgba(245,166,35,.25)}
+
     .divider{border:none;border-top:1px solid var(--border);margin:24px 0}
     .top-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:6px}
   </style>
