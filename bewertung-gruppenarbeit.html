@@ -172,7 +172,53 @@
     var gruppe = gruppen.find(function(g){ return g.id === gruppeId; });
     if (!gruppe) return;
     currentUser = { name: "Lehrer", gruppe: gruppe.name, rolle: "lehrer" };
-    zeigeBewertungsformular(gruppe, mitglied);
+    // Lehrer bewertet nur mit einer Gesamtnote
+    hideAll();
+    show("screen-bewertung");
+    document.getElementById("bew-titel").textContent = "Lehrerbewertung";
+    document.getElementById("bew-gruppe-sub").textContent = gruppe.name + " – " + mitglied;
+    document.getElementById("btn-zurueck").style.display = "";
+    document.getElementById("btn-abbrechen").style.display = "none";
+    var c = document.getElementById("mitglieder-container");
+    c.innerHTML = "";
+    // Prüfe ob schon bewertet
+    var bews = await ladeBewertungen();
+    var vorh = bews.find(function(b){ return b.mitgliedName === mitglied && b.gruppe === gruppe.name && b.rolle === "lehrer"; });
+    var aktWert = (vorh && vorh.kriterien && vorh.kriterien["gesamt"]) || 0;
+    var block = document.createElement("div");
+    block.className = "mitglied-block";
+    block.setAttribute("data-mitglied", mitglied);
+    block.setAttribute("data-gruppe-id", gruppeId);
+    block.setAttribute("data-gruppe-name", gruppe.name);
+    block.setAttribute("data-lehrer-einfach", "1");
+    var nameDiv = document.createElement("div");
+    nameDiv.className = "mitglied-name";
+    nameDiv.textContent = "👤 " + mitglied;
+    block.appendChild(nameDiv);
+    var kDiv = document.createElement("div");
+    kDiv.className = "kriterium-block";
+    kDiv.innerHTML =
+      '<div class="krit-label">🏆 Gruppenarbeit – Gesamtbewertung</div>' +
+      '<div class="krit-desc">Deine Gesamteinschätzung der Mitarbeit dieses Mitglieds (1–5 Punkte)</div>' +
+      '<div class="stars-wrap" data-id="gesamt" data-val="' + aktWert + '">' +
+        [1,2,3,4,5].map(function(n){
+          return '<span class="star' + (n <= aktWert ? ' active' : '') + '" data-val="' + n + '">★</span>';
+        }).join("") +
+        '<span class="star-label">' + (aktWert > 0 ? "⭐ " + sterneText(aktWert) : "– noch nicht bewertet") + '</span>' +
+      '</div>';
+    kDiv.querySelectorAll(".star").forEach(function(s) {
+      s.addEventListener("click", function() {
+        var val = parseInt(s.getAttribute("data-val"));
+        var wrap = s.closest(".stars-wrap");
+        wrap.querySelectorAll(".star").forEach(function(x){
+          x.classList.toggle("active", parseInt(x.getAttribute("data-val")) <= val);
+        });
+        wrap.setAttribute("data-val", val);
+        wrap.querySelector(".star-label").textContent = "⭐ " + sterneText(val);
+      });
+    });
+    block.appendChild(kDiv);
+    c.appendChild(block);
   };
 
   window.bewertungSpeichern = async function() {
@@ -254,8 +300,11 @@
           var sBews = bews.filter(function(b){ return b.mitgliedName === m && b.gruppe === g.name && b.rolle !== "lehrer"; });
           var lBew  = bews.find(function(b){ return b.mitgliedName === m && b.gruppe === g.name && b.rolle === "lehrer"; });
           var sInfo = sBews.length > 0 ? sBews.length + " Schüler-Bew." : "Noch keine Schüler-Bew.";
+          var lPunkte = (lBew && lBew.kriterien && lBew.kriterien["gesamt"]) || null;
           var lBtnClass = lBew ? "btn-sm btn-edit" : "btn-sm btn-lehrerbew";
-          var lBtnLabel = lBew ? "✅ Lehrerbew. ändern" : "➕ Lehrerbewertung abgeben";
+          var lBtnLabel = lBew
+            ? "✅ " + lPunkte + "/5 Pkt. – ändern"
+            : "➕ Lehrerbewertung abgeben";
 
           html += "<div class='mitglied-row'>";
           html += "<span class='mr-name'>👤 " + m + "</span>";
@@ -337,9 +386,8 @@
 
       var header = ["Gruppe","Mitglied","Schueler-Bew. (Anz.)"];
       KRITERIEN.forEach(function(k){ header.push(k.label + " Oe Schueler (30%)"); });
-      KRITERIEN.forEach(function(k){ header.push(k.label + " Lehrer (70%)"); });
-      KRITERIEN.forEach(function(k){ header.push(k.label + " Oe Gewichtet"); });
-      header.push("Gesamt Oe Gewichtet");
+      header.push("Lehrer Gesamtbewertung (70%)");
+      header.push("Gesamt Oe Gewichtet (70/30)");
       header.push("NOTE EINTRAGEN");
       zeilen.push(header.join(sep));
 
@@ -354,23 +402,23 @@
 
           var zeile = [g.name, m, sBews.length + " Bew."];
           var sAvgs = KRITERIEN.map(function(k){ return avgVal(sBews, k.id); });
-          var lVals = KRITERIEN.map(function(k){ return (lBew && lBew.kriterien && lBew.kriterien[k.id]) || null; });
+          // Lehrer bewertet nur mit einem Gesamtwert
+          var lGesamt = (lBew && lBew.kriterien && lBew.kriterien["gesamt"]) || null;
 
           sAvgs.forEach(function(a){ zeile.push(a !== null ? a.toFixed(2).replace(".",",") : ""); });
-          lVals.forEach(function(v){ zeile.push(v !== null ? Number(v).toFixed(2).replace(".",",") : ""); });
+          zeile.push(lGesamt !== null ? Number(lGesamt).toFixed(2).replace(".",",") : "");
 
-          var gewichtete = [];
-          KRITERIEN.forEach(function(k, i) {
-            var s = sAvgs[i]; var l = lVals[i]; var gw = null;
-            if (s !== null && l !== null) gw = l*0.7 + s*0.3;
-            else if (l !== null) gw = l;
-            else if (s !== null) gw = s;
-            zeile.push(gw !== null ? gw.toFixed(2).replace(".",",") : "");
-            if (gw !== null) gewichtete.push(gw);
-          });
-          var gesamt = gewichtete.length
-            ? (gewichtete.reduce(function(a,b){return a+b;},0)/gewichtete.length).toFixed(2).replace(".",",")
-            : "";
+          // Gewichteter Gesamtwert: Lehrer 70% + Schüler-Ø 30%
+          var sGesamtAvg = sAvgs.filter(function(x){ return x !== null; });
+          var sGesamt = sGesamtAvg.length
+            ? sGesamtAvg.reduce(function(a,b){return a+b;},0)/sGesamtAvg.length
+            : null;
+          var gewichtet = null;
+          if (lGesamt !== null && sGesamt !== null) gewichtet = lGesamt*0.7 + sGesamt*0.3;
+          else if (lGesamt !== null) gewichtet = lGesamt;
+          else if (sGesamt !== null) gewichtet = sGesamt;
+          zeile.push(gewichtet !== null ? gewichtet.toFixed(2).replace(".",",") : "");
+          var gesamt = gewichtet !== null ? gewichtet.toFixed(2).replace(".",",") : "";
           zeile.push(gesamt);
           zeile.push("");
           zeilen.push(zeile.join(sep));
