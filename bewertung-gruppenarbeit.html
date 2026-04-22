@@ -3,878 +3,694 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Klassen-Quiz v2</title>
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <title>Gruppenarbeit-Bewertung</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script>
   firebase.initializeApp({
-    apiKey:"AIzaSyBYubfEPbipWGWrpvMZAoMZN1F98p0jiw4",
-    authDomain:"oberschule-moderation.firebaseapp.com",
-    projectId:"oberschule-moderation",
-    storageBucket:"oberschule-moderation.firebasestorage.app",
-    messagingSenderId:"224718576254",
-    appId:"1:224718576254:web:54a9aa2e8690f44e44162f"
+    apiKey:            "AIzaSyBYubfEPbipWGWrpvMZAoMZN1F98p0jiw4",
+    authDomain:        "oberschule-moderation.firebaseapp.com",
+    projectId:         "oberschule-moderation",
+    storageBucket:     "oberschule-moderation.firebasestorage.app",
+    messagingSenderId: "224718576254",
+    appId:             "1:224718576254:web:54a9aa2e8690f44e44162f"
   });
-  var db = firebase.firestore();
+  const db = firebase.firestore();
 
-  var C_KLASSEN  = "quiz_klassen";
-  var C_FRAGEN   = "quiz_fragen";
-  var C_PUNKTE   = "quiz_punkte";
-  var C_SESSION  = "quiz_session";
-  var ADMIN_PW   = "Admin-OSWE";
+  const GRUPPEN_COL   = "gruppenarbeit_gruppen";
+  const BEWERTUNG_COL = "gruppenarbeit_bewertungen";
+  const ADMIN_PW      = "Admin-OSWE";
 
-  function NOTE(p) {
-    if (p>=4) return 1; if (p===3) return 2; if (p===2) return 3; if (p===1) return 4; return 5;
+  const KRITERIEN = [
+    { id:"informiert",   label:"Informationsstand", emoji:"📋", desc:"Hat sich immer über den aktuellen Stand der Aufgabe informiert" },
+    { id:"ideen",        label:"Ideen & Lösungen",  emoji:"💡", desc:"Hat eigene Ideen und Problemlösungen eingebracht" },
+    { id:"termine",      label:"Termintreue",        emoji:"📅", desc:"Hat Termine beachtet und auf bevorstehende Ereignisse hingewiesen" },
+    { id:"unterstuetzt", label:"Unterstützung",      emoji:"🤝", desc:"Hat anderen geholfen, wenn jemand nicht weiterkam" },
+    { id:"anwesend",     label:"Anwesenheit",        emoji:"✅", desc:"War bei Aufnahmen und gemeinsamen Arbeitsphasen zuverlässig anwesend" },
+  ];
+
+  var currentUser = null;
+  var gruppen     = [];
+
+  // ── HELPERS ──────────────────────────────────────────────────────
+  function show(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = el.classList.contains("modal-overlay") ? "flex" : "block";
   }
-
-  var S = { rolle:null, klasse:null, klasseId:null, gruppe:null, name:null,
-            klassen:[], fragen:[], punkte:{}, session:null, unsub:[],
-            quizKlasse:null, aktiveKlasse:null };
-
-  function show(id){var e=document.getElementById(id);if(e)e.style.display="block";}
-  function hide(id){var e=document.getElementById(id);if(e)e.style.display="none";}
-  function hideAll(){["s-start","s-schueler","s-buzzer","s-lehrer","s-tafel"].forEach(hide);}
-  function toast(msg,type){
-    var t=document.createElement("div");t.className="toast "+(type||"info");t.textContent=msg;
+  function hide(id) { var el = document.getElementById(id); if (el) el.style.display = "none"; }
+  function hideAll() { ["screen-start","screen-bewertung","screen-lehrer"].forEach(hide); }
+  function toast(msg, type) {
+    var t = document.createElement("div");
+    t.className = "toast toast-" + (type || "info");
+    t.textContent = msg;
     document.body.appendChild(t);
-    setTimeout(function(){t.classList.add("show");},10);
-    setTimeout(function(){t.classList.remove("show");setTimeout(function(){t.remove();},400);},3000);
+    setTimeout(function(){ t.classList.add("show"); }, 10);
+    setTimeout(function(){ t.classList.remove("show"); setTimeout(function(){ t.remove(); }, 400); }, 3000);
   }
-  function unsubAll(){S.unsub.forEach(function(u){try{u();}catch(e){}});S.unsub=[];}
-  function val(id){return document.getElementById(id).value;}
-  function setHTML(id,html){document.getElementById(id).innerHTML=html;}
-
-  async function ladeKlassen(){
-    var snap=await db.collection(C_KLASSEN).get();
-    S.klassen=snap.docs.map(function(d){return Object.assign({id:d.id},d.data());});
-    S.klassen.sort(function(a,b){return a.name.localeCompare(b.name);});
+  function sterneText(v) {
+    return ["","Ungenügend","Ausreichend","Gut","Sehr gut","Hervorragend"][v] || "";
   }
-  async function ladeFragen(klasse){
-    var snap=await db.collection(C_FRAGEN).where("klasse","==",klasse).get();
-    S.fragen=snap.docs.map(function(d){return Object.assign({id:d.id},d.data());});
-  }
-  async function ladePunkte(klasse){
-    var snap=await db.collection(C_PUNKTE).where("klasse","==",klasse).get();
-    S.punkte={};
-    snap.docs.forEach(function(d){var data=d.data();S.punkte[d.id]=Object.assign({id:d.id},data);});
+  function avgVal(list, kid) {
+    var v = list.map(function(b){ return (b.kriterien && b.kriterien[kid]) || 0; }).filter(function(x){ return x > 0; });
+    return v.length ? v.reduce(function(a,b){ return a+b; },0)/v.length : null;
   }
 
-  function befuelleKlassenSel(id){
-    var sel=document.getElementById(id);
-    sel.innerHTML="<option value=''>– Klasse –</option>";
-    S.klassen.forEach(function(k){sel.innerHTML+="<option value='"+k.id+"'>"+k.name+"</option>";});
+  // ── FIREBASE ─────────────────────────────────────────────────────
+  async function ladeGruppen() {
+    try {
+      var snap = await db.collection(GRUPPEN_COL).get();
+      gruppen = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+      gruppen.sort(function(a,b){ return (a.name||"").localeCompare(b.name||""); });
+    } catch(e) { console.error("ladeGruppen:", e); }
   }
-  function befuelleGruppenSel(selId,klasseId){
-    var k=S.klassen.find(function(x){return x.id===klasseId;});
-    var sel=document.getElementById(selId);
-    sel.innerHTML="<option value=''>– Gruppe –</option>";
-    if(!k)return;
-    (k.gruppen||[]).forEach(function(g){sel.innerHTML+="<option value='"+g.name+"'>"+g.name+"</option>";});
+  async function ladeBewertungen() {
+    try {
+      var snap = await db.collection(BEWERTUNG_COL).get();
+      return snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+    } catch(e) { console.error("ladeBewertungen:", e); return []; }
   }
-  window.onKlasseChange=function(selId,zielId){befuelleGruppenSel(zielId,val(selId));};
 
-  // ════════ START ════════
-  function zeigeStart(){unsubAll();hideAll();show("s-start");}
-  window.abmelden=function(){zeigeStart();};
+  // ── START ─────────────────────────────────────────────────────────
+  function zeigeStart() { hideAll(); show("screen-start"); }
 
-  document.addEventListener("DOMContentLoaded",async function(){
-    await ladeKlassen();
-    ["dd-kl-s","dd-kl-g"].forEach(befuelleKlassenSel);
+  window.startSchueler = async function() {
+    var name = document.getElementById("inp-name").value.trim();
+    if (!name) { toast("Bitte Namen eingeben!", "error"); return; }
+    await ladeGruppen();
+    var mg = gruppen.find(function(g){
+      return (g.mitglieder||[]).some(function(m){ return m.trim().toLowerCase() === name.toLowerCase(); });
+    });
+    if (!mg) { toast("Name nicht gefunden! Genau so schreiben wie eingetragen.", "error"); return; }
+    currentUser = { name: name, gruppe: mg.name, rolle: "schueler" };
+    zeigeBewertungsformular(mg, null);
+  };
+
+  window.startLehrer = async function() {
+    var pw = document.getElementById("inp-lehrerpw").value;
+    if (pw !== ADMIN_PW) { toast("Falsches Passwort!", "error"); return; }
+    currentUser = { name: "Lehrer", gruppe: null, rolle: "lehrer" };
+    await ladeGruppen();
+    await zeigeLehrer();
+  };
+
+  window.abmelden = function() {
+    currentUser = null;
+    document.getElementById("inp-name").value = "";
+    document.getElementById("inp-lehrerpw").value = "";
     zeigeStart();
-  });
-
-  // ════════ SCHÜLER ════════
-  window.startSchueler=async function(){
-    var klasseId=val("dd-kl-s"),gruppe=val("dd-gr-s"),name=val("inp-s-name").trim();
-    if(!klasseId||!gruppe||!name){toast("Alle Felder ausfüllen!","error");return;}
-    var k=S.klassen.find(function(x){return x.id===klasseId;});
-    S.klasse=k.name;S.klasseId=klasseId;S.gruppe=gruppe;S.name=name;S.rolle="schueler";
-    hideAll();show("s-schueler");
-    document.getElementById("s-sub-info").textContent=k.name+" · "+gruppe+" · "+name;
   };
 
-  window.fragenEinreichen=async function(){
-    var fragen=[];
-    for(var i=1;i<=4;i++){
-      var f=val("frage-"+i).trim(),a=val("antwort-"+i).trim();
-      if(!f||!a){toast("Alle 4 Fragen + Antworten ausfüllen!","error");return;}
-      fragen.push({f:f,a:a,status:"eingereicht",punkte:0});
+  // ── BEWERTUNGSFORMULAR ────────────────────────────────────────────
+  // gruppe = Gruppenobjekt, mitgliedFilter = nur dieses Mitglied (Lehrer) oder null (alle)
+  function zeigeBewertungsformular(gruppe, mitgliedFilter) {
+    hideAll();
+    show("screen-bewertung");
+
+    var titel = mitgliedFilter
+      ? "Lehrerbewertung: " + mitgliedFilter
+      : "Bewertung deiner Gruppe";
+    document.getElementById("bew-titel").textContent = titel;
+    document.getElementById("bew-gruppe-sub").textContent = gruppe.name;
+
+    var andere = mitgliedFilter
+      ? [mitgliedFilter]
+      : (gruppe.mitglieder||[]).filter(function(m){
+          return m.trim().toLowerCase() !== currentUser.name.toLowerCase();
+        });
+
+    var c = document.getElementById("mitglieder-container");
+    c.innerHTML = "";
+
+    if (andere.length === 0) {
+      c.innerHTML = "<p class='muted'>Keine anderen Mitglieder gefunden.</p>";
+      return;
     }
-    try{
-      await db.collection(C_FRAGEN).add({
-        klasse:S.klasse,klasseId:S.klasseId,gruppe:S.gruppe,name:S.name,
-        fragen:fragen,timestamp:firebase.firestore.FieldValue.serverTimestamp()
+
+    andere.forEach(function(mitglied) {
+      var block = document.createElement("div");
+      block.className = "mitglied-block";
+      block.setAttribute("data-mitglied", mitglied);
+      block.setAttribute("data-gruppe-id", gruppe.id);
+      block.setAttribute("data-gruppe-name", gruppe.name);
+
+      var nameDiv = document.createElement("div");
+      nameDiv.className = "mitglied-name";
+      nameDiv.textContent = "👤 " + mitglied;
+      block.appendChild(nameDiv);
+
+      KRITERIEN.forEach(function(k) {
+        var kDiv = document.createElement("div");
+        kDiv.className = "kriterium-block";
+        kDiv.innerHTML =
+          '<div class="krit-label">' + k.emoji + ' ' + k.label + '</div>' +
+          '<div class="krit-desc">' + k.desc + '</div>' +
+          '<div class="stars-wrap" data-id="' + k.id + '" data-val="0">' +
+            [1,2,3,4,5].map(function(n){
+              return '<span class="star" data-val="' + n + '">★</span>';
+            }).join("") +
+            '<span class="star-label">– nicht bewertet</span>' +
+          '</div>';
+        kDiv.querySelectorAll(".star").forEach(function(s) {
+          s.addEventListener("click", function() {
+            var val = parseInt(s.getAttribute("data-val"));
+            var wrap = s.closest(".stars-wrap");
+            wrap.querySelectorAll(".star").forEach(function(x){
+              x.classList.toggle("active", parseInt(x.getAttribute("data-val")) <= val);
+            });
+            wrap.setAttribute("data-val", val);
+            wrap.querySelector(".star-label").textContent = "⭐ " + sterneText(val);
+          });
+        });
+        block.appendChild(kDiv);
       });
-      toast("Eingereicht! ✓","success");
-      for(var j=1;j<=4;j++){document.getElementById("frage-"+j).value="";document.getElementById("antwort-"+j).value="";}
-      setTimeout(zeigeStart,1500);
-    }catch(e){toast("Fehler!","error");console.error(e);}
+      c.appendChild(block);
+    });
+  }
+
+  window.zeigeLehrerGruppenbewertung = async function(gruppeId) {
+    var gruppe = gruppen.find(function(g){ return g.id === gruppeId; });
+    if (!gruppe) return;
+    currentUser = { name: "Lehrer", gruppe: gruppe.name, rolle: "lehrer" };
+    hideAll();
+    show("screen-bewertung");
+    document.getElementById("bew-titel").textContent = "Lehrerbewertung";
+    document.getElementById("bew-gruppe-sub").textContent = gruppe.name + " – alle Mitglieder";
+    document.getElementById("btn-zurueck").style.display = "";
+    document.getElementById("btn-abbrechen").style.display = "none";
+    var bews = await ladeBewertungen();
+    var c = document.getElementById("mitglieder-container");
+    c.innerHTML = "";
+    var mitglieder = gruppe.mitglieder || [];
+    if (mitglieder.length === 0) {
+      c.innerHTML = "<p class='muted'>Keine Mitglieder eingetragen.</p>";
+      return;
+    }
+    mitglieder.forEach(function(mitglied) {
+      var vorh = bews.find(function(b){ return b.mitgliedName === mitglied && b.gruppe === gruppe.name && b.rolle === "lehrer"; });
+      var aktWert = (vorh && vorh.kriterien && vorh.kriterien["gesamt"]) || 0;
+      var block = document.createElement("div");
+      block.className = "mitglied-block";
+      block.setAttribute("data-mitglied", mitglied);
+      block.setAttribute("data-gruppe-id", gruppeId);
+      block.setAttribute("data-gruppe-name", gruppe.name);
+      block.setAttribute("data-lehrer-einfach", "1");
+      var nameDiv = document.createElement("div");
+      nameDiv.className = "mitglied-name";
+      nameDiv.textContent = "👤 " + mitglied;
+      block.appendChild(nameDiv);
+      var kDiv = document.createElement("div");
+      kDiv.className = "kriterium-block";
+      kDiv.innerHTML =
+        '<div class="krit-label">🏆 Gruppenarbeit – Gesamtbewertung</div>' +
+        '<div class="krit-desc">Deine Einschätzung der Mitarbeit dieses Mitglieds (1–5 Punkte)</div>' +
+        '<div class="stars-wrap" data-id="gesamt" data-val="' + aktWert + '">' +
+          [1,2,3,4,5].map(function(n){
+            return '<span class="star' + (n <= aktWert ? ' active' : '') + '" data-val="' + n + '">★</span>';
+          }).join("") +
+          '<span class="star-label">' + (aktWert > 0 ? "⭐ " + sterneText(aktWert) : "– noch nicht bewertet") + '</span>' +
+        '</div>';
+      kDiv.querySelectorAll(".star").forEach(function(s) {
+        s.addEventListener("click", function() {
+          var val = parseInt(s.getAttribute("data-val"));
+          var wrap = s.closest(".stars-wrap");
+          wrap.querySelectorAll(".star").forEach(function(x){
+            x.classList.toggle("active", parseInt(x.getAttribute("data-val")) <= val);
+          });
+          wrap.setAttribute("data-val", val);
+          wrap.querySelector(".star-label").textContent = "⭐ " + sterneText(val);
+        });
+      });
+      block.appendChild(kDiv);
+      c.appendChild(block);
+    });
   };
 
-  // ════════ GRUPPE / BUZZER ════════
-  window.startGruppe=async function(){
-    var klasseId=val("dd-kl-g"),gruppe=val("dd-gr-g"),pw=val("inp-g-pw");
-    if(!klasseId||!gruppe||!pw){toast("Alle Felder ausfüllen!","error");return;}
-    var k=S.klassen.find(function(x){return x.id===klasseId;});
-    var g=(k&&k.gruppen||[]).find(function(x){return x.name===gruppe;});
-    if(!g||g.pw!==pw){toast("Falsches Passwort!","error");return;}
-    S.klasse=k.name;S.klasseId=klasseId;S.gruppe=gruppe;S.rolle="gruppe";
-    hideAll();show("s-buzzer");
-    document.getElementById("bz-gruppe").textContent=gruppe;
-    document.getElementById("bz-klasse").textContent=k.name;
-    startBuzzerListener();
+  window.zeigeLehrerBewertungFuer = async function(gruppeId, mitglied) {
+    var gruppe = gruppen.find(function(g){ return g.id === gruppeId; });
+    if (!gruppe) return;
+    currentUser = { name: "Lehrer", gruppe: gruppe.name, rolle: "lehrer" };
+    // Lehrer bewertet nur mit einer Gesamtnote
+    hideAll();
+    show("screen-bewertung");
+    document.getElementById("bew-titel").textContent = "Lehrerbewertung";
+    document.getElementById("bew-gruppe-sub").textContent = gruppe.name + " – " + mitglied;
+    document.getElementById("btn-zurueck").style.display = "";
+    document.getElementById("btn-abbrechen").style.display = "none";
+    var c = document.getElementById("mitglieder-container");
+    c.innerHTML = "";
+    // Prüfe ob schon bewertet
+    var bews = await ladeBewertungen();
+    var vorh = bews.find(function(b){ return b.mitgliedName === mitglied && b.gruppe === gruppe.name && b.rolle === "lehrer"; });
+    var aktWert = (vorh && vorh.kriterien && vorh.kriterien["gesamt"]) || 0;
+    var block = document.createElement("div");
+    block.className = "mitglied-block";
+    block.setAttribute("data-mitglied", mitglied);
+    block.setAttribute("data-gruppe-id", gruppeId);
+    block.setAttribute("data-gruppe-name", gruppe.name);
+    block.setAttribute("data-lehrer-einfach", "1");
+    var nameDiv = document.createElement("div");
+    nameDiv.className = "mitglied-name";
+    nameDiv.textContent = "👤 " + mitglied;
+    block.appendChild(nameDiv);
+    var kDiv = document.createElement("div");
+    kDiv.className = "kriterium-block";
+    kDiv.innerHTML =
+      '<div class="krit-label">🏆 Gruppenarbeit – Gesamtbewertung</div>' +
+      '<div class="krit-desc">Deine Gesamteinschätzung der Mitarbeit dieses Mitglieds (1–5 Punkte)</div>' +
+      '<div class="stars-wrap" data-id="gesamt" data-val="' + aktWert + '">' +
+        [1,2,3,4,5].map(function(n){
+          return '<span class="star' + (n <= aktWert ? ' active' : '') + '" data-val="' + n + '">★</span>';
+        }).join("") +
+        '<span class="star-label">' + (aktWert > 0 ? "⭐ " + sterneText(aktWert) : "– noch nicht bewertet") + '</span>' +
+      '</div>';
+    kDiv.querySelectorAll(".star").forEach(function(s) {
+      s.addEventListener("click", function() {
+        var val = parseInt(s.getAttribute("data-val"));
+        var wrap = s.closest(".stars-wrap");
+        wrap.querySelectorAll(".star").forEach(function(x){
+          x.classList.toggle("active", parseInt(x.getAttribute("data-val")) <= val);
+        });
+        wrap.setAttribute("data-val", val);
+        wrap.querySelector(".star-label").textContent = "⭐ " + sterneText(val);
+      });
+    });
+    block.appendChild(kDiv);
+    c.appendChild(block);
   };
 
-  function startBuzzerListener(){
-    var unsub=db.collection(C_SESSION).doc("current").onSnapshot(function(doc){
-      if(!doc.exists){zeigeBuzzerIdle();return;}
-      var sess=doc.data();S.session=sess;
-      if(!sess.aktiv||sess.klasse!==S.klasse){zeigeBuzzerIdle();return;}
-      document.getElementById("bz-frage").textContent=sess.aktuelleFrageText||"";
-      var istZiel=sess.zielGruppe===S.gruppe;
-      document.getElementById("bz-ziel").textContent=istZiel?"🎯 Ihr seid gefragt!":"➡️ Frage für: "+sess.zielGruppe;
-      var gedrückt=sess.buzzerGedrückt;
-      var btn=document.getElementById("buzzer-btn");
-      var status=document.getElementById("bz-status");
-      if(istZiel&&sess.buzzerOffen&&!gedrückt){
-        btn.disabled=false;btn.className="buzzer-btn ready";status.textContent="JETZT DRÜCKEN!";
-      } else if(gedrückt&&gedrückt.gruppe===S.gruppe){
-        btn.disabled=true;btn.className="buzzer-btn pressed";status.textContent="✓ Gedrückt!";
-      } else if(gedrückt){
-        btn.disabled=true;btn.className="buzzer-btn locked";status.textContent=gedrückt.gruppe+" war schneller!";
+  window.bewertungSpeichern = async function() {
+    var blocks = document.querySelectorAll("#mitglieder-container .mitglied-block");
+    var komplett = true;
+    var ergebnisse = [];
+    blocks.forEach(function(block) {
+      var mitglied  = block.getAttribute("data-mitglied");
+      var gruppeId  = block.getAttribute("data-gruppe-id");
+      var gruppeName= block.getAttribute("data-gruppe-name");
+      var kriterien = {};
+      block.querySelectorAll(".stars-wrap").forEach(function(wrap) {
+        var val = parseInt(wrap.getAttribute("data-val") || 0);
+        if (!val) komplett = false;
+        kriterien[wrap.getAttribute("data-id")] = val;
+      });
+      ergebnisse.push({ mitglied: mitglied, gruppeId: gruppeId, gruppeName: gruppeName, kriterien: kriterien });
+    });
+    if (!komplett) { toast("Bitte alle Kriterien bewerten!", "error"); return; }
+    try {
+      for (var i = 0; i < ergebnisse.length; i++) {
+        var e = ergebnisse[i];
+        var rolle = currentUser.rolle || "schueler";
+        var docId = (e.gruppeName + "_" + rolle + "_" + currentUser.name + "_bewertet_" + e.mitglied).replace(/\s/g,"_");
+        await db.collection(BEWERTUNG_COL).doc(docId).set({
+          gruppe:       e.gruppeName,
+          gruppeId:     e.gruppeId,
+          bewerterName: currentUser.name,
+          mitgliedName: e.mitglied,
+          rolle:        rolle,
+          kriterien:    e.kriterien,
+          timestamp:    firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }
+      toast("Gespeichert! 🎉", "success");
+      if (currentUser.rolle === "lehrer") {
+        setTimeout(async function(){ await ladeGruppen(); await zeigeLehrer(); }, 1200);
       } else {
-        btn.disabled=true;btn.className="buzzer-btn waiting";
-        status.textContent=istZiel?"Warte auf Freigabe…":"Andere Gruppe ist dran";
+        setTimeout(function(){ abmelden(); }, 1500);
       }
+    } catch(e) { toast("Fehler beim Speichern!", "error"); console.error(e); }
+  };
+
+  window.zurueckZuLehrer = async function() {
+    await ladeGruppen();
+    await zeigeLehrer();
+  };
+
+  // ── LEHRER ────────────────────────────────────────────────────────
+  async function zeigeLehrer() {
+    hideAll();
+    show("screen-lehrer");
+    var bews = await ladeBewertungen();
+    renderLehrerGruppen(bews);
+  }
+
+  function renderLehrerGruppen(bews) {
+    var c = document.getElementById("lehrer-gruppen");
+    if (gruppen.length === 0) { c.innerHTML = "<p class='muted'>Noch keine Gruppen angelegt.</p>"; return; }
+
+    var html = "";
+    gruppen.forEach(function(g) {
+      var mitglieder = g.mitglieder || [];
+      var mitglStr = mitglieder.length
+        ? mitglieder.join(", ")
+        : "<em style='color:var(--muted)'>Keine Mitglieder</em>";
+
+      html += "<div class='gruppe-block'>";
+      html += "<div class='gruppe-block-header'>";
+      html += "<span class='lg-name'>👥 " + g.name + "</span>";
+      html += "<span class='lg-mitglieder'>" + mitglStr + "</span>";
+      html += "<button class='btn-sm btn-edit' onclick='gruppeBearbeiten(\"" + g.id + "\")'>✏️ Bearbeiten</button>";
+      html += "<button class='btn-sm btn-del' onclick='gruppeLoeschen(\"" + g.id + "\",\"" + g.name.replace(/"/g,"&quot;") + "\")'>🗑️</button>";
+      html += "</div>";
+
+      if (mitglieder.length > 0) {
+        html += "<div class='mitglied-liste'>";
+        mitglieder.forEach(function(m) {
+          var sBews = bews.filter(function(b){ return b.mitgliedName === m && b.gruppe === g.name && b.rolle !== "lehrer"; });
+          var lBew  = bews.find(function(b){ return b.mitgliedName === m && b.gruppe === g.name && b.rolle === "lehrer"; });
+          var sInfo = sBews.length > 0 ? sBews.length + " Schüler-Bew." : "Noch keine Schüler-Bew.";
+          var lPunkte = (lBew && lBew.kriterien && lBew.kriterien["gesamt"]) || null;
+          html += "<div class='mitglied-row'>";
+          html += "<span class='mr-name'>👤 " + m + "</span>";
+          html += "<span class='mr-count'>" + sInfo + "</span>";
+          html += lBew
+            ? "<span class='mr-note'>✅ " + lPunkte + "/5 Pkt.</span>"
+            : "<span class='mr-note mr-offen'>– noch keine Lehrerbew.</span>";
+          html += "</div>";
+        });
+        // Button: alle Mitglieder dieser Gruppe auf einmal bewerten
+        var alleBew = mitglieder.every(function(m){
+          return bews.some(function(b){ return b.mitgliedName === m && b.gruppe === g.name && b.rolle === "lehrer"; });
+        });
+        html += "<div style='margin-top:12px'>";
+        html += "<button class='" + (alleBew ? "btn-sm btn-edit" : "btn-sm btn-lehrerbew") + "' style='width:100%;padding:10px' onclick='zeigeLehrerGruppenbewertung(\"" + g.id + "\")'>"
+          + (alleBew ? "✏️ Lehrerbewertungen bearbeiten" : "➕ Gruppe jetzt bewerten") + "</button>";
+        html += "</div>";
+        html += "</div>";
+      }
+      html += "</div>";
     });
-    S.unsub.push(unsub);
-  }
-  function zeigeBuzzerIdle(){
-    document.getElementById("bz-frage").textContent="Warte auf den Lehrer…";
-    document.getElementById("bz-ziel").textContent="";
-    document.getElementById("bz-status").textContent="Kein Quiz aktiv";
-    var btn=document.getElementById("buzzer-btn");
-    btn.disabled=true;btn.className="buzzer-btn waiting";
-  }
-  window.buzzerDrücken=async function(){
-    try{await db.collection(C_SESSION).doc("current").update({buzzerGedrückt:{gruppe:S.gruppe,zeit:Date.now()}});}
-    catch(e){console.error(e);}
-  };
-
-  // ════════ LEHRER ════════
-  window.startLehrer=async function(){
-    if(val("inp-l-pw")!==ADMIN_PW){toast("Falsches Passwort!","error");return;}
-    S.rolle="lehrer";hideAll();show("s-lehrer");
-    await ladeKlassen();
-    ["dd-l-kl-fragen","dd-l-kl-quiz","dd-l-kl-aus"].forEach(befuelleKlassenSel);
-    renderKlassenTab();
-    lehrerTab("tab-klassen");
-  };
-  window.lehrerTab=function(tab){
-    ["tab-klassen","tab-fragen","tab-quiz","tab-aus"].forEach(function(t){
-      document.getElementById(t).style.display=t===tab?"block":"none";
-      var b=document.getElementById("btn-"+t);if(b)b.classList.toggle("active",t===tab);
-    });
-  };
-
-  // ─── TAB KLASSEN ───
-  function renderKlassenTab(){
-    var c=document.getElementById("kl-liste");
-    if(!S.klassen.length){c.innerHTML="<p class='muted'>Noch keine Klassen.</p>";return;}
-    c.innerHTML=S.klassen.map(function(k){
-      var tags=(k.gruppen||[]).map(function(g){
-        return "<span class='gr-tag'>"+g.name+" <em>"+g.pw+"</em></span>";
-      }).join("");
-      return "<div class='kl-row'><div><strong>"+k.name+"</strong><div class='gr-tags'>"+tags+"</div></div>"+
-        "<div style='display:flex;gap:6px;margin-top:8px'>"+
-        "<button class='btn-sm btn-edit' onclick='editKl(\""+k.id+"\")'>✏️</button>"+
-        "<button class='btn-sm btn-del' onclick='delKl(\""+k.id+"\",\""+k.name+"\")'>🗑️</button>"+
-        "</div></div>";
-    }).join("");
-  }
-  window.addKlasse=async function(){
-    var name=val("inp-kl-name").trim(),raw=val("inp-kl-gr").trim();
-    if(!name){toast("Name fehlt!","error");return;}
-    var gruppen=raw.split(",").map(function(s){var p=s.trim().split(":");return{name:p[0].trim(),pw:(p[1]||"1234").trim()};}).filter(function(g){return g.name;});
-    await db.collection(C_KLASSEN).add({name:name,gruppen:gruppen,timestamp:firebase.firestore.FieldValue.serverTimestamp()});
-    toast("Klasse hinzugefügt ✓","success");
-    document.getElementById("inp-kl-name").value="";document.getElementById("inp-kl-gr").value="";
-    await ladeKlassen();renderKlassenTab();
-    ["dd-kl-s","dd-kl-g","dd-l-kl-fragen","dd-l-kl-quiz","dd-l-kl-aus"].forEach(befuelleKlassenSel);
-  };
-  window.editKl=function(id){
-    var k=S.klassen.find(function(x){return x.id===id;});if(!k)return;
-    document.getElementById("edit-kl-id").value=id;
-    document.getElementById("edit-kl-name").value=k.name;
-    document.getElementById("edit-kl-gr").value=(k.gruppen||[]).map(function(g){return g.name+":"+g.pw;}).join(", ");
-    show("modal-kl");
-  };
-  window.editKlSpeichern=async function(){
-    var id=val("edit-kl-id"),name=val("edit-kl-name").trim(),raw=val("edit-kl-gr").trim();
-    var gruppen=raw.split(",").map(function(s){var p=s.trim().split(":");return{name:p[0].trim(),pw:(p[1]||"1234").trim()};}).filter(function(g){return g.name;});
-    await db.collection(C_KLASSEN).doc(id).update({name:name,gruppen:gruppen});
-    toast("Gespeichert ✓","success");hide("modal-kl");
-    await ladeKlassen();renderKlassenTab();
-    ["dd-kl-s","dd-kl-g","dd-l-kl-fragen","dd-l-kl-quiz","dd-l-kl-aus"].forEach(befuelleKlassenSel);
-  };
-  window.delKl=async function(id,name){
-    if(!confirm("Klasse \""+name+"\" löschen?"))return;
-    await db.collection(C_KLASSEN).doc(id).delete();
-    await ladeKlassen();renderKlassenTab();
-  };
-  window.schliesseModal=function(id){hide(id);};
-
-  // ─── TAB FRAGEN ───
-  window.fragenLaden=async function(){
-    var klasseId=val("dd-l-kl-fragen");if(!klasseId){toast("Klasse wählen!","error");return;}
-    S.aktiveKlasse=S.klassen.find(function(x){return x.id===klasseId;});
-    await ladeFragen(S.aktiveKlasse.name);await ladePunkte(S.aktiveKlasse.name);
-    renderFragenListe();
-  };
-
-  function renderFragenListe(){
-    var c=document.getElementById("fragen-liste");
-    if(!S.fragen.length){c.innerHTML="<p class='muted'>Keine Einreichungen.</p>";return;}
-    c.innerHTML=S.fragen.map(function(sub){
-      var rows=sub.fragen.map(function(fq,i){
-        var sc=fq.status==="freigegeben"?"st-frei":fq.status==="abgelehnt"?"st-ab":"st-ein";
-        var pkt=fq.punkte>0?"<span class='pkt-b'>+"+fq.punkte+"</span>":"";
-        var btns=(fq.status!=="freigegeben"?"<button class='btn-sm btn-frei' onclick='freigebenFrage(\""+sub.id+"\","+i+")'>✓ +2Pkt</button>":"")+
-          (fq.status!=="abgelehnt"?"<button class='btn-sm btn-ab' onclick='ablehnFrage(\""+sub.id+"\","+i+")'>✗ Löschen</button>":"");
-        return "<div class='fq-row'><span class='fq-nr'>#"+(i+1)+"</span>"+
-          "<div class='fq-body'><div class='fq-f'>❓ "+fq.f+"</div><div class='fq-a'>💡 "+fq.a+"</div></div>"+
-          "<span class='fq-st "+sc+"'>"+fq.status+"</span>"+pkt+
-          "<div class='fq-btns'>"+btns+"</div></div>";
-      }).join("");
-      return "<div class='sub-card'><div class='sub-hdr'>👤 <strong>"+sub.name+"</strong> <span class='sub-gr'>"+sub.gruppe+"</span></div>"+rows+"</div>";
-    }).join("");
+    c.innerHTML = html;
   }
 
-  window.freigebenFrage=async function(subId,idx){
-    var sub=S.fragen.find(function(x){return x.id===subId;});if(!sub)return;
-    var anz=sub.fragen.filter(function(f){return f.status==="freigegeben";}).length;
-    if(anz>=2){toast("Max. 2 Fragen pro Schüler!","error");return;}
-    var fragen=sub.fragen.map(function(f,i){return i===idx?Object.assign({},f,{status:"freigegeben",punkte:2}):f;});
-    await db.collection(C_FRAGEN).doc(subId).update({fragen:fragen});
-    // Punkte speichern
-    var docId=(sub.klasse+"_SCH_"+sub.name).replace(/[\s/]/g,"_");
-    var ref=db.collection(C_PUNKTE).doc(docId);
-    var snap=await ref.get();
-    if(snap.exists){await ref.update({fragenPunkte:firebase.firestore.FieldValue.increment(2)});}
-    else{await ref.set({klasse:sub.klasse,gruppe:sub.gruppe,name:sub.name,typ:"schueler",fragenPunkte:2,buzzerPunkte:0});}
-    toast("Freigegeben! +2 Pkt für "+sub.name,"success");
-    await ladeFragen(sub.klasse);await ladePunkte(sub.klasse);renderFragenListe();
+  window.gruppeHinzufuegen = async function() {
+    var name = document.getElementById("neue-gruppe-name").value.trim();
+    if (!name) { toast("Bitte Gruppenname eingeben!", "error"); return; }
+    try {
+      await db.collection(GRUPPEN_COL).add({ name: name, mitglieder: [], timestamp: firebase.firestore.FieldValue.serverTimestamp() });
+      toast("Gruppe hinzugefügt! ✓", "success");
+      document.getElementById("neue-gruppe-name").value = "";
+      await ladeGruppen(); await zeigeLehrer();
+    } catch(e) { toast("Fehler!", "error"); }
   };
 
-  window.ablehnFrage=async function(subId,idx){
-    var sub=S.fragen.find(function(x){return x.id===subId;});if(!sub)return;
-    var fragen=sub.fragen.map(function(f,i){return i===idx?Object.assign({},f,{status:"abgelehnt",punkte:0}):f;});
-    await db.collection(C_FRAGEN).doc(subId).update({fragen:fragen});
-    toast("Abgelehnt","info");
-    await ladeFragen(sub.klasse);renderFragenListe();
+  window.gruppeBearbeiten = function(id) {
+    var g = gruppen.find(function(x){ return x.id === id; });
+    if (!g) return;
+    document.getElementById("edit-gruppe-id").value         = id;
+    document.getElementById("edit-gruppe-name").value       = g.name || "";
+    document.getElementById("edit-gruppe-mitglieder").value = (g.mitglieder||[]).join(", ");
+    show("modal-edit");
   };
 
-  // ─── TAB QUIZ ───
-  window.quizKlasseLaden=async function(){
-    var klasseId=val("dd-l-kl-quiz");if(!klasseId)return;
-    S.quizKlasse=S.klassen.find(function(x){return x.id===klasseId;});
-    await ladeFragen(S.quizKlasse.name);await ladePunkte(S.quizKlasse.name);
-    renderFragenSel();renderZielSel();
-    startSessionListener();
+  window.gruppeBearbeitenSpeichern = async function() {
+    var id   = document.getElementById("edit-gruppe-id").value;
+    var name = document.getElementById("edit-gruppe-name").value.trim();
+    var mitglieder = document.getElementById("edit-gruppe-mitglieder").value
+      .split(",").map(function(m){ return m.trim(); }).filter(Boolean);
+    if (!name) { toast("Name darf nicht leer sein!", "error"); return; }
+    try {
+      await db.collection(GRUPPEN_COL).doc(id).update({ name: name, mitglieder: mitglieder });
+      toast("Gespeichert ✓", "success");
+      hide("modal-edit");
+      await ladeGruppen(); await zeigeLehrer();
+    } catch(e) { toast("Fehler!", "error"); }
   };
 
-  function renderFragenSel(){
-    var sel=document.getElementById("sel-frage");
-    sel.innerHTML="<option value=''>– Frage wählen –</option>";
-    S.fragen.forEach(function(sub){
-      sub.fragen.forEach(function(fq,i){
-        if(fq.status==="freigegeben"){
-          sel.innerHTML+="<option value='"+sub.id+"__"+i+"'>"+sub.gruppe+"/"+sub.name+": "+fq.f.substring(0,45)+"…</option>";
-        }
+  window.gruppeLoeschen = async function(id, name) {
+    if (!confirm("Gruppe \"" + name + "\" wirklich löschen?")) return;
+    try {
+      await db.collection(GRUPPEN_COL).doc(id).delete();
+      toast("Gruppe gelöscht", "info");
+      await ladeGruppen(); await zeigeLehrer();
+    } catch(e) { toast("Fehler!", "error"); }
+  };
+
+  window.loescheBewertungen = async function() {
+    if (!confirm("Wirklich ALLE Bewertungen löschen?")) return;
+    try {
+      var snap = await db.collection(BEWERTUNG_COL).get();
+      var batch = db.batch();
+      snap.docs.forEach(function(d){ batch.delete(d.ref); });
+      await batch.commit();
+      toast(snap.size + " Bewertung(en) gelöscht ✓", "success");
+      await zeigeLehrer();
+    } catch(e) { toast("Fehler!", "error"); }
+  };
+
+  window.schliesseModal = function(id) { hide(id); };
+
+  // ── CSV EXPORT ────────────────────────────────────────────────────
+  window.exportCSV = async function() {
+    try {
+      await ladeGruppen();
+      var bews = await ladeBewertungen();
+      var sep  = ";";
+      var zeilen = [];
+
+      var header = ["Gruppe","Mitglied","Schueler-Bew. (Anz.)"];
+      KRITERIEN.forEach(function(k){ header.push(k.label + " Oe Schueler (30%)"); });
+      header.push("Lehrer Gesamtbewertung (70%)");
+      header.push("Gesamt Oe Gewichtet (70/30)");
+      header.push("NOTE EINTRAGEN");
+      zeilen.push(header.join(sep));
+
+      var letzteGruppe = null;
+      gruppen.forEach(function(g) {
+        (g.mitglieder||[]).forEach(function(m) {
+          if (letzteGruppe && letzteGruppe !== g.name) zeilen.push("");
+          letzteGruppe = g.name;
+
+          var sBews = bews.filter(function(b){ return b.mitgliedName === m && b.gruppe === g.name && b.rolle !== "lehrer"; });
+          var lBew  = bews.find(function(b){ return b.mitgliedName === m && b.gruppe === g.name && b.rolle === "lehrer"; });
+
+          var zeile = [g.name, m, sBews.length + " Bew."];
+          var sAvgs = KRITERIEN.map(function(k){ return avgVal(sBews, k.id); });
+          // Lehrer bewertet nur mit einem Gesamtwert
+          var lGesamt = (lBew && lBew.kriterien && lBew.kriterien["gesamt"]) || null;
+
+          sAvgs.forEach(function(a){ zeile.push(a !== null ? a.toFixed(2).replace(".",",") : ""); });
+          zeile.push(lGesamt !== null ? Number(lGesamt).toFixed(2).replace(".",",") : "");
+
+          // Gewichteter Gesamtwert: Lehrer 70% + Schüler-Ø 30%
+          var sGesamtAvg = sAvgs.filter(function(x){ return x !== null; });
+          var sGesamt = sGesamtAvg.length
+            ? sGesamtAvg.reduce(function(a,b){return a+b;},0)/sGesamtAvg.length
+            : null;
+          var gewichtet = null;
+          if (lGesamt !== null && sGesamt !== null) gewichtet = lGesamt*0.7 + sGesamt*0.3;
+          else if (lGesamt !== null) gewichtet = lGesamt;
+          else if (sGesamt !== null) gewichtet = sGesamt;
+          zeile.push(gewichtet !== null ? gewichtet.toFixed(2).replace(".",",") : "");
+          var gesamt = gewichtet !== null ? gewichtet.toFixed(2).replace(".",",") : "";
+          zeile.push(gesamt);
+          zeile.push("");
+          zeilen.push(zeile.join(sep));
+        });
       });
-    });
-  }
-  function renderZielSel(){
-    var sel=document.getElementById("sel-ziel");
-    sel.innerHTML="<option value=''>– Zielgruppe –</option>";
-    (S.quizKlasse&&S.quizKlasse.gruppen||[]).forEach(function(g){
-      sel.innerHTML+="<option value='"+g.name+"'>"+g.name+"</option>";
-    });
-  }
 
-  function startSessionListener(){
-    var unsub=db.collection(C_SESSION).doc("current").onSnapshot(function(doc){
-      S.session=doc.exists?doc.data():null;
-      renderQuizPanel();
-    });
-    S.unsub.push(unsub);
-  }
+      if (zeilen.length <= 1) { toast("Noch keine Bewertungen vorhanden.", "error"); return; }
 
-  function renderQuizPanel(){
-    var sess=S.session;
-    var c=document.getElementById("quiz-panel");
-    document.getElementById("btn-richtig").disabled=true;
-    document.getElementById("btn-falsch").disabled=true;
-    if(!sess||!sess.aktiv){c.innerHTML="<p class='muted'>Kein Quiz aktiv.</p>";return;}
-    var bInfo=sess.buzzerGedrückt
-      ?"🔔 <strong>"+sess.buzzerGedrückt.gruppe+"</strong> hat gebrummt!"
-      :(sess.buzzerOffen?"⏳ Warte auf Buzzer…":"🔒 Buzzer geschlossen");
-    c.innerHTML="<div class='q-box'>"+
-      "<div class='q-f'>❓ "+sess.aktuelleFrageText+"</div>"+
-      "<div class='q-a'>💡 "+sess.aktuelleAntwort+"</div>"+
-      "<div class='q-ziel'>Zielgruppe: <strong>"+sess.zielGruppe+"</strong></div>"+
-      "<div class='q-buzzer'>"+bInfo+"</div></div>";
-    if(sess.buzzerGedrückt){
-      document.getElementById("btn-richtig").disabled=false;
-      document.getElementById("btn-falsch").disabled=false;
-    }
-  }
-
-  window.quizStarten=async function(){
-    var fragVal=val("sel-frage"),ziel=val("sel-ziel");
-    if(!fragVal||!ziel){toast("Frage + Zielgruppe wählen!","error");return;}
-    var parts=fragVal.split("__");
-    var sub=S.fragen.find(function(x){return x.id===parts[0];});
-    var fq=sub.fragen[parseInt(parts[1])];
-    await db.collection(C_SESSION).doc("current").set({
-      aktiv:true,klasse:S.quizKlasse.name,
-      aktuelleFrageText:fq.f,aktuelleAntwort:fq.a,
-      zielGruppe:ziel,buzzerOffen:false,buzzerGedrückt:null
-    });
-    toast("Frage gestartet!","success");
+      var bom  = "\uFEFF";
+      var blob = new Blob([bom + zeilen.join("\r\n")], { type:"text/csv;charset=utf-8;" });
+      var url  = URL.createObjectURL(blob);
+      var a    = document.createElement("a");
+      a.href   = url; a.style.display = "none";
+      a.download = "Gruppenarbeit_" + new Date().toLocaleDateString("de-DE").split(".").join("-") + ".csv";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast("CSV exportiert! ✓", "success");
+    } catch(err) { toast("Fehler: " + err.message, "error"); console.error(err); }
   };
 
-  window.buzzerFreigeben=async function(){
-    await db.collection(C_SESSION).doc("current").update({buzzerOffen:true,buzzerGedrückt:null});
-    toast("Buzzer offen!","success");
-  };
-
-  window.antwortRichtig=async function(){
-    var sess=S.session;if(!sess||!sess.buzzerGedrückt)return;
-    var gruppe=sess.buzzerGedrückt.gruppe;
-    var docId=(sess.klasse+"_GR_"+gruppe).replace(/[\s/]/g,"_");
-    var ref=db.collection(C_PUNKTE).doc(docId);
-    var snap=await ref.get();
-    if(snap.exists){await ref.update({buzzerPunkte:firebase.firestore.FieldValue.increment(1)});}
-    else{await ref.set({klasse:sess.klasse,gruppe:gruppe,name:"(Gruppe "+gruppe+")",typ:"gruppe",fragenPunkte:0,buzzerPunkte:1});}
-    await db.collection(C_SESSION).doc("current").update({aktiv:false,buzzerOffen:false,buzzerGedrückt:null});
-    toast("✓ Richtig! +1 Punkt für "+gruppe,"success");
-    await ladePunkte(sess.klasse);
-  };
-
-  window.antwortFalsch=async function(){
-    await db.collection(C_SESSION).doc("current").update({buzzerOffen:false,buzzerGedrückt:null});
-    toast("✗ Falsch – Buzzer zurück","info");
-  };
-
-  window.quizBeenden=async function(){
-    await db.collection(C_SESSION).doc("current").set({aktiv:false});
-    toast("Quiz beendet","info");
-  };
-
-  window.tafelStarten=function(){
-    hideAll();show("s-tafel");
-    startTafelListener();
-  };
-
-  // ─── TAB AUSWERTUNG ───
-  window.auswertungLaden=async function(){
-    var klasseId=val("dd-l-kl-aus");if(!klasseId)return;
-    var k=S.klassen.find(function(x){return x.id===klasseId;});
-    await ladeFragen(k.name);await ladePunkte(k.name);
-    renderAuswertung(k);
-  };
-
-  function renderAuswertung(k){
-    // Schüler-Punkte aus Punkte-Collection (typ=schueler)
-    var schueler=[];
-    Object.values(S.punkte).forEach(function(p){
-      if(p.typ==="schueler") schueler.push(p);
-    });
-    // Buzzer-Punkte pro Gruppe
-    var buzzerGr={};
-    Object.values(S.punkte).forEach(function(p){
-      if(p.typ==="gruppe") buzzerGr[p.gruppe]=(buzzerGr[p.gruppe]||0)+(p.buzzerPunkte||0);
-    });
-    // Fehlende Schüler aus Fragen ergänzen
-    S.fragen.forEach(function(sub){
-      if(!schueler.find(function(s){return s.name===sub.name;})){
-        schueler.push({name:sub.name,gruppe:sub.gruppe,klasse:sub.klasse,fragenPunkte:0,buzzerPunkte:0,typ:"schueler"});
-      }
-    });
-
-    var rows=schueler.map(function(s){
-      var buzzer=buzzerGr[s.gruppe]||0;
-      var total=(s.fragenPunkte||0)+buzzer;
-      return {name:s.name,gruppe:s.gruppe,fragen:s.fragenPunkte||0,buzzer:buzzer,total:total,note:NOTE(total)};
-    });
-    rows.sort(function(a,b){return b.total-a.total;});
-
-    // Gruppen-Tabelle
-    var grHTML="<h3 style='margin-bottom:10px'>Buzzer-Punkte pro Gruppe</h3><div class='gr-punkte-grid'>";
-    (k.gruppen||[]).forEach(function(g){
-      grHTML+="<div class='gp-item'><div class='gp-name'>"+g.name+"</div><div class='gp-pkt'>"+(buzzerGr[g.name]||0)+" Pkt</div></div>";
-    });
-    grHTML+="</div>";
-
-    // Schüler-Tabelle
-    var tableHTML="<h3 style='margin:20px 0 10px'>Schüler-Gesamtauswertung</h3>"+
-      "<table class='aus-tbl'><thead><tr><th>Name</th><th>Gruppe</th><th>Fragen</th><th>Buzzer (Gruppe)</th><th>Gesamt</th><th>Note</th></tr></thead><tbody>"+
-      rows.map(function(r){
-        return "<tr><td>"+r.name+"</td><td>"+r.gruppe+"</td><td>"+r.fragen+"</td><td>"+r.buzzer+"</td>"+
-          "<td><strong>"+r.total+"</strong></td><td><span class='note n"+r.note+"'>"+r.note+"</span></td></tr>";
-      }).join("")+"</tbody></table>";
-
-    setHTML("aus-container",grHTML+tableHTML);
-  }
-
-  window.exportCSV=async function(){
-    var klasseId=val("dd-l-kl-aus");if(!klasseId){toast("Klasse wählen!","error");return;}
-    var k=S.klassen.find(function(x){return x.id===klasseId;});
-    await ladeFragen(k.name);await ladePunkte(k.name);
-    var schueler=[];
-    Object.values(S.punkte).forEach(function(p){if(p.typ==="schueler")schueler.push(p);});
-    S.fragen.forEach(function(sub){if(!schueler.find(function(s){return s.name===sub.name;}))schueler.push({name:sub.name,gruppe:sub.gruppe,fragenPunkte:0});});
-    var buzzerGr={};
-    Object.values(S.punkte).forEach(function(p){if(p.typ==="gruppe")buzzerGr[p.gruppe]=(buzzerGr[p.gruppe]||0)+(p.buzzerPunkte||0);});
-    var sep=";";
-    var zeilen=[["Name","Gruppe","Fragen-Punkte","Buzzer-Punkte (Gruppe)","Gesamt","Note"].join(sep)];
-    schueler.forEach(function(s){
-      var buzzer=buzzerGr[s.gruppe]||0;
-      var total=(s.fragenPunkte||0)+buzzer;
-      zeilen.push([s.name,s.gruppe,s.fragenPunkte||0,buzzer,total,NOTE(total)].join(sep));
-    });
-    var blob=new Blob(["\uFEFF"+zeilen.join("\r\n")],{type:"text/csv;charset=utf-8;"});
-    var url=URL.createObjectURL(blob);
-    var a=document.createElement("a");a.href=url;a.style.display="none";
-    a.download="Quiz_"+k.name+"_"+new Date().toLocaleDateString("de-DE").split(".").join("-")+".csv";
-    document.body.appendChild(a);a.click();document.body.removeChild(a);
-    URL.revokeObjectURL(url);toast("CSV exportiert ✓","success");
-  };
-
-  window.allePunkteLoeschen=async function(){
-    var klasseId=val("dd-l-kl-aus");if(!klasseId){toast("Klasse wählen!","error");return;}
-    var k=S.klassen.find(function(x){return x.id===klasseId;});
-    if(!confirm("Alle Punkte für "+k.name+" löschen?"))return;
-    var snap=await db.collection(C_PUNKTE).where("klasse","==",k.name).get();
-    var batch=db.batch();snap.docs.forEach(function(d){batch.delete(d.ref);});
-    await batch.commit();
-    toast("Punkte gelöscht ✓","success");
-    await ladePunkte(k.name);renderAuswertung(k);
-  };
-
-  // ════════ TAFEL ════════
-  function startTafelListener(){
-    var unsub=db.collection(C_SESSION).doc("current").onSnapshot(async function(doc){
-      var sess=doc.exists?doc.data():null;
-      S.session=sess;
-      renderTafel(sess);
-      // Scoreboard laden
-      if(sess&&sess.klasse){
-        await ladePunkte(sess.klasse);
-        renderScoreboard(sess.klasse);
-      }
-    });
-    S.unsub.push(unsub);
-  }
-
-  function renderTafel(sess){
-    var fBox=document.getElementById("tafel-frage-box");
-    var aBox=document.getElementById("tafel-antwort-box");
-    var buzBox=document.getElementById("tafel-buzzer-box");
-    if(!sess||!sess.aktiv){
-      fBox.textContent="Warte auf Lehrer…";aBox.style.display="none";
-      buzBox.textContent="";return;
-    }
-    fBox.textContent=sess.aktuelleFrageText;
-    aBox.style.display="none";
-    document.getElementById("tafel-antwort-text").textContent=sess.aktuelleAntwort;
-    if(sess.buzzerGedrückt){
-      buzBox.innerHTML="🔔 <strong>"+sess.buzzerGedrückt.gruppe+"</strong> hat gebrummt!";
-      buzBox.style.background="rgba(250,200,50,.15)";
-    } else if(sess.buzzerOffen){
-      buzBox.innerHTML="⏳ Buzzer offen…";buzBox.style.background="rgba(100,200,100,.1)";
-    } else {
-      buzBox.innerHTML="";buzBox.style.background="transparent";
-    }
-  }
-
-  window.tafelAntwortZeigen=function(){
-    document.getElementById("tafel-antwort-box").style.display="block";
-  };
-
-  function renderScoreboard(klasse){
-    var k=S.klassen.find(function(x){return x.name===klasse;});if(!k)return;
-    var buzzerGr={};
-    Object.values(S.punkte).forEach(function(p){
-      if(p.typ==="gruppe")buzzerGr[p.gruppe]=(buzzerGr[p.gruppe]||0)+(p.buzzerPunkte||0);
-    });
-    var c=document.getElementById("scoreboard");
-    c.innerHTML=(k.gruppen||[]).map(function(g){
-      var pkt=buzzerGr[g.name]||0;
-      return "<div class='sb-item'><div class='sb-name'>"+g.name+"</div><div class='sb-pkt'>"+pkt+"</div><div class='sb-label'>Punkte</div></div>";
-    }).join("");
-  }
-
-  window.tafelBeenden=function(){zeigeStart();};
+  document.addEventListener("DOMContentLoaded", function() { zeigeStart(); });
   </script>
 
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    :root{
-      --bg:#080b10;--bg2:#0f1520;--bg3:#161f2e;--bg4:#1e2a3d;
-      --gold:#f0c040;--gold2:#ffd966;--blue:#4a9eff;--green:#3ecf8e;
-      --red:#f06060;--text:#e8edf5;--muted:#6b7a99;--border:rgba(255,255,255,0.07);--r:12px;
-    }
-    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-
-    /* NAV */
-    nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:50}
-    .nav-logo{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--gold);letter-spacing:2px}
-    .nav-sub{color:var(--muted);font-size:.82rem}
+    :root{--bg:#0f0e11;--bg2:#1a1820;--bg3:#242130;--amber:#f5a623;--amber2:#ffcc66;--green:#4ade80;--red:#f87171;--text:#f0ede8;--muted:#8a8499;--border:rgba(255,255,255,0.08);--r:14px}
+    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:15px}
+    nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50}
+    .nav-logo{font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;color:var(--amber)}
+    .nav-sub{color:var(--muted);font-size:.85rem}
     .nav-right{margin-left:auto}
-    .btn-nav{background:var(--bg3);border:1px solid var(--border);color:var(--muted);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:.83rem;transition:all .2s}
-    .btn-nav:hover{color:var(--text);border-color:var(--gold)}
-    /* LOGO PLACEHOLDER */
-    .logo-placeholder{width:40px;height:40px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.6rem;color:var(--muted);text-align:center;line-height:1.2}
-
-    /* SCREENS */
-    .screen{display:none;max-width:780px;margin:0 auto;padding:40px 20px 80px}
-
-    /* START */
-    .start-hero{text-align:center;padding:48px 0 36px}
-    .start-icon{font-size:3.5rem;margin-bottom:14px;animation:pulse 2s infinite}
-    @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
-    .start-title{font-family:'Bebas Neue',sans-serif;font-size:3rem;color:var(--gold);letter-spacing:3px}
-    .start-sub{color:var(--muted);margin-top:6px;font-size:.95rem}
-    .role-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:36px}
-    @media(max-width:600px){.role-cards{grid-template-columns:1fr}}
-    .role-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:24px 20px;cursor:pointer;transition:all .25s}
-    .role-card:hover{border-color:var(--gold);transform:translateY(-2px)}
-    .role-card h3{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:1px;margin-bottom:12px;color:var(--gold)}
-    .role-card input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-family:inherit;font-size:.88rem;margin-bottom:8px;outline:none;transition:border-color .2s}
-    .role-card input:focus{border-color:var(--gold)}
-    .role-card select{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-family:inherit;font-size:.88rem;margin-bottom:8px;outline:none}
-    .role-card select option{background:#0f1520}
-
-    /* BUTTONS */
-    .btn-primary{background:var(--gold);color:#080b10;border:none;padding:10px 20px;border-radius:9px;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;font-size:1rem;cursor:pointer;transition:all .2s;width:100%}
-    .btn-primary:hover{background:var(--gold2);transform:translateY(-1px)}
+    .btn-nav{background:var(--bg3);border:1px solid var(--border);color:var(--muted);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:.85rem;transition:all .2s}
+    .btn-nav:hover{color:var(--text);border-color:var(--amber)}
+    .screen{display:none;max-width:720px;margin:0 auto;padding:40px 20px 80px}
+    .start-hero{text-align:center;padding:50px 0 40px}
+    .start-icon{font-size:4rem;margin-bottom:16px;animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+    .start-title{font-family:'Syne',sans-serif;font-size:2.2rem;font-weight:800;color:var(--amber)}
+    .start-sub{color:var(--muted);margin-top:8px}
+    .login-cards{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:40px}
+    @media(max-width:540px){.login-cards{grid-template-columns:1fr}}
+    .login-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:28px 24px}
+    .login-card h3{font-family:'Syne',sans-serif;font-size:1.1rem;margin-bottom:16px}
+    .login-card input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:8px;font-family:inherit;font-size:.9rem;margin-bottom:10px;outline:none;transition:border-color .2s}
+    .login-card input:focus{border-color:var(--amber)}
+    .section-label{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px}
+    .btn-primary{background:var(--amber);color:#0f0e11;border:none;padding:11px 22px;border-radius:9px;font-family:'Syne',sans-serif;font-weight:700;font-size:.95rem;cursor:pointer;transition:all .2s;width:100%}
+    .btn-primary:hover{background:var(--amber2);transform:translateY(-1px)}
     .btn-secondary{background:transparent;color:var(--muted);border:1px solid var(--border);padding:9px 18px;border-radius:9px;font-family:inherit;cursor:pointer;transition:all .2s}
-    .btn-secondary:hover{color:var(--text);border-color:var(--gold)}
-    .btn-export{background:rgba(62,207,142,.12);color:var(--green);border:1px solid rgba(62,207,142,.3);padding:9px 18px;border-radius:9px;font-family:inherit;cursor:pointer;font-size:.88rem;transition:all .2s}
-    .btn-export:hover{background:rgba(62,207,142,.25)}
-    .btn-del-all{background:rgba(240,96,96,.08);color:var(--red);border:1px solid rgba(240,96,96,.2);padding:9px 18px;border-radius:9px;font-family:inherit;cursor:pointer;font-size:.88rem;transition:all .2s}
-    .btn-del-all:hover{background:rgba(240,96,96,.2)}
-    .btn-sm{padding:5px 10px;border-radius:6px;font-size:.78rem;cursor:pointer;border:none;font-family:inherit;transition:all .2s}
-    .btn-edit{background:var(--bg4);color:var(--gold);border:1px solid var(--border)}
-    .btn-del{background:rgba(240,96,96,.1);color:var(--red);border:1px solid rgba(240,96,96,.2)}
-    .btn-frei{background:rgba(62,207,142,.12);color:var(--green);border:1px solid rgba(62,207,142,.25)}
-    .btn-frei:hover{background:rgba(62,207,142,.25)}
-    .btn-ab{background:rgba(240,96,96,.08);color:var(--red);border:1px solid rgba(240,96,96,.15)}
-    .btn-ab:hover{background:rgba(240,96,96,.2)}
-
-    /* SCHÜLER */
-    .screen-title{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:2px;color:var(--gold);margin-bottom:6px}
-    .screen-sub{color:var(--muted);margin-bottom:24px;font-size:.88rem}
-    .info-badge{display:inline-block;background:var(--bg3);border:1px solid var(--border);padding:6px 14px;border-radius:20px;font-size:.82rem;color:var(--muted);margin-bottom:20px}
-    .fragen-grid{display:flex;flex-direction:column;gap:14px}
-    .frage-block{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px}
-    .frage-block label{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:5px}
-    .frage-block input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-family:inherit;font-size:.9rem;outline:none;transition:border-color .2s;margin-bottom:10px}
-    .frage-block input:focus{border-color:var(--gold)}
-
-    /* BUZZER */
-    .buzzer-screen{text-align:center;padding-top:20px}
-    .bz-info{font-size:.9rem;color:var(--muted);margin-bottom:8px}
-    .bz-frage{font-size:1.2rem;font-weight:600;margin:16px 0;padding:16px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border);min-height:60px}
-    .bz-ziel{font-size:1rem;color:var(--gold);margin-bottom:20px;font-weight:600}
-    .buzzer-btn{width:200px;height:200px;border-radius:50%;border:none;font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:2px;cursor:pointer;transition:all .25s;margin:0 auto;display:block}
-    .buzzer-btn.waiting{background:var(--bg3);color:var(--muted);cursor:not-allowed;box-shadow:none}
-    .buzzer-btn.ready{background:var(--gold);color:#080b10;cursor:pointer;box-shadow:0 0 40px rgba(240,192,64,.5);animation:glow 1s infinite alternate}
-    @keyframes glow{from{box-shadow:0 0 30px rgba(240,192,64,.4)}to{box-shadow:0 0 60px rgba(240,192,64,.8)}}
-    .buzzer-btn.pressed{background:var(--green);color:#fff;cursor:not-allowed}
-    .buzzer-btn.locked{background:var(--bg4);color:var(--muted);cursor:not-allowed}
-    .bz-status{margin-top:16px;font-size:1.1rem;font-weight:600;color:var(--text)}
-
-    /* LEHRER TABS */
-    .tab-bar{display:flex;gap:6px;margin-bottom:24px;flex-wrap:wrap}
-    .tab-btn{background:var(--bg3);border:1px solid var(--border);color:var(--muted);padding:8px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:.85rem;transition:all .2s}
-    .tab-btn.active{background:var(--gold);color:#080b10;border-color:var(--gold);font-weight:600}
-
-    /* KLASSEN TAB */
-    .kl-row{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;margin-bottom:10px}
-    .gr-tags{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px}
-    .gr-tag{background:var(--bg4);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:.78rem;color:var(--muted)}
-    .gr-tag em{color:var(--gold)}
-    .add-form{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
-    .add-form input{flex:1;min-width:140px;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-family:inherit;font-size:.88rem;outline:none}
-    .add-form input:focus{border-color:var(--gold)}
-
-    /* FRAGEN TAB */
-    .sub-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:14px}
-    .sub-hdr{margin-bottom:12px;display:flex;align-items:center;gap:8px}
-    .sub-gr{background:var(--bg4);border-radius:20px;padding:2px 10px;font-size:.78rem;color:var(--muted)}
-    .fq-row{display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
-    .fq-row:last-child{border-bottom:none}
-    .fq-nr{font-family:'Bebas Neue',sans-serif;color:var(--gold);font-size:1rem;min-width:22px}
-    .fq-body{flex:1;min-width:200px}
-    .fq-f{font-weight:600;font-size:.9rem;margin-bottom:3px}
-    .fq-a{font-size:.83rem;color:var(--green)}
-    .fq-st{font-size:.72rem;padding:2px 8px;border-radius:10px;white-space:nowrap}
-    .st-ein{background:rgba(74,158,255,.15);color:var(--blue)}
-    .st-frei{background:rgba(62,207,142,.15);color:var(--green)}
-    .st-ab{background:rgba(240,96,96,.15);color:var(--red)}
-    .pkt-b{background:rgba(240,192,64,.15);color:var(--gold);font-size:.75rem;padding:2px 8px;border-radius:10px}
-    .fq-btns{display:flex;gap:6px;flex-wrap:wrap}
-
-    /* QUIZ TAB */
-    .quiz-ctrl{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:14px}
-    .quiz-ctrl label{font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px;margin-top:10px}
-    .quiz-ctrl select{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-family:inherit;font-size:.88rem;outline:none}
-    .quiz-ctrl select option{background:#0f1520}
-    .quiz-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-    .q-box{background:var(--bg3);border-radius:var(--r);padding:16px;margin-bottom:14px}
-    .q-f{font-size:1.1rem;font-weight:600;margin-bottom:8px}
-    .q-a{color:var(--green);font-size:.9rem;margin-bottom:8px}
-    .q-ziel{font-size:.85rem;color:var(--muted);margin-bottom:6px}
-    .q-buzzer{font-size:.95rem;font-weight:600;color:var(--gold)}
-    .btn-richtig{background:rgba(62,207,142,.15);color:var(--green);border:1px solid rgba(62,207,142,.3);padding:10px 20px;border-radius:9px;font-family:inherit;font-weight:600;cursor:pointer;font-size:.9rem;transition:all .2s}
-    .btn-richtig:hover:not(:disabled){background:rgba(62,207,142,.3)}
-    .btn-richtig:disabled,.btn-falsch:disabled{opacity:.4;cursor:not-allowed}
-    .btn-falsch{background:rgba(240,96,96,.12);color:var(--red);border:1px solid rgba(240,96,96,.25);padding:10px 20px;border-radius:9px;font-family:inherit;font-weight:600;cursor:pointer;font-size:.9rem;transition:all .2s}
-    .btn-falsch:hover:not(:disabled){background:rgba(240,96,96,.25)}
-
-    /* AUSWERTUNG */
-    .gr-punkte-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:10px}
-    .gp-item{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px;text-align:center}
-    .gp-name{font-size:.85rem;color:var(--muted);margin-bottom:4px}
-    .gp-pkt{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--gold)}
-    .aus-tbl{width:100%;border-collapse:collapse;font-size:.88rem}
-    .aus-tbl th{text-align:left;color:var(--muted);padding:8px;border-bottom:1px solid var(--border);font-weight:500}
-    .aus-tbl td{padding:8px;border-bottom:1px solid rgba(255,255,255,.04)}
-    .note{display:inline-block;width:28px;height:28px;border-radius:50%;text-align:center;line-height:28px;font-weight:700;font-size:.85rem}
-    .n1{background:rgba(62,207,142,.2);color:var(--green)}
-    .n2{background:rgba(74,158,255,.2);color:var(--blue)}
-    .n3{background:rgba(240,192,64,.2);color:var(--gold)}
-    .n4{background:rgba(240,96,96,.2);color:var(--red)}
-    .n5{background:rgba(150,50,50,.3);color:#c08080}
-
-    /* TAFEL */
-    .tafel-wrap{display:none;background:var(--bg);min-height:100vh;padding:30px}
-    .tafel-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
-    .tafel-frage{font-family:'Bebas Neue',sans-serif;font-size:clamp(2rem,4vw,3.5rem);color:var(--text);text-align:center;padding:40px 30px;background:var(--bg2);border-radius:16px;border:1px solid var(--border);margin-bottom:16px;min-height:140px;letter-spacing:1px;line-height:1.2}
-    .tafel-antwort{font-size:1.5rem;color:var(--green);text-align:center;padding:20px 30px;background:rgba(62,207,142,.06);border-radius:12px;border:1px solid rgba(62,207,142,.2);margin-bottom:16px;display:none}
-    .tafel-buzzer{text-align:center;font-size:1.3rem;min-height:40px;padding:10px;border-radius:10px}
-    .scoreboard{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px;margin-top:20px}
-    .sb-item{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center}
-    .sb-name{font-size:.85rem;color:var(--muted);margin-bottom:4px}
-    .sb-pkt{font-family:'Bebas Neue',sans-serif;font-size:2.5rem;color:var(--gold)}
-    .sb-label{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-    .tafel-btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:16px}
-
-    /* MODAL */
-    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;align-items:center;justify-content:center;padding:20px}
+    .btn-secondary:hover{color:var(--text);border-color:var(--amber)}
+    .btn-export{background:rgba(74,222,128,.12);color:var(--green);border:1px solid rgba(74,222,128,.3);padding:10px 20px;border-radius:9px;font-family:'Syne',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;transition:all .2s}
+    .btn-export:hover{background:rgba(74,222,128,.25)}
+    .btn-sm{padding:6px 12px;border-radius:7px;font-size:.82rem;cursor:pointer;border:none;font-family:inherit;transition:all .2s}
+    .btn-edit{background:var(--bg3);color:var(--amber);border:1px solid var(--border)}
+    .btn-edit:hover{border-color:var(--amber)}
+    .btn-del{background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.2)}
+    .btn-del:hover{background:rgba(248,113,113,.25)}
+    .btn-lehrerbew{background:rgba(245,166,35,.15);color:var(--amber);border:1px solid rgba(245,166,35,.4);font-weight:600}
+    .btn-lehrerbew:hover{background:rgba(245,166,35,.3)}
+    .btn-del-all{background:rgba(248,113,113,.08);color:var(--red);border:1px solid rgba(248,113,113,.2);padding:9px 16px;border-radius:9px;font-family:inherit;cursor:pointer;font-size:.88rem;transition:all .2s}
+    .btn-del-all:hover{background:rgba(248,113,113,.2)}
+    .screen-title{font-family:'Syne',sans-serif;font-size:1.5rem;font-weight:800;margin-bottom:4px}
+    .screen-sub{color:var(--muted);margin-bottom:28px;font-size:.9rem}
+    .bew-gruppe-label{font-family:'Syne',sans-serif;color:var(--amber);font-size:.95rem;font-weight:700;margin-bottom:20px;display:inline-block;background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.25);padding:8px 14px;border-radius:9px}
+    .mitglied-block{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:20px}
+    .mitglied-name{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:700;color:var(--amber);margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+    .kriterium-block{background:var(--bg3);border-radius:10px;padding:14px 16px;margin-bottom:10px}
+    .krit-label{font-family:'Syne',sans-serif;font-weight:700;font-size:.95rem;margin-bottom:3px}
+    .krit-desc{color:var(--muted);font-size:.82rem;margin-bottom:10px}
+    .stars-wrap{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+    .star{font-size:1.9rem;cursor:pointer;color:rgba(255,255,255,.1);transition:color .15s,transform .15s}
+    .star:hover,.star.active{color:var(--amber)}
+    .star:hover{transform:scale(1.2)}
+    .star-label{color:var(--muted);font-size:.82rem;margin-left:8px}
+    .bew-actions{display:flex;gap:10px;margin-top:24px}
+    .lehrer-section{margin-bottom:36px}
+    .lehrer-section h2{font-family:'Syne',sans-serif;font-size:1.2rem;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+    .add-gruppe-form{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+    .add-gruppe-form input{flex:1;min-width:160px;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:9px 14px;border-radius:8px;font-family:inherit;font-size:.9rem;outline:none}
+    .add-gruppe-form input:focus{border-color:var(--amber)}
+    .gruppe-block{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px 20px;margin-bottom:14px}
+    .gruppe-block-header{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .lg-name{font-family:'Syne',sans-serif;font-weight:700;min-width:120px}
+    .lg-mitglieder{font-size:.82rem;color:var(--muted);flex:1}
+    .mitglied-liste{margin-top:14px;border-top:1px solid var(--border);padding-top:12px;display:flex;flex-direction:column;gap:8px}
+    .mitglied-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 10px;background:var(--bg3);border-radius:9px}
+    .mr-name{font-weight:600;font-size:.9rem;min-width:150px}
+    .mr-count{font-size:.8rem;color:var(--muted);flex:1}
+    .mr-note{font-size:.82rem;font-weight:600;color:var(--green)}
+    .mr-offen{color:var(--muted);font-weight:400}
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center;padding:20px}
     .modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:16px;max-width:500px;width:100%;padding:28px}
     .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
-    .modal-header h3{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:1px}
+    .modal-header h3{font-family:'Syne',sans-serif;font-size:1.15rem}
     .modal-close{background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer}
-    .modal-form label{font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px;margin-top:10px}
-    .modal-form input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-family:inherit;font-size:.88rem;outline:none}
-    .modal-form input:focus{border-color:var(--gold)}
-
-    /* TOAST */
-    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:11px 22px;border-radius:30px;font-size:.88rem;opacity:0;transition:all .3s;z-index:200;white-space:nowrap}
+    .modal-form label{font-size:.83rem;color:var(--muted);display:block;margin-bottom:4px;margin-top:12px}
+    .modal-form input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:9px 14px;border-radius:8px;font-family:inherit;font-size:.9rem;outline:none}
+    .modal-form input:focus{border-color:var(--amber)}
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:12px 22px;border-radius:30px;font-size:.9rem;opacity:0;transition:all .3s;z-index:200;white-space:nowrap}
     .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-    .toast.success{border-color:var(--green);color:var(--green)}
-    .toast.error{border-color:var(--red);color:var(--red)}
-    .muted{color:var(--muted);font-style:italic;font-size:.88rem}
-    .divider{border:none;border-top:1px solid var(--border);margin:20px 0}
-    .hint{font-size:.78rem;color:var(--muted);margin-top:4px}
+    .toast-success{border-color:var(--green);color:var(--green)}
+    .toast-error{border-color:var(--red);color:var(--red)}
+    .muted{color:var(--muted);font-style:italic;font-size:.9rem}
+    .top-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:6px}
+    .divider{border:none;border-top:1px solid var(--border);margin:24px 0}
   </style>
 </head>
 <body>
 
 <nav>
-  <!-- LOGO: Ersetze diesen Platzhalter mit deinem echten Logo -->
-  <div class="logo-placeholder">LOGO</div>
-  <span class="nav-logo">KLASSEN-QUIZ</span>
-  <span class="nav-sub">Interaktives Frage-Antwort-System</span>
+  <span class="nav-logo">🤝 Gruppenarbeit</span>
+  <span class="nav-sub">Peer-Bewertung | OSWE</span>
   <div class="nav-right"><button class="btn-nav" onclick="abmelden()">⟵ Abmelden</button></div>
 </nav>
 
-<!-- ════ START ════ -->
-<div id="s-start" class="screen" style="display:block;max-width:820px">
+<!-- START -->
+<div id="screen-start" class="screen" style="display:block;max-width:680px">
   <div class="start-hero">
-    <div class="start-icon">🎯</div>
-    <div class="start-title">Klassen-Quiz</div>
-    <div class="start-sub">Fragen einreichen · Buzzer drücken · Punkte sammeln</div>
+    <div class="start-icon">🤝</div>
+    <div class="start-title">Gruppenarbeit bewerten</div>
+    <div class="start-sub">Bewertet ehrlich und fair die Mitarbeit eurer Gruppenmitglieder</div>
   </div>
-  <div class="role-cards">
-
-    <!-- Schüler -->
-    <div class="role-card">
-      <h3>📝 Schüler</h3>
-      <select id="dd-kl-s" onchange="onKlasseChange('dd-kl-s','dd-gr-s')"></select>
-      <select id="dd-gr-s"></select>
-      <input id="inp-s-name" type="text" placeholder="Dein Name" onkeydown="if(event.key==='Enter')startSchueler()">
-      <button class="btn-primary" onclick="startSchueler()">Fragen einreichen →</button>
+  <div class="login-cards">
+    <div class="login-card">
+      <h3>👤 Ich bin Schüler/in</h3>
+      <div class="section-label">Dein Name</div>
+      <input id="inp-name" type="text" placeholder="Vorname Nachname" onkeydown="if(event.key==='Enter')startSchueler()">
+      <p style="font-size:.78rem;color:var(--muted);margin:-4px 0 10px">Genau so schreiben wie vom Lehrer eingetragen.</p>
+      <button class="btn-primary" onclick="startSchueler()">Weiter →</button>
     </div>
-
-    <!-- Gruppe / Buzzer -->
-    <div class="role-card">
-      <h3>🔔 Gruppe</h3>
-      <select id="dd-kl-g" onchange="onKlasseChange('dd-kl-g','dd-gr-g')"></select>
-      <select id="dd-gr-g"></select>
-      <input id="inp-g-pw" type="password" placeholder="Gruppen-Passwort" onkeydown="if(event.key==='Enter')startGruppe()">
-      <button class="btn-primary" onclick="startGruppe()">Zum Buzzer →</button>
-    </div>
-
-    <!-- Lehrer -->
-    <div class="role-card">
-      <h3>👩‍🏫 Lehrer</h3>
-      <input id="inp-l-pw" type="password" placeholder="Lehrer-Passwort" onkeydown="if(event.key==='Enter')startLehrer()">
+    <div class="login-card">
+      <h3>👩‍🏫 Ich bin Lehrer/in</h3>
+      <div class="section-label">Passwort</div>
+      <input id="inp-lehrerpw" type="password" placeholder="Lehrer-Passwort" onkeydown="if(event.key==='Enter')startLehrer()">
+      <br>
       <button class="btn-primary" onclick="startLehrer()">Einloggen →</button>
     </div>
-
   </div>
 </div>
 
-<!-- ════ SCHÜLER ════ -->
-<div id="s-schueler" class="screen">
-  <div class="screen-title">📝 Fragen einreichen</div>
-  <div id="s-sub-info" class="info-badge"></div>
-  <p class="screen-sub">Denk dir 4 Fragen mit Antworten aus. Die Antworten sind für andere verborgen.</p>
-  <div class="fragen-grid">
-    <div class="frage-block"><label>Frage 1</label><input id="frage-1" placeholder="Deine Frage…"><label>Antwort 1</label><input id="antwort-1" placeholder="Die richtige Antwort…"></div>
-    <div class="frage-block"><label>Frage 2</label><input id="frage-2" placeholder="Deine Frage…"><label>Antwort 2</label><input id="antwort-2" placeholder="Die richtige Antwort…"></div>
-    <div class="frage-block"><label>Frage 3</label><input id="frage-3" placeholder="Deine Frage…"><label>Antwort 3</label><input id="antwort-3" placeholder="Die richtige Antwort…"></div>
-    <div class="frage-block"><label>Frage 4</label><input id="frage-4" placeholder="Deine Frage…"><label>Antwort 4</label><input id="antwort-4" placeholder="Die richtige Antwort…"></div>
-  </div>
-  <div style="display:flex;gap:10px;margin-top:20px">
-    <button class="btn-secondary" onclick="abmelden()">← Zurück</button>
-    <button class="btn-primary" style="flex:1" onclick="fragenEinreichen()">Fragen einreichen ✓</button>
+<!-- BEWERTUNGSFORMULAR (Schüler + Lehrer) -->
+<div id="screen-bewertung" class="screen">
+  <div class="screen-title" id="bew-titel">Bewertung</div>
+  <div id="bew-gruppe-sub" class="bew-gruppe-label"></div>
+  <div id="mitglieder-container"></div>
+  <div class="bew-actions">
+    <button class="btn-secondary" onclick="zurueckZuLehrer()" id="btn-zurueck" style="display:none">← Zurück</button>
+    <button class="btn-secondary" onclick="abmelden()" id="btn-abbrechen">← Abbrechen</button>
+    <button class="btn-primary" style="flex:1" onclick="bewertungSpeichern()">Bewertungen abschicken 🎉</button>
   </div>
 </div>
 
-<!-- ════ BUZZER ════ -->
-<div id="s-buzzer" class="screen">
-  <div class="buzzer-screen">
-    <div class="screen-title">🔔 Buzzer</div>
-    <div class="bz-info">Klasse: <strong id="bz-klasse"></strong> · Gruppe: <strong id="bz-gruppe"></strong></div>
-    <div class="bz-frage" id="bz-frage">Warte auf den Lehrer…</div>
-    <div class="bz-ziel" id="bz-ziel"></div>
-    <button id="buzzer-btn" class="buzzer-btn waiting" onclick="buzzerDrücken()" disabled>BUZZ</button>
-    <div class="bz-status" id="bz-status">Kein Quiz aktiv</div>
+<!-- LEHRER -->
+<div id="screen-lehrer" class="screen" style="max-width:820px">
+  <div class="top-bar">
+    <div class="screen-title" style="margin:0">👩‍🏫 Lehrer-Verwaltung</div>
+    <button class="btn-export" onclick="exportCSV()">⬇️ CSV exportieren</button>
+  </div>
+  <div class="screen-sub">Gruppen verwalten, Mitglieder eintragen und Lehrerbewertungen abgeben.</div>
+
+  <div class="lehrer-section">
+    <h2>👥 Gruppen &amp; Bewertungen</h2>
+    <div class="add-gruppe-form">
+      <input id="neue-gruppe-name" type="text" placeholder="Gruppenname (z. B. Gruppe A)" onkeydown="if(event.key==='Enter')gruppeHinzufuegen()">
+      <button class="btn-primary" style="width:auto;padding:9px 22px" onclick="gruppeHinzufuegen()">+ Gruppe hinzufügen</button>
+    </div>
+    <div id="lehrer-gruppen"></div>
+  </div>
+
+  <div class="lehrer-section">
+    <h2>🗑️ Datenverwaltung</h2>
+    <button class="btn-del-all" onclick="loescheBewertungen()">🗑️ Alle Bewertungen löschen</button>
   </div>
 </div>
 
-<!-- ════ LEHRER ════ -->
-<div id="s-lehrer" class="screen" style="max-width:900px">
-  <div class="screen-title">👩‍🏫 Lehrer-Verwaltung</div>
-  <div class="tab-bar">
-    <button id="btn-tab-klassen" class="tab-btn" onclick="lehrerTab('tab-klassen')">🏫 Klassen</button>
-    <button id="btn-tab-fragen"  class="tab-btn" onclick="lehrerTab('tab-fragen')">📋 Fragen</button>
-    <button id="btn-tab-quiz"    class="tab-btn" onclick="lehrerTab('tab-quiz')">🎯 Live-Quiz</button>
-    <button id="btn-tab-aus"     class="tab-btn" onclick="lehrerTab('tab-aus')">📊 Auswertung</button>
-  </div>
-
-  <!-- TAB: KLASSEN -->
-  <div id="tab-klassen">
-    <div class="add-form">
-      <input id="inp-kl-name" placeholder="Klassenname z.B. 7a">
-      <input id="inp-kl-gr" placeholder="Gruppe1:pw1, Gruppe2:pw2, …" style="flex:2">
-      <button class="btn-primary" style="width:auto;padding:9px 18px" onclick="addKlasse()">+ Klasse</button>
-    </div>
-    <p class="hint" style="margin-bottom:14px">Format Gruppen: Name:Passwort, z.B. „Gruppe1:quiz1, Gruppe2:quiz2"</p>
-    <div id="kl-liste"></div>
-  </div>
-
-  <!-- TAB: FRAGEN -->
-  <div id="tab-fragen" style="display:none">
-    <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
-      <select id="dd-l-kl-fragen" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-family:inherit;font-size:.88rem;outline:none"></select>
-      <button class="btn-primary" style="width:auto;padding:9px 18px" onclick="fragenLaden()">Laden</button>
-    </div>
-    <p class="hint" style="margin-bottom:14px">Max. 2 Fragen pro Schüler freigeben (je +2 Punkte). Abgelehnte Fragen werden aus dem Quiz entfernt.</p>
-    <div id="fragen-liste"></div>
-  </div>
-
-  <!-- TAB: LIVE QUIZ -->
-  <div id="tab-quiz" style="display:none">
-    <div class="quiz-ctrl">
-      <label>Klasse laden</label>
-      <div style="display:flex;gap:8px">
-        <select id="dd-l-kl-quiz" style="flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-family:inherit;font-size:.88rem;outline:none"></select>
-        <button class="btn-primary" style="width:auto;padding:9px 18px" onclick="quizKlasseLaden()">Laden</button>
-      </div>
-      <label>Frage auswählen</label>
-      <select id="sel-frage"><option value="">– zuerst Klasse laden –</option></select>
-      <label>Zielgruppe (beantwortet die Frage)</label>
-      <select id="sel-ziel"><option value="">– Gruppe wählen –</option></select>
-      <div class="quiz-actions">
-        <button class="btn-primary" style="width:auto" onclick="quizStarten()">▶ Frage starten</button>
-        <button class="btn-secondary" onclick="buzzerFreigeben()">🔔 Buzzer öffnen</button>
-        <button class="btn-secondary" onclick="quizBeenden()">⏹ Beenden</button>
-        <button class="btn-secondary" onclick="tafelStarten()">📺 Tafel-Modus</button>
-      </div>
-    </div>
-    <div id="quiz-panel"><p class="muted">Kein Quiz aktiv.</p></div>
-    <div style="display:flex;gap:10px;margin-top:10px">
-      <button id="btn-richtig" class="btn-richtig" onclick="antwortRichtig()" disabled>✓ Richtig (+1 Pkt)</button>
-      <button id="btn-falsch"  class="btn-falsch"  onclick="antwortFalsch()"  disabled>✗ Falsch</button>
-    </div>
-  </div>
-
-  <!-- TAB: AUSWERTUNG -->
-  <div id="tab-aus" style="display:none">
-    <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
-      <select id="dd-l-kl-aus" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-family:inherit;font-size:.88rem;outline:none"></select>
-      <button class="btn-primary" style="width:auto;padding:9px 18px" onclick="auswertungLaden()">Laden</button>
-      <button class="btn-export" onclick="exportCSV()">⬇️ CSV</button>
-      <button class="btn-del-all" onclick="allePunkteLoeschen()">🗑️ Punkte löschen</button>
-    </div>
-    <p class="hint" style="margin-bottom:16px">Notenschlüssel: ≥4 Pkt = Note 1 · 3 = Note 2 · 2 = Note 3 · 1 = Note 4 · 0 = Note 5</p>
-    <div id="aus-container"></div>
-  </div>
-</div>
-
-<!-- ════ TAFEL ════ -->
-<div id="s-tafel" class="tafel-wrap">
-  <div class="tafel-top">
-    <span style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:var(--gold);letter-spacing:2px">🎯 KLASSEN-QUIZ</span>
-    <div class="tafel-btns">
-      <button class="btn-secondary" onclick="tafelAntwortZeigen()">💡 Antwort zeigen</button>
-      <button class="btn-secondary" onclick="tafelBeenden()">✕ Beenden</button>
-    </div>
-  </div>
-  <div class="tafel-frage" id="tafel-frage-box">Warte auf Lehrer…</div>
-  <div class="tafel-antwort" id="tafel-antwort-box"><span id="tafel-antwort-text"></span></div>
-  <div class="tafel-buzzer" id="tafel-buzzer-box"></div>
-  <div class="scoreboard" id="scoreboard"></div>
-</div>
-
-<!-- MODAL: KLASSE BEARBEITEN -->
-<div id="modal-kl" class="modal-overlay" style="display:none" onclick="if(event.target===this)schliesseModal('modal-kl')">
+<!-- MODAL -->
+<div id="modal-edit" class="modal-overlay" style="display:none" onclick="if(event.target===this)schliesseModal('modal-edit')">
   <div class="modal-box">
     <div class="modal-header">
-      <h3>✏️ Klasse bearbeiten</h3>
-      <button class="modal-close" onclick="schliesseModal('modal-kl')">✕</button>
+      <h3>✏️ Gruppe bearbeiten</h3>
+      <button class="modal-close" onclick="schliesseModal('modal-edit')">✕</button>
     </div>
     <div class="modal-form">
-      <input type="hidden" id="edit-kl-id">
-      <label>Klassenname</label>
-      <input id="edit-kl-name" type="text" placeholder="z.B. 7a">
-      <label>Gruppen (Name:Passwort, kommagetrennt)</label>
-      <input id="edit-kl-gr" type="text" placeholder="Gruppe1:pw1, Gruppe2:pw2">
+      <input type="hidden" id="edit-gruppe-id">
+      <label>Gruppenname</label>
+      <input id="edit-gruppe-name" type="text" placeholder="Gruppenname">
+      <label>Mitglieder <small style="color:var(--muted)">(kommagetrennt: Max Mustermann, Lisa Schmidt)</small></label>
+      <input id="edit-gruppe-mitglieder" type="text" placeholder="Max Mustermann, Lisa Schmidt, ...">
     </div>
     <div style="display:flex;gap:10px;margin-top:16px">
-      <button class="btn-secondary" onclick="schliesseModal('modal-kl')">Abbrechen</button>
-      <button class="btn-primary" style="flex:1" onclick="editKlSpeichern()">Speichern ✓</button>
+      <button class="btn-secondary" onclick="schliesseModal('modal-edit')">Abbrechen</button>
+      <button class="btn-primary" style="flex:1" onclick="gruppeBearbeitenSpeichern()">Speichern ✓</button>
     </div>
   </div>
 </div>
 
+<script>
+  // Zurück-Button je nach Rolle anzeigen
+  var _origZeigeBewertungsformular = zeigeBewertungsformular;
+  zeigeBewertungsformular = function(gruppe, mitgliedFilter) {
+    _origZeigeBewertungsformular(gruppe, mitgliedFilter);
+    if (mitgliedFilter && currentUser && currentUser.rolle === "lehrer") {
+      document.getElementById("btn-zurueck").style.display = "";
+      document.getElementById("btn-abbrechen").style.display = "none";
+    } else {
+      document.getElementById("btn-zurueck").style.display = "none";
+      document.getElementById("btn-abbrechen").style.display = "";
+    }
+  };
+</script>
 </body>
 </html>
