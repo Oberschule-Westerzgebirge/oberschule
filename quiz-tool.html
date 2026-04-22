@@ -316,7 +316,7 @@
           (statusText!=="abgelehnt"?"<button class='btn-sm btn-ab' onclick='ablehnFrage(\""+sub.id+"\","+i+")'>✗ Löschen</button>":"");
         return "<div class='fq-row'><span class='fq-nr'>#"+(i+1)+"</span>"+
           "<div class='fq-body'><div class='fq-f'>❓ "+frageText+"</div><div class='fq-a'>💡 "+antwortText+"</div></div>"+
-          "<span class='fq-st "+sc+"'>"+fq.status+"</span>"+pkt+
+          "<span class='fq-st "+sc+"'>"+statusText+"</span>"+pkt+
           "<div class='fq-btns'>"+btns+"</div></div>";
       }).join("");
       return "<div class='sub-card'><div class='sub-hdr'>👤 <strong>"+sub.name+"</strong> <span class='sub-gr'>"+sub.gruppe+"</span></div>"+rows+"</div>";
@@ -344,7 +344,10 @@
     if(snap.exists){await ref.update({fragenPunkte:firebase.firestore.FieldValue.increment(2)});}
     else{await ref.set({klasse:sub.klasse,gruppe:sub.gruppe,name:sub.name,typ:"schueler",fragenPunkte:2,buzzerPunkte:0});}
     toast("Freigegeben! +2 Pkt für "+sub.name,"success");
-    await ladeFragen(sub.klasse);await ladePunkte(sub.klasse);renderFragenListe();
+    await ladeFragen(sub.klasse);await ladePunkte(sub.klasse);
+    renderFragenListe();
+    // Dropdown im Quiz-Tab aktualisieren falls aktiv
+    if(S.quizKlasse&&S.quizKlasse.name===sub.klasse) renderFragenSel();
   };
 
   window.ablehnFrage=async function(subId,idx){
