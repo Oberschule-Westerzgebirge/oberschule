@@ -112,7 +112,7 @@
     if (pw !== ADMIN_PW) { toast("Falsches Passwort!", "error"); return; }
     currentUser = { name: "Lehrer", gruppe: null, rolle: "lehrer" };
     await ladeGruppen();
-    zeigeLehrer();
+    await zeigeLehrer();
   };
 
   window.zeigeLehrerBewertung = function(gruppeId, gruppeName, mitgliedName) {
@@ -257,7 +257,7 @@
       }
       toast("Bewertungen gespeichert! 🎉", "success");
       if (currentUser.rolle === "lehrer") {
-        setTimeout(function(){ zeigeLehrer(); }, 1200);
+        setTimeout(async function(){ await zeigeLehrer(); }, 1200);
       } else {
         setTimeout(function(){ abmelden(); }, 1500);
       }
@@ -267,10 +267,10 @@
   // ════════════════════════════════════════
   // LEHRER
   // ════════════════════════════════════════
-  function zeigeLehrer() {
+  async function zeigeLehrer() {
     hideAll();
     show("screen-lehrer");
-    renderLehrerGruppen();
+    await renderLehrerGruppen();
   }
 
   function renderLehrerGruppen() {
@@ -296,7 +296,7 @@
       await db.collection(GRUPPEN_COL).add({ name: name, mitglieder: [], timestamp: firebase.firestore.FieldValue.serverTimestamp() });
       toast("Gruppe hinzugefügt! ✓", "success");
       document.getElementById("neue-gruppe-name").value = "";
-      await ladeGruppen(); renderLehrerGruppen();
+      await ladeGruppen(); await renderLehrerGruppen();
     } catch(e) { toast("Fehler!", "error"); console.error(e); }
   };
 
@@ -319,7 +319,7 @@
       await db.collection(GRUPPEN_COL).doc(id).update({ name: name, mitglieder: mitglieder });
       toast("Gespeichert ✓", "success");
       hide("modal-edit");
-      await ladeGruppen(); renderLehrerGruppen();
+      await ladeGruppen(); await renderLehrerGruppen();
     } catch(e) { toast("Fehler!", "error"); console.error(e); }
   };
 
@@ -328,7 +328,7 @@
     try {
       await db.collection(GRUPPEN_COL).doc(id).delete();
       toast("Gruppe gelöscht", "info");
-      await ladeGruppen(); renderLehrerGruppen();
+      await ladeGruppen(); await renderLehrerGruppen();
     } catch(e) { toast("Fehler!", "error"); }
   };
 
