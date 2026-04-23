@@ -303,41 +303,39 @@
 
   function renderFragenListe(){
     var c=document.getElementById("fragen-liste");
-    if(!S.fragen.length){c.innerHTML="<p class='muted'>Keine Einreichungen.</p>";return;}
+    if(!S.fragen.length){c.innerHTML="<p class=\'muted\'>Keine Einreichungen.</p>";return;}
     c.innerHTML=S.fragen.map(function(sub){
       var rows=sub.fragen.map(function(fq,i){
-        // V1 nutzte {frage,antwort}, V2 nutzt {f,a} - beide unterstützen
-        var frageText  = fq.f      || fq.frage      || fq.question || "(keine Frage)";
-        var antwortText= fq.a      || fq.antwort     || fq.answer   || "(keine Antwort)";
-        var statusText = fq.status || "eingereicht";
+        var frageText  = fq.f||fq.frage||fq.question||"(keine Frage)";
+        var antwortText= fq.a||fq.antwort||fq.answer||"(keine Antwort)";
+        var statusText = fq.status||"eingereicht";
         var sc=statusText==="freigegeben"?"st-frei":statusText==="abgelehnt"?"st-ab":"st-ein";
-        var pkt=fq.punkte>0?"<span class='pkt-b'>+"+fq.punkte+"</span>":"";
-        var dropdownId = "pkt-"+sub.id+"-"+i;
-        var aktPkt = fq.punkte||0;
-        var dropdown = statusText!=="freigegeben"
-          ? "<select class='pkt-sel' id='"+dropdownId+"'>"+
-              "<option value='2'"+(aktPkt===2?" selected":"")+">2 Pkt – Frage &amp; Antwort korrekt</option>"+
-              "<option value='1'"+(aktPkt===1?" selected":"")+">1 Pkt – nur teilweise richtig</option>"+
-              "<option value='0'"+(aktPkt===0?" selected":"")+">0 Pkt – abgelehnt</option>"+
-            "</select>"
-          : "<span class='pkt-fix'>"+aktPkt+" Pkt vergeben</span>";
-        var btns = statusText!=="freigegeben"
-          ? "<button class='btn-sm btn-frei' onclick='freigebenFrage(""+sub.id+"","+i+",""+dropdownId+"")'>✓ Freigeben</button>"
-          : "<button class='btn-sm btn-ab' onclick='ablehnFrage(""+sub.id+"","+i+")'>↩ Zurücksetzen</button>";
-        btns += statusText!=="abgelehnt"&&statusText!=="freigegeben"
-          ? "" : "";
-        var loeschenBtn = statusText!=="freigegeben"
-          ? "<button class='btn-sm btn-ab' onclick='ablehnFrage(""+sub.id+"","+i+")'>✗ Löschen</button>"
-          : "";
-        return "<div class='fq-row'><span class='fq-nr'>#"+(i+1)+"</span>"+
-          "<div class='fq-body'><div class='fq-f'>❓ "+frageText+"</div><div class='fq-a'>💡 "+antwortText+"</div></div>"+
-          "<span class='fq-st "+sc+"'>"+statusText+"</span>"+pkt+
-          "<div class='fq-btns'>"+dropdown+btns+loeschenBtn+"</div></div>";
+        var pkt=fq.punkte>0?"<span class=\'pkt-b\'>+"+fq.punkte+"</span>":"";
+        var aktPkt=fq.punkte||0;
+        var ddId="dd"+sub.id.replace(/[^a-z0-9]/gi,"")+"x"+i;
+        var dropdown="";
+        var btns="";
+        var loeschenBtn="";
+        if(statusText!=="freigegeben"){
+          dropdown="<select class=\'pkt-sel\' id=\'"+ddId+"\'>"+
+            "<option value=\'2\'"+(aktPkt===2?" selected":"")+">2 Pkt – Frage &amp; Antwort korrekt</option>"+
+            "<option value=\'1\'"+(aktPkt===1?" selected":"")+">1 Pkt – teilweise richtig</option>"+
+            "<option value=\'0\'"+(aktPkt===0?" selected":"")+">0 Pkt – ablehnen</option>"+
+            "</select>";
+          btns="<button class=\'btn-sm btn-frei\' onclick=\"freigebenFrage('"+sub.id+"',"+i+",'"+ddId+"')\">✓ Freigeben</button>";
+          loeschenBtn="<button class=\'btn-sm btn-ab\' onclick=\"ablehnFrage('"+sub.id+"',"+i+")\" >✗ Löschen</button>";
+        } else {
+          btns="<button class=\'btn-sm btn-ab\' onclick=\"ablehnFrage('"+sub.id+"',"+i+")\" >↩ Zurücksetzen</button>";
+        }
+        return "<div class=\'fq-row\'><span class=\'fq-nr\'>#"+(i+1)+"</span>"+
+          "<div class=\'fq-body\'><div class=\'fq-f\'>❓ "+frageText+"</div><div class=\'fq-a\'>💡 "+antwortText+"</div></div>"+
+          "<span class=\'fq-st "+sc+"\'>"+statusText+"</span>"+pkt+
+          "<div class=\'fq-btns\'>"+dropdown+btns+loeschenBtn+"</div></div>";
       }).join("");
-      return "<div class='sub-card'><div class='sub-hdr'>👤 <strong>"+sub.name+"</strong> <span class='sub-gr'>"+sub.gruppe+"</span></div>"+rows+"</div>";
+      return "<div class=\'sub-card\'><div class=\'sub-hdr\'>👤 <strong>"+sub.name+"</strong> <span class=\'sub-gr\'>"+sub.gruppe+"</span></div>"+rows+"</div>";
     }).join("");
   }
-
+  
   window.freigebenFrage=async function(subId,idx,dropdownId){
     var sub=S.fragen.find(function(x){return x.id===subId;});if(!sub)return;
     // Punkte aus Dropdown lesen
@@ -799,6 +797,10 @@
     .muted{color:var(--muted);font-style:italic;font-size:.88rem}
     .divider{border:none;border-top:1px solid var(--border);margin:20px 0}
     .hint{font-size:.78rem;color:var(--muted);margin-top:4px}
+    .fq-btns{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+    .pkt-sel{background:var(--bg4);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:7px;font-family:inherit;font-size:.78rem;outline:none;cursor:pointer}
+    .pkt-sel:focus{border-color:var(--gold)}
+    .pkt-fix{font-size:.78rem;color:var(--gold);font-weight:600;padding:4px 8px;background:rgba(240,192,64,.1);border-radius:6px}
     .gr-check-label{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg3);border-radius:8px;margin-bottom:6px;font-size:.88rem;cursor:pointer}
     .gr-check-label input[type='checkbox']{width:16px;height:16px;accent-color:var(--gold)}
     .pw-inline{flex:1;background:var(--bg4);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:6px;font-family:inherit;font-size:.82rem;outline:none;max-width:100px}
