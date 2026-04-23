@@ -149,20 +149,46 @@
       var sess=doc.data();S.session=sess;
       if(!sess.aktiv||sess.klasse!==S.klasse){zeigeBuzzerIdle();return;}
       document.getElementById("bz-frage").textContent=sess.aktuelleFrageText||"";
+      var istFragengruppe=sess.fragenstellendeGruppe===S.gruppe;
       var istZiel=sess.zielGruppe===S.gruppe;
-      document.getElementById("bz-ziel").textContent=istZiel?"🎯 Ihr seid gefragt!":"➡️ Frage für: "+sess.zielGruppe;
       var gedrückt=sess.buzzerGedrückt;
       var btn=document.getElementById("buzzer-btn");
       var status=document.getElementById("bz-status");
-      if(istZiel&&sess.buzzerOffen&&!gedrückt){
-        btn.disabled=false;btn.className="buzzer-btn ready";status.textContent="JETZT DRÜCKEN!";
-      } else if(gedrückt&&gedrückt.gruppe===S.gruppe){
-        btn.disabled=true;btn.className="buzzer-btn pressed";status.textContent="✓ Gedrückt!";
-      } else if(gedrückt){
-        btn.disabled=true;btn.className="buzzer-btn locked";status.textContent=gedrückt.gruppe+" war schneller!";
+      // Fragengruppe: Zielgruppe auswählen
+      if(istFragengruppe&&!sess.zielGruppe){
+        btn.style.display="none";
+        var used=sess.verwendeteZielgruppen||[];
+        var alle=(S.quizKlasse&&S.quizKlasse.gruppen||[]);
+        var waehlbar=alle.filter(function(g){return g.name!==S.gruppe&&!used.includes(g.name);});
+        if(sess.zielVorschlag){
+          document.getElementById("bz-ziel").textContent="Vorschlag gesendet: "+sess.zielVorschlag+" – warte auf Lehrer…";
+          status.textContent="";
+          document.getElementById("bz-picker").innerHTML="";
+        } else {
+          document.getElementById("bz-ziel").textContent="Wählt eine Gruppe aus, der ihr die Frage stellt:";
+          status.textContent="";
+          document.getElementById("bz-picker").innerHTML=
+            waehlbar.map(function(g){
+              return "<button class='btn-gruppe-wahl' onclick='zielVorschlagSenden(\""+g.name+"\")'>"+g.name+"</button>";
+            }).join("");
+        }
       } else {
-        btn.disabled=true;btn.className="buzzer-btn waiting";
-        status.textContent=istZiel?"Warte auf Freigabe…":"Andere Gruppe ist dran";
+        btn.style.display="block";
+        document.getElementById("bz-picker").innerHTML="";
+        document.getElementById("bz-ziel").textContent=istZiel?"🎯 Ihr seid gefragt!":"➡️ Frage für: "+(sess.zielGruppe||"wird gewählt…");
+        var kannBuzzen=(istZiel&&sess.buzzerOffen||sess.buzzerAlleOffen)&&!gedrückt;
+        if(kannBuzzen){
+          btn.disabled=false;
+          btn.className="buzzer-btn ready"+(sess.buzzerAlleOffen?" steal":"");
+          status.textContent=sess.buzzerAlleOffen?"⚡ STEAL – JETZT!":"JETZT DRÜCKEN!";
+        } else if(gedrückt&&gedrückt.gruppe===S.gruppe){
+          btn.disabled=true;btn.className="buzzer-btn pressed";status.textContent="✓ Gedrückt!";
+        } else if(gedrückt){
+          btn.disabled=true;btn.className="buzzer-btn locked";status.textContent=gedrückt.gruppe+" war schneller!";
+        } else {
+          btn.disabled=true;btn.className="buzzer-btn waiting";
+          status.textContent=istZiel?"Warte auf Freigabe…":sess.zielGruppe?"Andere Gruppe ist dran":"Ziel wird gewählt…";
+        }
       }
     });
     S.unsub.push(unsub);
@@ -440,11 +466,39 @@
     if(!sess||!sess.aktiv){c.innerHTML="<p class='muted'>Kein Quiz aktiv.</p>";return;}
     var bInfo=sess.buzzerGedrückt
       ?"🔔 <strong>"+sess.buzzerGedrückt.gruppe+"</strong> hat gebrummt!"
-      :(sess.buzzerOffen?"⏳ Warte auf Buzzer…":"🔒 Buzzer geschlossen");
+      :(sess.buzzerAlleOffen?"⚡ Steal-Modus – alle können buzzen!"
+      :(sess.buzzerOffen?"⏳ Warte auf Buzzer…":"🔒 Buzzer geschlossen"));
+    // Vorschlag-Box
+    var vorschlagHTML="";
+    if(!sess.zielGruppe&&sess.zielVorschlag){
+      vorschlagHTML="<div class='vorschlag-box'>"+
+        "<span>💬 Vorschlag: <strong>"+sess.zielVorschlag+"</strong></span>"+
+        "<button class='btn-sm btn-frei' onclick='zielBestaetigen()'>✓ Bestätigen</button>"+
+        "</div>";
+    } else if(!sess.zielGruppe){
+      vorschlagHTML="<div class='vorschlag-box warten'>⏳ Warte auf Zielgruppen-Vorschlag der Gruppe...</div>";
+    }
+    // Countdown berechnen
+    var timerHTML="";
+    if(sess.timerStart&&!sess.buzzerGedrückt&&!sess.buzzerAlleOffen){
+      var vergangen=Math.floor((Date.now()-sess.timerStart)/1000);
+      var rest=Math.max(0,(sess.timerDauer||30)-vergangen);
+      var farbe=rest<=5?"var(--red)":rest<=10?"var(--gold)":"var(--green)";
+      timerHTML="<div class='q-timer' style='color:"+farbe+"'>⏱ "+rest+"s "+
+        (rest===0?"→ Steal-Modus!":"bis Steal-Modus")+"</div>";
+    }
+    var zielAnzeige=sess.zielGruppe||"(wird gewählt…)";
+    var usedHTML="";
+    if((sess.verwendeteZielgruppen||[]).length>0){
+      usedHTML="<div class='used-gruppen'>Bereits als Ziel: "+sess.verwendeteZielgruppen.join(", ")+"</div>";
+    }
     c.innerHTML="<div class='q-box'>"+
       "<div class='q-f'>❓ "+sess.aktuelleFrageText+"</div>"+
       "<div class='q-a'>💡 "+sess.aktuelleAntwort+"</div>"+
-      "<div class='q-ziel'>Zielgruppe: <strong>"+sess.zielGruppe+"</strong></div>"+
+      "<div class='q-ziel'>Fragengruppe: <strong>"+sess.fragenstellendeGruppe+"</strong>"+
+        " → Ziel: <strong>"+zielAnzeige+"</strong>"+
+        (sess.buzzerAlleOffen?" <span class='steal-badge'>⚡ STEAL!</span>":"")+"</div>"+
+      usedHTML+vorschlagHTML+timerHTML+
       "<div class='q-buzzer'>"+bInfo+"</div></div>";
     if(sess.buzzerGedrückt){
       document.getElementById("btn-richtig").disabled=false;
@@ -460,20 +514,65 @@
     var fq=sub.fragen[parseInt(parts[1])];
     var fqText   = fq.f||fq.frage||fq.question||"";
     var fqAntwort= fq.a||fq.antwort||fq.answer||"";
+    // verwendeteZielgruppen aus laufender Runde behalten
+    var prevDoc=await db.collection(C_SESSION).doc("current").get();
+    var prevUsed=(prevDoc.exists&&prevDoc.data().verwendeteZielgruppen)||[];
     await db.collection(C_SESSION).doc("current").set({
       aktiv:true,klasse:S.quizKlasse.name,
       aktuelleFrageText:fqText,aktuelleAntwort:fqAntwort,
-      zielGruppe:ziel,buzzerOffen:false,buzzerGedrückt:null
+      fragenstellendeGruppe:ziel,
+      zielGruppe:null,zielVorschlag:null,
+      buzzerOffen:false,buzzerAlleOffen:false,
+      buzzerGedrückt:null,timerStart:null,timerDauer:30,
+      verwendeteZielgruppen:prevUsed
     });
-    toast("Frage gestartet!","success");
+    if(S.stealTimer){clearTimeout(S.stealTimer);S.stealTimer=null;}
+    toast("Frage gestartet! Gruppe wählt Zielgruppe…","success");
   };
 
-  window.buzzerFreigeben=async function(){
-    await db.collection(C_SESSION).doc("current").update({buzzerOffen:true,buzzerGedrückt:null});
-    toast("Buzzer offen!","success");
+  window.zielVorschlagSenden=async function(zielGruppe){
+    await db.collection(C_SESSION).doc("current").update({zielVorschlag:zielGruppe});
+    toast("Vorschlag: "+zielGruppe+" – warte auf Lehrer…","info");
+  };
+
+  window.zielBestaetigen=async function(){
+    var sess=S.session;
+    if(!sess||!sess.zielVorschlag){toast("Kein Vorschlag!","error");return;}
+    var jetzt=Date.now();
+    var used=(sess.verwendeteZielgruppen||[]).concat([sess.zielVorschlag]);
+    await db.collection(C_SESSION).doc("current").update({
+      zielGruppe:sess.zielVorschlag,
+      timerStart:jetzt,
+      verwendeteZielgruppen:used
+    });
+    toast("Ziel bestätigt: "+sess.zielVorschlag,"success");
+    if(S.stealTimer)clearTimeout(S.stealTimer);
+    S.stealTimer=setTimeout(async function(){
+      var doc=await db.collection(C_SESSION).doc("current").get();
+      if(doc.exists&&doc.data().aktiv&&!doc.data().buzzerGedrückt){
+        await db.collection(C_SESSION).doc("current").update({buzzerOffen:true,buzzerAlleOffen:true});
+        toast("Steal-Modus!","info");
+      }
+    },30000);
+  };
+
+  window.rundeZuruecksetzen=async function(){
+    if(!confirm("Runde zurücksetzen? Alle Gruppen werden wieder als Ziel verfügbar."))return;
+    await db.collection(C_SESSION).doc("current").update({verwendeteZielgruppen:[]});
+    toast("Runde zurückgesetzt","info");
+  };
+
+  window.buzzerFreigeben=async function(alleOffen){
+    await db.collection(C_SESSION).doc("current").update({
+      buzzerOffen:true,
+      buzzerAlleOffen:alleOffen===true,
+      buzzerGedrückt:null
+    });
+    toast(alleOffen?"⚡ Steal-Modus für alle!":"Buzzer offen!","success");
   };
 
   window.antwortRichtig=async function(){
+    if(S.stealTimer){clearTimeout(S.stealTimer);S.stealTimer=null;}
     var sess=S.session;if(!sess||!sess.buzzerGedrückt)return;
     var gruppe=sess.buzzerGedrückt.gruppe;
     var docId=(sess.klasse+"_GR_"+gruppe).replace(/[\s/]/g,"_");
@@ -487,6 +586,7 @@
   };
 
   window.antwortFalsch=async function(){
+    if(S.stealTimer){clearTimeout(S.stealTimer);S.stealTimer=null;}
     await db.collection(C_SESSION).doc("current").update({buzzerOffen:false,buzzerGedrückt:null});
     toast("✗ Falsch – Buzzer zurück","info");
   };
@@ -509,47 +609,60 @@
     renderAuswertung(k);
   };
 
+  function noteAusGesamt(total, maxPkt){
+    if(!maxPkt||maxPkt<=0)return "–";
+    var pct=total/maxPkt;
+    if(pct>=0.875)return 1;
+    if(pct>=0.75) return 2;
+    if(pct>=0.625)return 3;
+    if(pct>=0.5)  return 4;
+    return 5;
+  }
+
   function renderAuswertung(k){
-    // Schüler-Punkte aus Punkte-Collection (typ=schueler)
-    var schueler=[];
+    var maxPkt=parseInt(document.getElementById("inp-max-pkt").value)||0;
+    // Fragen-Punkte pro Gruppe (alle Schüler addieren)
+    var fragenGr={};
     Object.values(S.punkte).forEach(function(p){
-      if(p.typ==="schueler") schueler.push(p);
+      if(p.typ==="schueler"){
+        fragenGr[p.gruppe]=(fragenGr[p.gruppe]||0)+(p.fragenPunkte||0);
+      }
+    });
+    // Schüler aus Fragen ergänzen (für fragenGr)
+    S.fragen.forEach(function(sub){
+      // sicherstellen Gruppe bekannt
+      fragenGr[sub.gruppe]=fragenGr[sub.gruppe]||0;
     });
     // Buzzer-Punkte pro Gruppe
     var buzzerGr={};
     Object.values(S.punkte).forEach(function(p){
       if(p.typ==="gruppe") buzzerGr[p.gruppe]=(buzzerGr[p.gruppe]||0)+(p.buzzerPunkte||0);
     });
-    // Fehlende Schüler aus Fragen ergänzen
-    S.fragen.forEach(function(sub){
-      if(!schueler.find(function(s){return s.name===sub.name;})){
-        schueler.push({name:sub.name,gruppe:sub.gruppe,klasse:sub.klasse,fragenPunkte:0,buzzerPunkte:0,typ:"schueler"});
-      }
-    });
-
-    var rows=schueler.map(function(s){
-      var buzzer=buzzerGr[s.gruppe]||0;
-      var total=(s.fragenPunkte||0)+buzzer;
-      return {name:s.name,gruppe:s.gruppe,fragen:s.fragenPunkte||0,buzzer:buzzer,total:total,note:NOTE(total)};
-    });
-    rows.sort(function(a,b){return b.total-a.total;});
-
     // Gruppen-Tabelle
-    var grHTML="<h3 style='margin-bottom:10px'>Buzzer-Punkte pro Gruppe</h3><div class='gr-punkte-grid'>";
-    (k.gruppen||[]).forEach(function(g){
-      grHTML+="<div class='gp-item'><div class='gp-name'>"+g.name+"</div><div class='gp-pkt'>"+(buzzerGr[g.name]||0)+" Pkt</div></div>";
+    var grRows=(k.gruppen||[]).map(function(g){
+      var fragen=fragenGr[g.name]||0;
+      var buzzer=buzzerGr[g.name]||0;
+      var total=fragen+buzzer;
+      var note=noteAusGesamt(total,maxPkt);
+      return {name:g.name,fragen:fragen,buzzer:buzzer,total:total,note:note};
     });
-    grHTML+="</div>";
-
-    // Schüler-Tabelle
-    var tableHTML="<h3 style='margin:20px 0 10px'>Schüler-Gesamtauswertung</h3>"+
-      "<table class='aus-tbl'><thead><tr><th>Name</th><th>Gruppe</th><th>Fragen</th><th>Buzzer (Gruppe)</th><th>Gesamt</th><th>Note</th></tr></thead><tbody>"+
-      rows.map(function(r){
-        return "<tr><td>"+r.name+"</td><td>"+r.gruppe+"</td><td>"+r.fragen+"</td><td>"+r.buzzer+"</td>"+
-          "<td><strong>"+r.total+"</strong></td><td><span class='note n"+r.note+"'>"+r.note+"</span></td></tr>";
+    grRows.sort(function(a,b){return b.total-a.total;});
+    var noteHinweis=maxPkt>0
+      ?"Notenschlüssel: "+maxPkt+" Pkt max · ≥87,5%=1 · ≥75%=2 · ≥62,5%=3 · ≥50%=4 · <50%=5"
+      :"Bitte Max-Punkte eintragen um Noten zu berechnen";
+    var tableHTML=
+      "<h3 style='margin-bottom:10px'>Gruppen-Auswertung</h3>"+
+      "<p class='hint' style='margin-bottom:12px'>"+noteHinweis+"</p>"+
+      "<table class='aus-tbl'><thead><tr>"+
+        "<th>Gruppe</th><th>Fragen-Pkt</th><th>Buzzer-Pkt</th><th>Gesamt</th><th>Note</th>"+
+      "</tr></thead><tbody>"+
+      grRows.map(function(r){
+        var noteStr=maxPkt>0?"<span class='note n"+r.note+"'>"+r.note+"</span>":"–";
+        return "<tr><td><strong>"+r.name+"</strong></td>"+
+          "<td>"+r.fragen+"</td><td>"+r.buzzer+"</td>"+
+          "<td><strong>"+r.total+"</strong></td><td>"+noteStr+"</td></tr>";
       }).join("")+"</tbody></table>";
-
-    setHTML("aus-container",grHTML+tableHTML);
+    setHTML("aus-container",tableHTML);
   }
 
   window.exportCSV=async function(){
@@ -616,8 +729,23 @@
     if(sess.buzzerGedrückt){
       buzBox.innerHTML="🔔 <strong>"+sess.buzzerGedrückt.gruppe+"</strong> hat gebrummt!";
       buzBox.style.background="rgba(250,200,50,.15)";
-    } else if(sess.buzzerOffen){
-      buzBox.innerHTML="⏳ Buzzer offen…";buzBox.style.background="rgba(100,200,100,.1)";
+    } else if(sess.buzzerAlleOffen){
+      buzBox.innerHTML="⚡ STEAL-MODUS – Alle Gruppen können antworten!";buzBox.style.background="rgba(240,96,96,.15)";
+    } else if(sess.timerStart){
+      var vergangen=Math.floor((Date.now()-sess.timerStart)/1000);
+      var rest=Math.max(0,(sess.timerDauer||30)-vergangen);
+      var farbe=rest<=5?"#f06060":rest<=10?"#f0c040":"#3ecf8e";
+      buzBox.innerHTML="<span style='font-family:Bebas Neue,sans-serif;font-size:2rem;color:"+farbe+"'>⏱ "+rest+"</span> Sekunden bis Steal-Modus";
+      buzBox.style.background="transparent";
+      if(!S.tafelTimer)S.tafelTimer=setInterval(function(){
+        var v2=Math.floor((Date.now()-sess.timerStart)/1000);
+        var r2=Math.max(0,(sess.timerDauer||30)-v2);
+        var f2=r2<=5?"#f06060":r2<=10?"#f0c040":"#3ecf8e";
+        var bb=document.getElementById("tafel-buzzer-box");
+        if(bb&&!S.session?.buzzerGedrückt&&!S.session?.buzzerAlleOffen)
+          bb.innerHTML="<span style='font-family:Bebas Neue,sans-serif;font-size:2rem;color:"+f2+"'>⏱ "+r2+"</span> Sekunden bis Steal-Modus";
+        else if(S.tafelTimer){clearInterval(S.tafelTimer);S.tafelTimer=null;}
+      },1000);
     } else {
       buzBox.innerHTML="";buzBox.style.background="transparent";
     }
@@ -640,7 +768,7 @@
     }).join("");
   }
 
-  window.tafelBeenden=function(){zeigeStart();};
+  window.tafelBeenden=function(){if(S.tafelTimer){clearInterval(S.tafelTimer);S.tafelTimer=null;}zeigeStart();};
   </script>
 
   <style>
@@ -821,6 +949,15 @@
     .muted{color:var(--muted);font-style:italic;font-size:.88rem}
     .divider{border:none;border-top:1px solid var(--border);margin:20px 0}
     .hint{font-size:.78rem;color:var(--muted);margin-top:4px}
+    .q-timer{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:1px;margin:8px 0;padding:8px 14px;background:var(--bg4);border-radius:9px;display:inline-block}
+    .vorschlag-box{background:rgba(62,207,142,.1);border:1px solid rgba(62,207,142,.3);border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0;flex-wrap:wrap}
+    .vorschlag-box.warten{background:rgba(74,158,255,.08);border-color:rgba(74,158,255,.2);color:var(--muted);display:block;text-align:center}
+    .used-gruppen{font-size:.78rem;color:var(--muted);margin:6px 0;padding:6px 10px;background:rgba(240,96,96,.06);border-radius:7px}
+    .btn-gruppe-wahl{background:var(--bg3);border:2px solid var(--border);color:var(--text);padding:14px 20px;border-radius:12px;font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:1px;cursor:pointer;transition:all .2s;min-width:100px}
+    .btn-gruppe-wahl:hover{border-color:var(--gold);color:var(--gold);background:rgba(240,192,64,.1);transform:translateY(-2px)}
+    .steal-badge{background:rgba(240,96,96,.2);color:var(--red);font-size:.75rem;padding:2px 8px;border-radius:20px;font-weight:700;margin-left:6px}
+    .buzzer-btn.steal{background:var(--red);box-shadow:0 0 50px rgba(240,96,96,.6);animation:glowred 0.7s infinite alternate}
+    @keyframes glowred{from{box-shadow:0 0 30px rgba(240,96,96,.4)}to{box-shadow:0 0 70px rgba(240,96,96,.9)}}
     .fq-btns{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
     .pkt-sel{background:var(--bg4);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:7px;font-family:inherit;font-size:.78rem;outline:none;cursor:pointer}
     .pkt-sel:focus{border-color:var(--gold)}
@@ -902,6 +1039,7 @@
     <div class="bz-info">Klasse: <strong id="bz-klasse"></strong> · Gruppe: <strong id="bz-gruppe"></strong></div>
     <div class="bz-frage" id="bz-frage">Warte auf den Lehrer…</div>
     <div class="bz-ziel" id="bz-ziel"></div>
+    <div id="bz-picker" style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:16px 0"></div>
     <button id="buzzer-btn" class="buzzer-btn waiting" onclick="buzzerDrücken()" disabled>BUZZ</button>
     <div class="bz-status" id="bz-status">Kein Quiz aktiv</div>
   </div>
@@ -953,11 +1091,13 @@
       </div>
       <label>Frage auswählen</label>
       <select id="sel-frage"><option value="">– zuerst Klasse laden –</option></select>
-      <label>Zielgruppe (beantwortet die Frage)</label>
+      <label>Fragenstellende Gruppe (stellt die Frage)</label>
       <select id="sel-ziel"><option value="">– Gruppe wählen –</option></select>
       <div class="quiz-actions">
         <button class="btn-primary" style="width:auto" onclick="quizStarten()">▶ Frage starten</button>
-        <button class="btn-secondary" onclick="buzzerFreigeben()">🔔 Buzzer öffnen</button>
+        <button class="btn-secondary" onclick="buzzerFreigeben(false)">🔔 Buzzer öffnen</button>
+        <button class="btn-secondary" onclick="buzzerFreigeben(true)" style="color:var(--red);border-color:rgba(240,96,96,.3)">⚡ Steal!</button>
+        <button class="btn-secondary" onclick="rundeZuruecksetzen()" style="color:var(--muted)">↺ Runde reset</button>
         <button class="btn-secondary" onclick="quizBeenden()">⏹ Beenden</button>
         <button class="btn-secondary" onclick="tafelStarten()">📺 Tafel-Modus</button>
       </div>
@@ -977,7 +1117,11 @@
       <button class="btn-export" onclick="exportCSV()">⬇️ CSV</button>
       <button class="btn-del-all" onclick="allePunkteLoeschen()">🗑️ Punkte löschen</button>
     </div>
-    <p class="hint" style="margin-bottom:16px">Notenschlüssel: ≥4 Pkt = Note 1 · 3 = Note 2 · 2 = Note 3 · 1 = Note 4 · 0 = Note 5</p>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <label style="font-size:.82rem;color:var(--muted)">Max. erreichbare Punkte:</label>
+      <input id="inp-max-pkt" type="number" min="1" value="10" style="width:80px;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:8px;font-family:inherit;font-size:.88rem;outline:none">
+      <button class="btn-primary" style="width:auto;padding:7px 16px" onclick="auswertungLaden()">Neu berechnen</button>
+    </div>
     <div id="aus-container"></div>
   </div>
 </div>
