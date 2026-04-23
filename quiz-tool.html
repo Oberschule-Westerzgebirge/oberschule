@@ -332,7 +332,13 @@
           "<span class=\'fq-st "+sc+"\'>"+statusText+"</span>"+pkt+
           "<div class=\'fq-btns\'>"+dropdown+btns+loeschenBtn+"</div></div>";
       }).join("");
-      return "<div class=\'sub-card\'><div class=\'sub-hdr\'>👤 <strong>"+sub.name+"</strong> <span class=\'sub-gr\'>"+sub.gruppe+"</span></div>"+rows+"</div>";
+      var epId=(S.aktiveKlasse?S.aktiveKlasse.name:'')+"_SCH_"+sub.name;
+      epId=epId.replace(/[\s\/]/g,'_');
+      return "<div class='sub-card'>" +
+        "<div class='sub-hdr'>" +
+          "<span class='sub-hdr-left'>👤 <strong>"+sub.name+"</strong> <span class='sub-gr'>"+sub.gruppe+"</span></span>" +
+          "<button class='btn-sm btn-extrapkt' onclick=\"extraPunkt('"+epId+"','"+sub.name+"')\">&#11088; Bonus-Punkt</button>" +
+        "</div>"+rows+"</div>";
     }).join("");
   }
   
@@ -364,6 +370,21 @@
     await ladeFragen(sub.klasse);await ladePunkte(sub.klasse);
     renderFragenListe();
     if(S.quizKlasse&&S.quizKlasse.name===sub.klasse) renderFragenSel();
+  };
+
+  window.extraPunkt=async function(docId,name){
+    if(!confirm('+1 Bonus-Punkt fuer '+name+' vergeben?'))return;
+    var ref=db.collection(C_PUNKTE).doc(docId);
+    var snap=await ref.get();
+    if(snap.exists){
+      await ref.update({fragenPunkte:firebase.firestore.FieldValue.increment(1)});
+    } else {
+      var sub2=S.fragen.find(function(x){return x.name===name;});
+      var gr=sub2?sub2.gruppe||'':'';
+      await ref.set({klasse:S.aktiveKlasse?S.aktiveKlasse.name:'',gruppe:gr,name:name,typ:'schueler',fragenPunkte:1,buzzerPunkte:0});
+    }
+    toast('Bonus-Punkt fuer '+name+' vergeben!','success');
+    if(S.aktiveKlasse)await ladePunkte(S.aktiveKlasse.name);
   };
 
   window.ablehnFrage=async function(subId,idx){
@@ -716,7 +737,10 @@
 
     /* FRAGEN TAB */
     .sub-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:14px}
-    .sub-hdr{margin-bottom:12px;display:flex;align-items:center;gap:8px}
+    .sub-hdr{margin-bottom:12px;display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap}
+    .sub-hdr-left{display:flex;align-items:center;gap:8px}
+    .btn-extrapkt{background:rgba(240,192,64,.12);color:var(--gold);border:1px solid rgba(240,192,64,.3);font-size:.78rem;padding:4px 10px;border-radius:6px;cursor:pointer;transition:all .2s}
+    .btn-extrapkt:hover{background:rgba(240,192,64,.25)}
     .sub-gr{background:var(--bg4);border-radius:20px;padding:2px 10px;font-size:.78rem;color:var(--muted)}
     .fq-row{display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
     .fq-row:last-child{border-bottom:none}
