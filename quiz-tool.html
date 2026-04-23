@@ -318,9 +318,9 @@
         var loeschenBtn="";
         if(statusText!=="freigegeben"){
           dropdown="<select class=\'pkt-sel\' id=\'"+ddId+"\'>"+
-            "<option value=\'2\'"+(aktPkt===2?" selected":"")+">2 Pkt – Frage &amp; Antwort korrekt</option>"+
+            "<option value=\'2\'"+((aktPkt===2||aktPkt===0)?" selected":"")+">2 Pkt – Frage &amp; Antwort korrekt</option>"+
             "<option value=\'1\'"+(aktPkt===1?" selected":"")+">1 Pkt – teilweise richtig</option>"+
-            "<option value=\'0\'"+(aktPkt===0?" selected":"")+">0 Pkt – ablehnen</option>"+
+            "<option value=\'0\'>0 Pkt – ablehnen (Frage löschen)</option>"+
             "</select>";
           btns="<button class=\'btn-sm btn-frei\' onclick=\"freigebenFrage('"+sub.id+"',"+i+",'"+ddId+"')\">✓ Freigeben</button>";
           loeschenBtn="<button class=\'btn-sm btn-ab\' onclick=\"ablehnFrage('"+sub.id+"',"+i+")\" >✗ Löschen</button>";
