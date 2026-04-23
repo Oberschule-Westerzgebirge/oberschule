@@ -312,41 +312,59 @@
         var statusText = fq.status || "eingereicht";
         var sc=statusText==="freigegeben"?"st-frei":statusText==="abgelehnt"?"st-ab":"st-ein";
         var pkt=fq.punkte>0?"<span class='pkt-b'>+"+fq.punkte+"</span>":"";
-        var btns=(statusText!=="freigegeben"?"<button class='btn-sm btn-frei' onclick='freigebenFrage(\""+sub.id+"\","+i+")'>✓ +2Pkt</button>":"")+
-          (statusText!=="abgelehnt"?"<button class='btn-sm btn-ab' onclick='ablehnFrage(\""+sub.id+"\","+i+")'>✗ Löschen</button>":"");
+        var dropdownId = "pkt-"+sub.id+"-"+i;
+        var aktPkt = fq.punkte||0;
+        var dropdown = statusText!=="freigegeben"
+          ? "<select class='pkt-sel' id='"+dropdownId+"'>"+
+              "<option value='2'"+(aktPkt===2?" selected":"")+">2 Pkt – Frage &amp; Antwort korrekt</option>"+
+              "<option value='1'"+(aktPkt===1?" selected":"")+">1 Pkt – nur teilweise richtig</option>"+
+              "<option value='0'"+(aktPkt===0?" selected":"")+">0 Pkt – abgelehnt</option>"+
+            "</select>"
+          : "<span class='pkt-fix'>"+aktPkt+" Pkt vergeben</span>";
+        var btns = statusText!=="freigegeben"
+          ? "<button class='btn-sm btn-frei' onclick='freigebenFrage(""+sub.id+"","+i+",""+dropdownId+"")'>✓ Freigeben</button>"
+          : "<button class='btn-sm btn-ab' onclick='ablehnFrage(""+sub.id+"","+i+")'>↩ Zurücksetzen</button>";
+        btns += statusText!=="abgelehnt"&&statusText!=="freigegeben"
+          ? "" : "";
+        var loeschenBtn = statusText!=="freigegeben"
+          ? "<button class='btn-sm btn-ab' onclick='ablehnFrage(""+sub.id+"","+i+")'>✗ Löschen</button>"
+          : "";
         return "<div class='fq-row'><span class='fq-nr'>#"+(i+1)+"</span>"+
           "<div class='fq-body'><div class='fq-f'>❓ "+frageText+"</div><div class='fq-a'>💡 "+antwortText+"</div></div>"+
           "<span class='fq-st "+sc+"'>"+statusText+"</span>"+pkt+
-          "<div class='fq-btns'>"+btns+"</div></div>";
+          "<div class='fq-btns'>"+dropdown+btns+loeschenBtn+"</div></div>";
       }).join("");
       return "<div class='sub-card'><div class='sub-hdr'>👤 <strong>"+sub.name+"</strong> <span class='sub-gr'>"+sub.gruppe+"</span></div>"+rows+"</div>";
     }).join("");
   }
 
-  window.freigebenFrage=async function(subId,idx){
+  window.freigebenFrage=async function(subId,idx,dropdownId){
     var sub=S.fragen.find(function(x){return x.id===subId;});if(!sub)return;
+    // Punkte aus Dropdown lesen
+    var sel=document.getElementById(dropdownId);
+    var punkte=sel?parseInt(sel.value):2;
+    // Bei 0 Punkte = ablehnen
+    if(punkte===0){window.ablehnFrage(subId,idx);return;}
     var anz=sub.fragen.filter(function(f){return f.status==="freigegeben";}).length;
     if(anz>=2){toast("Max. 2 Fragen pro Schüler!","error");return;}
     var fragen=sub.fragen.map(function(fq,i){
       if(i!==idx) return fq;
-      // Normalisiere auf V2-Format beim Freigeben
       return {
         f:     fq.f||fq.frage||fq.question||"",
         a:     fq.a||fq.antwort||fq.answer||"",
-        status:"freigegeben", punkte:2
+        status:"freigegeben", punkte:punkte
       };
     });
     await db.collection(C_FRAGEN).doc(subId).update({fragen:fragen});
-    // Punkte speichern
+    // Punkte dem Schüler gutschreiben
     var docId=(sub.klasse+"_SCH_"+sub.name).replace(/[\s/]/g,"_");
     var ref=db.collection(C_PUNKTE).doc(docId);
     var snap=await ref.get();
-    if(snap.exists){await ref.update({fragenPunkte:firebase.firestore.FieldValue.increment(2)});}
-    else{await ref.set({klasse:sub.klasse,gruppe:sub.gruppe,name:sub.name,typ:"schueler",fragenPunkte:2,buzzerPunkte:0});}
-    toast("Freigegeben! +2 Pkt für "+sub.name,"success");
+    if(snap.exists){await ref.update({fragenPunkte:firebase.firestore.FieldValue.increment(punkte)});}
+    else{await ref.set({klasse:sub.klasse,gruppe:sub.gruppe||"",name:sub.name,typ:"schueler",fragenPunkte:punkte,buzzerPunkte:0});}
+    toast("Freigegeben! +"+punkte+" Pkt für "+sub.name,"success");
     await ladeFragen(sub.klasse);await ladePunkte(sub.klasse);
     renderFragenListe();
-    // Dropdown im Quiz-Tab aktualisieren falls aktiv
     if(S.quizKlasse&&S.quizKlasse.name===sub.klasse) renderFragenSel();
   };
 
@@ -713,7 +731,10 @@
     .st-frei{background:rgba(62,207,142,.15);color:var(--green)}
     .st-ab{background:rgba(240,96,96,.15);color:var(--red)}
     .pkt-b{background:rgba(240,192,64,.15);color:var(--gold);font-size:.75rem;padding:2px 8px;border-radius:10px}
-    .fq-btns{display:flex;gap:6px;flex-wrap:wrap}
+    .fq-btns{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+    .pkt-sel{background:var(--bg4);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:7px;font-family:inherit;font-size:.78rem;outline:none;cursor:pointer}
+    .pkt-sel:focus{border-color:var(--gold)}
+    .pkt-fix{font-size:.78rem;color:var(--gold);font-weight:600;padding:4px 8px;background:rgba(240,192,64,.1);border-radius:6px}
 
     /* QUIZ TAB */
     .quiz-ctrl{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:14px}
