@@ -173,7 +173,9 @@
           btn.className="buzzer-btn ready"+(sess.buzzerAlleOffen?" steal":"");
           status.textContent=sess.buzzerAlleOffen?"⚡ STEAL – JETZT!":"JETZT DRÜCKEN!";
         } else if(gedrückt&&gedrückt.gruppe===S.gruppe){
-          btn.disabled=true;btn.className="buzzer-btn pressed";status.textContent="✓ Gedrückt!";
+          btn.disabled=true;btn.className="buzzer-btn pressed";status.textContent="✓ Gedrückt! Tippt jetzt eure Antwort:";
+          document.getElementById("bz-antwort-box").style.display="block";
+          document.getElementById("bz-antwort-inp").focus();
         } else if(gedrückt){
           btn.disabled=true;btn.className="buzzer-btn locked";status.textContent=gedrückt.gruppe+" war schneller!";
         } else {
@@ -190,7 +192,22 @@
     document.getElementById("bz-status").textContent="Kein Quiz aktiv";
     var btn=document.getElementById("buzzer-btn");
     btn.disabled=true;btn.className="buzzer-btn waiting";
+    document.getElementById("bz-antwort-box").style.display="none";
+    document.getElementById("bz-antwort-inp").value="";
+    document.getElementById("bz-antwort-inp").disabled=false;
   }
+  window.antwortAbschicken=async function(){
+    var text=document.getElementById("bz-antwort-inp").value.trim();
+    if(!text){document.getElementById("bz-antwort-inp").focus();return;}
+    try{
+      await db.collection(C_SESSION).doc("current").update({gruppenAntwort:{gruppe:S.gruppe,text:text}});
+      document.getElementById("bz-antwort-inp").disabled=true;
+      document.querySelector("#bz-antwort-box button").disabled=true;
+      document.querySelector("#bz-antwort-box button").textContent="Gesendet ✓";
+      toast("Antwort gesendet!","success");
+    }catch(e){console.error(e);}
+  };
+
   window.buzzerDrücken=async function(){
     try{await db.collection(C_SESSION).doc("current").update({buzzerGedrückt:{gruppe:S.gruppe,zeit:Date.now()}});}
     catch(e){console.error(e);}
@@ -518,7 +535,9 @@
         " → Ziel: <strong>"+zielAnzeige+"</strong>"+
         (sess.buzzerAlleOffen?" <span class='steal-badge'>⚡ STEAL!</span>":"")+"</div>"+
       usedHTML+vorschlagHTML+timerHTML+
-      "<div class='q-buzzer'>"+bInfo+"</div></div>";
+      "<div class='q-buzzer'>"+bInfo+"</div>"+
+      (sess.gruppenAntwort?"<div class='q-antwort-gruppe'>✏️ <strong>"+sess.gruppenAntwort.gruppe+"</strong> antwortet: <em>"+sess.gruppenAntwort.text+"</em></div>":"")
+      +"</div>";
     if(sess.buzzerGedrückt){
       document.getElementById("btn-richtig").disabled=false;
       document.getElementById("btn-falsch").disabled=false;
@@ -541,7 +560,7 @@
       fragenstellendeGruppe:ziel,
       zielGruppe:null,zielVorschlag:null,
       buzzerOffen:false,buzzerAlleOffen:false,
-      buzzerGedrückt:null,timerStart:null,timerDauer:30,
+      buzzerGedrückt:null,gruppenAntwort:null,timerStart:null,timerDauer:30,
       verwendeteZielgruppen:prevUsed
     });
     if(S.stealTimer){clearTimeout(S.stealTimer);S.stealTimer=null;}
@@ -983,6 +1002,9 @@
     .modal-form input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-family:inherit;font-size:.88rem;outline:none}
     .modal-form input:focus{border-color:var(--gold)}
 
+    .q-antwort-gruppe{margin-top:10px;padding:10px 14px;background:rgba(74,158,255,.1);border:1px solid rgba(74,158,255,.25);border-radius:9px;font-size:.92rem;color:var(--blue)}
+    .q-antwort-gruppe em{color:var(--text);font-style:normal;font-weight:600}
+
     /* DANGER ZONE */
     .danger-zone{background:rgba(240,96,96,.06);border:1px solid rgba(240,96,96,.2);border-radius:var(--r);padding:16px 18px;margin-top:4px}
     .danger-zone-title{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--red);font-weight:600;margin-bottom:12px}
@@ -1086,6 +1108,15 @@
     <div id="bz-picker" style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:16px 0"></div>
     <button id="buzzer-btn" class="buzzer-btn waiting" onclick="buzzerDrücken()" disabled>BUZZ</button>
     <div class="bz-status" id="bz-status">Kein Quiz aktiv</div>
+    <div id="bz-antwort-box" style="display:none;margin-top:20px;width:100%;max-width:420px;margin-left:auto;margin-right:auto">
+      <input id="bz-antwort-inp" type="text" placeholder="Eure Antwort eingeben…" 
+        style="width:100%;background:var(--bg2);border:2px solid var(--gold);color:var(--text);padding:12px 16px;border-radius:10px;font-family:inherit;font-size:1rem;outline:none;text-align:center"
+        onkeydown="if(event.key==='Enter')antwortAbschicken()">
+      <button onclick="antwortAbschicken()" 
+        style="width:100%;margin-top:10px;background:var(--gold);color:#080b10;border:none;padding:12px;border-radius:10px;font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:1px;cursor:pointer">
+        Antwort senden ✓
+      </button>
+    </div>
   </div>
 </div>
 
