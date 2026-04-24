@@ -149,7 +149,7 @@
       if(istFragengruppe&&!sess.zielGruppe){
         btn.style.display="none";
         var used=sess.verwendeteZielgruppen||[];
-        var alle=(S.quizKlasse&&S.quizKlasse.gruppen||[]);
+        var alle=(S.klassen.find(function(x){return x.name===S.klasse;})||{gruppen:[]}).gruppen;
         var waehlbar=alle.filter(function(g){return g.name!==S.gruppe&&!used.includes(g.name);});
         if(sess.zielVorschlag){
           document.getElementById("bz-ziel").textContent="Vorschlag gesendet: "+sess.zielVorschlag+" – warte auf Lehrer…";
