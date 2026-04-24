@@ -53,21 +53,11 @@
   async function ladeFragen(klasse){
     var snap;
     if(klasse){
-      var snapKlasse = await db.collection(C_FRAGEN).where("klasse","==",klasse).get();
-      var snapAlle   = await db.collection(C_FRAGEN).get();
-      var alleOhneKlasse = snapAlle.docs.filter(function(d){
-        var data=d.data();
-        return !data.klasse || data.klasse==="" || data.klasse===klasse;
-      });
-      var ids={};
-      snapKlasse.docs.forEach(function(d){ids[d.id]=true;});
-      var merged=snapKlasse.docs.slice();
-      alleOhneKlasse.forEach(function(d){if(!ids[d.id])merged.push(d);});
-      S.fragen=merged.map(function(d){return Object.assign({id:d.id},d.data());});
+      snap = await db.collection(C_FRAGEN).where("klasse","==",klasse).get();
     } else {
-      snap=await db.collection(C_FRAGEN).get();
-      S.fragen=snap.docs.map(function(d){return Object.assign({id:d.id},d.data());});
+      snap = await db.collection(C_FRAGEN).get();
     }
+    S.fragen = snap.docs.map(function(d){return Object.assign({id:d.id},d.data());});
   }
   async function ladePunkte(klasse){
     var snap=await db.collection(C_PUNKTE).where("klasse","==",klasse).get();
