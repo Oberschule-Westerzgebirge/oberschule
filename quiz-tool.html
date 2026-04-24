@@ -51,13 +51,17 @@
     S.klassen.sort(function(a,b){return a.name.localeCompare(b.name);});
   }
   async function ladeFragen(klasse){
-    var snap;
-    if(klasse){
-      snap = await db.collection(C_FRAGEN).where("klasse","==",klasse).get();
-    } else {
-      snap = await db.collection(C_FRAGEN).get();
-    }
-    S.fragen = snap.docs.map(function(d){return Object.assign({id:d.id},d.data());});
+    var snap = await db.collection(C_FRAGEN).get();
+    var alle = snap.docs.map(function(d){return Object.assign({id:d.id},d.data());});
+    if(!klasse){S.fragen=alle;return;}
+    var klasseObj=S.klassen.find(function(x){return x.name===klasse;});
+    var gruppenNamen=klasseObj?(klasseObj.gruppen||[]).map(function(g){return g.name;}):[];
+    S.fragen=alle.filter(function(d){
+      if(d.klasse===klasse) return true;
+      if(klasseObj&&d.klasseId===klasseObj.id) return true;
+      if((!d.klasse||d.klasse==="")&&gruppenNamen.length&&gruppenNamen.includes(d.gruppe)) return true;
+      return false;
+    });
   }
   async function ladePunkte(klasse){
     var snap=await db.collection(C_PUNKTE).where("klasse","==",klasse).get();
