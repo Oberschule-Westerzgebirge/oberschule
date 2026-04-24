@@ -172,12 +172,14 @@
           btn.disabled=false;
           btn.className="buzzer-btn ready"+(sess.buzzerAlleOffen?" steal":"");
           status.textContent=sess.buzzerAlleOffen?"⚡ STEAL – JETZT!":"JETZT DRÜCKEN!";
+          document.getElementById("bz-antwort-box").style.display="block";
         } else if(gedrückt&&gedrückt.gruppe===S.gruppe){
           btn.disabled=true;btn.className="buzzer-btn pressed";status.textContent="✓ Gedrückt! Tippt jetzt eure Antwort:";
           document.getElementById("bz-antwort-box").style.display="block";
           document.getElementById("bz-antwort-inp").focus();
         } else if(gedrückt){
           btn.disabled=true;btn.className="buzzer-btn locked";status.textContent=gedrückt.gruppe+" war schneller!";
+          document.getElementById("bz-antwort-box").style.display="none";
         } else {
           btn.disabled=true;btn.className="buzzer-btn waiting";
           status.textContent=istZiel?"Warte auf Freigabe…":sess.zielGruppe?"Andere Gruppe ist dran":"Ziel wird gewählt…";
@@ -569,6 +571,10 @@
     var fqAntwort= fq.a||fq.antwort||fq.answer||"";
     var prevDoc=await db.collection(C_SESSION).doc("current").get();
     var prevUsed=(prevDoc.exists&&prevDoc.data().verwendeteZielgruppen)||[];
+    // Auto-reset wenn alle möglichen Zielgruppen bereits verwendet wurden
+    var alleGruppen=(S.quizKlasse.gruppen||[]).map(function(g){return g.name;});
+    var moeglich=alleGruppen.filter(function(n){return n!==ziel&&!prevUsed.includes(n);});
+    if(moeglich.length===0) prevUsed=[];
     await db.collection(C_SESSION).doc("current").set({
       aktiv:true,klasse:S.quizKlasse.name,
       aktuelleFrageText:fqText,aktuelleAntwort:fqAntwort,
