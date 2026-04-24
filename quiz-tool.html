@@ -614,6 +614,37 @@
     toast("Quiz beendet","info");
   };
 
+  // ════════ ALLES LÖSCHEN ════════
+  window.alleKlassenLoeschen=async function(){
+    if(!confirm("⚠️ ACHTUNG: Wirklich ALLE Klassen löschen? Das kann nicht rückgängig gemacht werden!"))return;
+    var snap=await db.collection(C_KLASSEN).get();
+    if(!snap.docs.length){toast("Keine Klassen vorhanden.","info");return;}
+    var batch=db.batch();
+    snap.docs.forEach(function(d){batch.delete(d.ref);});
+    await batch.commit();
+    toast("Alle Klassen gelöscht ✓","success");
+    await ladeKlassen();renderKlassenTab();
+    ["dd-kl-s","dd-kl-g","dd-l-kl-fragen","dd-l-kl-quiz","dd-l-kl-aus"].forEach(befuelleKlassenSel);
+  };
+
+  window.alleFragenLoeschen=async function(){
+    if(!confirm("⚠️ ACHTUNG: Wirklich ALLE Fragen löschen? Das kann nicht rückgängig gemacht werden!"))return;
+    var snap=await db.collection(C_FRAGEN).get();
+    if(!snap.docs.length){toast("Keine Fragen vorhanden.","info");return;}
+    // Firestore batch max 500 – in Blöcken löschen
+    var docs=snap.docs;
+    var i=0;
+    while(i<docs.length){
+      var batch=db.batch();
+      docs.slice(i,i+500).forEach(function(d){batch.delete(d.ref);});
+      await batch.commit();
+      i+=500;
+    }
+    S.fragen=[];
+    document.getElementById("fragen-liste").innerHTML="<p class='muted'>Keine Einreichungen.</p>";
+    toast("Alle Fragen gelöscht ✓","success");
+  };
+
   window.tafelStarten=function(){
     hideAll();show("s-tafel");
     startTafelListener();
@@ -952,6 +983,13 @@
     .modal-form input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-family:inherit;font-size:.88rem;outline:none}
     .modal-form input:focus{border-color:var(--gold)}
 
+    /* DANGER ZONE */
+    .danger-zone{background:rgba(240,96,96,.06);border:1px solid rgba(240,96,96,.2);border-radius:var(--r);padding:16px 18px;margin-top:4px}
+    .danger-zone-title{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--red);font-weight:600;margin-bottom:12px}
+    .danger-btns{display:flex;gap:10px;flex-wrap:wrap}
+    .btn-danger{background:rgba(240,96,96,.1);color:var(--red);border:1px solid rgba(240,96,96,.3);padding:9px 18px;border-radius:9px;font-family:inherit;cursor:pointer;font-size:.88rem;transition:all .2s}
+    .btn-danger:hover{background:rgba(240,96,96,.25);border-color:var(--red)}
+
     /* TOAST */
     .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:11px 22px;border-radius:30px;font-size:.88rem;opacity:0;transition:all .3s;z-index:200;white-space:nowrap}
     .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -1075,6 +1113,14 @@
       </button>
     </div>
     <div id="kl-liste"></div>
+    <hr class="divider">
+    <div class="danger-zone">
+      <div class="danger-zone-title">⚠️ Gefahrenzone</div>
+      <div class="danger-btns">
+        <button class="btn-danger" onclick="alleKlassenLoeschen()">🗑️ Alle Klassen löschen</button>
+        <button class="btn-danger" onclick="alleFragenLoeschen()">🗑️ Alle Fragen löschen</button>
+      </div>
+    </div>
   </div>
 
   <!-- TAB: FRAGEN -->
