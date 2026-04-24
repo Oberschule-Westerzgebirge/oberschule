@@ -139,6 +139,21 @@
     var unsub=db.collection(C_SESSION).doc("current").onSnapshot(function(doc){
       if(!doc.exists){zeigeBuzzerIdle();return;}
       var sess=doc.data();S.session=sess;
+      // Steal-Timer: läuft auf jedem Client
+      if(sess.timerStart&&!sess.buzzerAlleOffen&&!sess.buzzerGedrückt&&sess.aktiv){
+        var vergangen=Date.now()-sess.timerStart;
+        var rest=Math.max(0,(sess.timerDauer||30)*1000-vergangen);
+        if(rest<=0){
+          db.collection(C_SESSION).doc("current").update({buzzerOffen:true,buzzerAlleOffen:true});
+        } else {
+          if(S.stealTimer)clearTimeout(S.stealTimer);
+          S.stealTimer=setTimeout(async function(){
+            var d=await db.collection(C_SESSION).doc("current").get();
+            if(d.exists&&d.data().aktiv&&!d.data().buzzerGedrückt)
+              db.collection(C_SESSION).doc("current").update({buzzerOffen:true,buzzerAlleOffen:true});
+          },rest);
+        }
+      }
       if(!sess.aktiv||sess.klasse!==S.klasse){zeigeBuzzerIdle();return;}
       document.getElementById("bz-frage").textContent=sess.aktuelleFrageText||"";
       var istFragengruppe=sess.fragenstellendeGruppe===S.gruppe;
@@ -151,8 +166,12 @@
         var used=sess.verwendeteZielgruppen||[];
         var alle=(S.klassen.find(function(x){return x.name===S.klasse;})||{gruppen:[]}).gruppen;
         var waehlbar=alle.filter(function(g){return g.name!==S.gruppe&&!used.includes(g.name);});
-        if(sess.zielVorschlag){
-          document.getElementById("bz-ziel").textContent="Vorschlag gesendet: "+sess.zielVorschlag+" – warte auf Lehrer…";
+        if(sess.zielGruppe){
+          document.getElementById("bz-ziel").textContent="✅ Frage geht an: "+sess.zielGruppe;
+          status.textContent="";
+          document.getElementById("bz-picker").innerHTML="";
+        } else if(sess.zielVorschlag){
+          document.getElementById("bz-ziel").textContent="✅ Frage geht an: "+sess.zielVorschlag;
           status.textContent="";
           document.getElementById("bz-picker").innerHTML="";
         } else {
@@ -167,11 +186,12 @@
         btn.style.display="block";
         document.getElementById("bz-picker").innerHTML="";
         document.getElementById("bz-ziel").textContent=istZiel?"🎯 Ihr seid gefragt!":"➡️ Frage für: "+(sess.zielGruppe||"wird gewählt…");
-        // Antwortfeld zeigen sobald diese Gruppe Ziel ist
-        if(istZiel||sess.buzzerAlleOffen){
+        // Antwortfeld: sobald diese Gruppe bestätigtes Ziel ist
+        var istBestaetigt=(sess.zielGruppe===S.gruppe)||sess.buzzerAlleOffen;
+        if(istBestaetigt){
           document.getElementById("bz-antwort-box").style.display="block";
         }
-        var kannBuzzen=(istZiel&&sess.buzzerOffen||sess.buzzerAlleOffen)&&!gedrückt;
+        var kannBuzzen=((istZiel&&sess.buzzerOffen)||(sess.buzzerAlleOffen&&!istFragengruppe))&&!gedrückt;
         if(kannBuzzen){
           btn.disabled=false;
           btn.className="buzzer-btn ready"+(sess.buzzerAlleOffen?" steal":"");
@@ -185,7 +205,7 @@
           document.getElementById("bz-antwort-box").style.display="none";
         } else {
           btn.disabled=true;btn.className="buzzer-btn waiting";
-          status.textContent=istZiel?"Warte auf Freigabe…":sess.zielGruppe?"Andere Gruppe ist dran":"Ziel wird gewählt…";
+          status.textContent=istZiel?"⬇️ Antwort eingeben & BUZZ drücken!":sess.zielGruppe?"Andere Gruppe ist dran":"Ziel wird gewählt…";
         }
       }
     });
@@ -526,13 +546,10 @@
       :(sess.buzzerAlleOffen?"⚡ Steal-Modus – alle können buzzen!"
       :(sess.buzzerOffen?"⏳ Warte auf Buzzer…":"🔒 Buzzer geschlossen"));
     var vorschlagHTML="";
-    if(!sess.zielGruppe&&sess.zielVorschlag){
-      vorschlagHTML="<div class='vorschlag-box'>"+
-        "<span>💬 Vorschlag: <strong>"+sess.zielVorschlag+"</strong></span>"+
-        "<button class='btn-sm btn-frei' onclick='zielBestaetigen()'>✓ Bestätigen</button>"+
-        "</div>";
-    } else if(!sess.zielGruppe){
-      vorschlagHTML="<div class='vorschlag-box warten'>⏳ Warte auf Zielgruppen-Vorschlag der Gruppe...</div>";
+    if(sess.zielGruppe){
+      vorschlagHTML="<div class='vorschlag-box'>✅ Zielgruppe: <strong>"+sess.zielGruppe+"</strong> – Timer läuft</div>";
+    } else {
+      vorschlagHTML="<div class='vorschlag-box warten'>⏳ Fragenstellende Gruppe wählt Zielgruppe…</div>";
     }
     var timerHTML="";
     if(sess.timerStart&&!sess.buzzerGedrückt&&!sess.buzzerAlleOffen){
@@ -592,8 +609,21 @@
   };
 
   window.zielVorschlagSenden=async function(zielGruppe){
-    await db.collection(C_SESSION).doc("current").update({zielVorschlag:zielGruppe});
-    toast("Vorschlag: "+zielGruppe+" – warte auf Lehrer…","info");
+    var sess=S.session;
+    var used=(sess&&sess.verwendeteZielgruppen||[]).concat([zielGruppe]);
+    var jetzt=Date.now();
+    await db.collection(C_SESSION).doc("current").update({
+      zielGruppe:zielGruppe,
+      zielVorschlag:zielGruppe,
+      timerStart:jetzt,
+      timerDauer:30,
+      buzzerOffen:true,
+      buzzerAlleOffen:false,
+      buzzerGedrückt:null,
+      gruppenAntwort:null,
+      verwendeteZielgruppen:used
+    });
+    toast("Frage geht an: "+zielGruppe,"success");
   };
 
   window.zielBestaetigen=async function(){
