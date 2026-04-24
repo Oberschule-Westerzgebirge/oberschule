@@ -53,14 +53,12 @@
   async function ladeFragen(klasse){
     var snap;
     if(klasse){
-      // Lade Fragen dieser Klasse ODER Fragen ohne Klasse (alte V1-Einträge)
       var snapKlasse = await db.collection(C_FRAGEN).where("klasse","==",klasse).get();
       var snapAlle   = await db.collection(C_FRAGEN).get();
       var alleOhneKlasse = snapAlle.docs.filter(function(d){
         var data=d.data();
         return !data.klasse || data.klasse==="" || data.klasse===klasse;
       });
-      // Merge, keine Duplikate
       var ids={};
       snapKlasse.docs.forEach(function(d){ids[d.id]=true;});
       var merged=snapKlasse.docs.slice();
@@ -154,7 +152,6 @@
       var gedrückt=sess.buzzerGedrückt;
       var btn=document.getElementById("buzzer-btn");
       var status=document.getElementById("bz-status");
-      // Fragengruppe: Zielgruppe auswählen
       if(istFragengruppe&&!sess.zielGruppe){
         btn.style.display="none";
         var used=sess.verwendeteZielgruppen||[];
@@ -223,7 +220,6 @@
 
   // ─── TAB KLASSEN ───
   function renderKlassenTab(){
-    // Auch Dropdown im Gruppen-Modal aktualisieren
     var sel=document.getElementById("sel-kl-zuweisung");
     if(sel){
       sel.innerHTML="<option value=''>– Klasse wählen –</option>";
@@ -253,7 +249,6 @@
     ["dd-kl-s","dd-kl-g","dd-l-kl-fragen","dd-l-kl-quiz","dd-l-kl-aus"].forEach(befuelleKlassenSel);
   };
 
-  // Bestehende Gruppen aus Fragen-Collection erkennen und anzeigen
   window.gruppenErkennen=async function(){
     var snap=await db.collection(C_FRAGEN).get();
     var gruppenSet={};
@@ -263,7 +258,6 @@
     });
     var gruppen=Object.keys(gruppenSet).sort();
     if(!gruppen.length){toast("Keine Gruppen in den Fragen gefunden.","error");return;}
-    // Zeige Modal mit Gruppen zum Auswählen
     var c=document.getElementById("erkannte-gruppen");
     c.innerHTML=gruppen.map(function(g){
       return "<label class='gr-check-label'>"+
@@ -284,7 +278,6 @@
       gruppen.push({name:cb.value,pw:pw});
     });
     if(!gruppen.length){toast("Keine Gruppen ausgewählt!","error");return;}
-    // Bestehende Gruppen laden und ergänzen
     var k=S.klassen.find(function(x){return x.id===klasseId;});
     var vorh=(k&&k.gruppen)||[];
     var vorhandeneNamen=vorh.map(function(g){return g.name;});
@@ -320,6 +313,43 @@
   window.schliesseModal=function(id){hide(id);};
 
   // ─── TAB FRAGEN ───
+
+  // ════════ NEU: FRAGEN-EXPORT ════════
+  window.exportFragen=async function(){
+    var klasseId=val("dd-l-kl-fragen");
+    if(!klasseId){toast("Klasse wählen!","error");return;}
+    var k=S.klassen.find(function(x){return x.id===klasseId;});
+    // Fragen neu laden falls noch nicht geschehen
+    if(!S.fragen.length || (S.aktiveKlasse && S.aktiveKlasse.id!==klasseId)){
+      await ladeFragen(k.name);
+    }
+    var sep=";";
+    var zeilen=[["Schüler","Gruppe","Frage #","Fragetext","Antwort","Status","Punkte"].join(sep)];
+    S.fragen.forEach(function(sub){
+      (sub.fragen||[]).forEach(function(fq,i){
+        var frageText  = (fq.f||fq.frage||fq.question||"").replace(/"/g,'""');
+        var antwortText= (fq.a||fq.antwort||fq.answer||"").replace(/"/g,'""');
+        zeilen.push([
+          '"'+(sub.name||"")+'"',
+          '"'+(sub.gruppe||"")+'"',
+          i+1,
+          '"'+frageText+'"',
+          '"'+antwortText+'"',
+          fq.status||"eingereicht",
+          fq.punkte||0
+        ].join(sep));
+      });
+    });
+    var blob=new Blob(["\uFEFF"+zeilen.join("\r\n")],{type:"text/csv;charset=utf-8;"});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a");
+    a.href=url;a.style.display="none";
+    a.download="Fragen_"+k.name+"_"+new Date().toLocaleDateString("de-DE").split(".").join("-")+".csv";
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast("Fragen exportiert ✓","success");
+  };
+
   window.fragenLaden=async function(){
     var klasseId=val("dd-l-kl-fragen");if(!klasseId){toast("Klasse wählen!","error");return;}
     S.aktiveKlasse=S.klassen.find(function(x){return x.id===klasseId;});
@@ -367,13 +397,11 @@
         "</div>"+rows+"</div>";
     }).join("");
   }
-  
+
   window.freigebenFrage=async function(subId,idx,dropdownId){
     var sub=S.fragen.find(function(x){return x.id===subId;});if(!sub)return;
-    // Punkte aus Dropdown lesen
     var sel=document.getElementById(dropdownId);
     var punkte=sel?parseInt(sel.value):2;
-    // Bei 0 Punkte = ablehnen
     if(punkte===0){window.ablehnFrage(subId,idx);return;}
     var anz=sub.fragen.filter(function(f){return f.status==="freigegeben";}).length;
     if(anz>=2){toast("Max. 2 Fragen pro Schüler!","error");return;}
@@ -386,7 +414,6 @@
       };
     });
     await db.collection(C_FRAGEN).doc(subId).update({fragen:fragen});
-    // Punkte dem Schüler gutschreiben
     var docId=(sub.klasse+"_SCH_"+sub.name).replace(/[\s/]/g,"_");
     var ref=db.collection(C_PUNKTE).doc(docId);
     var snap=await ref.get();
@@ -468,7 +495,6 @@
       ?"🔔 <strong>"+sess.buzzerGedrückt.gruppe+"</strong> hat gebrummt!"
       :(sess.buzzerAlleOffen?"⚡ Steal-Modus – alle können buzzen!"
       :(sess.buzzerOffen?"⏳ Warte auf Buzzer…":"🔒 Buzzer geschlossen"));
-    // Vorschlag-Box
     var vorschlagHTML="";
     if(!sess.zielGruppe&&sess.zielVorschlag){
       vorschlagHTML="<div class='vorschlag-box'>"+
@@ -478,7 +504,6 @@
     } else if(!sess.zielGruppe){
       vorschlagHTML="<div class='vorschlag-box warten'>⏳ Warte auf Zielgruppen-Vorschlag der Gruppe...</div>";
     }
-    // Countdown berechnen
     var timerHTML="";
     if(sess.timerStart&&!sess.buzzerGedrückt&&!sess.buzzerAlleOffen){
       var vergangen=Math.floor((Date.now()-sess.timerStart)/1000);
@@ -514,7 +539,6 @@
     var fq=sub.fragen[parseInt(parts[1])];
     var fqText   = fq.f||fq.frage||fq.question||"";
     var fqAntwort= fq.a||fq.antwort||fq.answer||"";
-    // verwendeteZielgruppen aus laufender Runde behalten
     var prevDoc=await db.collection(C_SESSION).doc("current").get();
     var prevUsed=(prevDoc.exists&&prevDoc.data().verwendeteZielgruppen)||[];
     await db.collection(C_SESSION).doc("current").set({
@@ -621,24 +645,19 @@
 
   function renderAuswertung(k){
     var maxPkt=parseInt(document.getElementById("inp-max-pkt").value)||0;
-    // Fragen-Punkte pro Gruppe (alle Schüler addieren)
     var fragenGr={};
     Object.values(S.punkte).forEach(function(p){
       if(p.typ==="schueler"){
         fragenGr[p.gruppe]=(fragenGr[p.gruppe]||0)+(p.fragenPunkte||0);
       }
     });
-    // Schüler aus Fragen ergänzen (für fragenGr)
     S.fragen.forEach(function(sub){
-      // sicherstellen Gruppe bekannt
       fragenGr[sub.gruppe]=fragenGr[sub.gruppe]||0;
     });
-    // Buzzer-Punkte pro Gruppe
     var buzzerGr={};
     Object.values(S.punkte).forEach(function(p){
       if(p.typ==="gruppe") buzzerGr[p.gruppe]=(buzzerGr[p.gruppe]||0)+(p.buzzerPunkte||0);
     });
-    // Gruppen-Tabelle
     var grRows=(k.gruppen||[]).map(function(g){
       var fragen=fragenGr[g.name]||0;
       var buzzer=buzzerGr[g.name]||0;
@@ -706,7 +725,6 @@
       var sess=doc.exists?doc.data():null;
       S.session=sess;
       renderTafel(sess);
-      // Scoreboard laden
       if(sess&&sess.klasse){
         await ladePunkte(sess.klasse);
         renderScoreboard(sess.klasse);
@@ -787,7 +805,6 @@
     .nav-right{margin-left:auto}
     .btn-nav{background:var(--bg3);border:1px solid var(--border);color:var(--muted);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:.83rem;transition:all .2s}
     .btn-nav:hover{color:var(--text);border-color:var(--gold)}
-    /* LOGO PLACEHOLDER */
     .logo-placeholder{width:40px;height:40px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.6rem;color:var(--muted);text-align:center;line-height:1.2}
 
     /* SCREENS */
@@ -958,10 +975,6 @@
     .steal-badge{background:rgba(240,96,96,.2);color:var(--red);font-size:.75rem;padding:2px 8px;border-radius:20px;font-weight:700;margin-left:6px}
     .buzzer-btn.steal{background:var(--red);box-shadow:0 0 50px rgba(240,96,96,.6);animation:glowred 0.7s infinite alternate}
     @keyframes glowred{from{box-shadow:0 0 30px rgba(240,96,96,.4)}to{box-shadow:0 0 70px rgba(240,96,96,.9)}}
-    .fq-btns{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-    .pkt-sel{background:var(--bg4);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:7px;font-family:inherit;font-size:.78rem;outline:none;cursor:pointer}
-    .pkt-sel:focus{border-color:var(--gold)}
-    .pkt-fix{font-size:.78rem;color:var(--gold);font-weight:600;padding:4px 8px;background:rgba(240,192,64,.1);border-radius:6px}
     .gr-check-label{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg3);border-radius:8px;margin-bottom:6px;font-size:.88rem;cursor:pointer}
     .gr-check-label input[type='checkbox']{width:16px;height:16px;accent-color:var(--gold)}
     .pw-inline{flex:1;background:var(--bg4);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:6px;font-family:inherit;font-size:.82rem;outline:none;max-width:100px}
@@ -971,7 +984,6 @@
 <body>
 
 <nav>
-  <!-- LOGO: Ersetze diesen Platzhalter mit deinem echten Logo -->
   <div class="logo-placeholder">LOGO</div>
   <span class="nav-logo">KLASSEN-QUIZ</span>
   <span class="nav-sub">Interaktives Frage-Antwort-System</span>
@@ -1076,8 +1088,10 @@
     <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
       <select id="dd-l-kl-fragen" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-family:inherit;font-size:.88rem;outline:none"></select>
       <button class="btn-primary" style="width:auto;padding:9px 18px" onclick="fragenLaden()">Laden</button>
+      <!-- NEU: Fragen-Export Button -->
+      <button class="btn-export" onclick="exportFragen()">⬇️ Fragen CSV</button>
     </div>
-    <p class="hint" style="margin-bottom:14px">Max. 2 Fragen pro Schüler freigeben (je +2 Punkte). Abgelehnte Fragen werden aus dem Quiz entfernt.</p>
+    <p class="hint" style="margin-bottom:14px">Max. 2 Fragen pro Schüler freigeben (je +2 Punkte). Abgelehnte Fragen werden aus dem Quiz entfernt. CSV exportiert alle Fragen mit Status und Punkten.</p>
     <div id="fragen-liste"></div>
   </div>
 
