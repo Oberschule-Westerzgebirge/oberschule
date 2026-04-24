@@ -167,12 +167,15 @@
         btn.style.display="block";
         document.getElementById("bz-picker").innerHTML="";
         document.getElementById("bz-ziel").textContent=istZiel?"🎯 Ihr seid gefragt!":"➡️ Frage für: "+(sess.zielGruppe||"wird gewählt…");
+        // Antwortfeld zeigen sobald diese Gruppe Ziel ist
+        if(istZiel||sess.buzzerAlleOffen){
+          document.getElementById("bz-antwort-box").style.display="block";
+        }
         var kannBuzzen=(istZiel&&sess.buzzerOffen||sess.buzzerAlleOffen)&&!gedrückt;
         if(kannBuzzen){
           btn.disabled=false;
           btn.className="buzzer-btn ready"+(sess.buzzerAlleOffen?" steal":"");
           status.textContent=sess.buzzerAlleOffen?"⚡ STEAL – JETZT!":"JETZT DRÜCKEN!";
-          document.getElementById("bz-antwort-box").style.display="block";
         } else if(gedrückt&&gedrückt.gruppe===S.gruppe){
           btn.disabled=true;btn.className="buzzer-btn pressed";status.textContent="✓ Gedrückt! Tippt jetzt eure Antwort:";
           document.getElementById("bz-antwort-box").style.display="block";
