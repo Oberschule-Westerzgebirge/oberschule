@@ -161,75 +161,47 @@
       var gedrückt=sess.buzzerGedrückt;
       var btn=document.getElementById("buzzer-btn");
       var status=document.getElementById("bz-status");
-      // ── Fragenstellende Gruppe ──
-      if(istFragengruppe){
-        if(!sess.zielGruppe){
-          btn.style.display="none";
-          document.getElementById("bz-antwort-box").style.display="none";
-          var used=sess.verwendeteZielgruppen||[];
-          var alle=(S.klassen.find(function(x){return x.name===S.klasse;})||{gruppen:[]}).gruppen;
-          var waehlbar=alle.filter(function(g){return g.name!==S.gruppe&&!used.includes(g.name);});
-          document.getElementById("bz-ziel").textContent="Wählt eine Gruppe aus:";
-          status.textContent="";
-          document.getElementById("bz-picker").innerHTML=
-            waehlbar.map(function(g){
-              return "<button class='btn-gruppe-wahl' onclick='zielVorschlagSenden(""+g.name+"")'>"+g.name+"</button>";
-            }).join("");
-        } else {
-          btn.style.display="none";
-          document.getElementById("bz-picker").innerHTML="";
-          document.getElementById("bz-antwort-box").style.display="none";
-          document.getElementById("bz-ziel").textContent="✅ Frage geht an: "+sess.zielGruppe;
-          status.textContent="⏳ Warte auf Antwort der Zielgruppe…";
-        }
-      // ── Zielgruppe ──
-      } else if(istZiel){
-        btn.style.display="block";
-        document.getElementById("bz-picker").innerHTML="";
-        document.getElementById("bz-ziel").textContent="🎯 Ihr seid gefragt!";
-        document.getElementById("bz-antwort-box").style.display="block";
-        if(gedrückt&&gedrückt.gruppe===S.gruppe){
-          btn.disabled=true;btn.className="buzzer-btn pressed";
-          status.textContent="✓ Gedrückt!";
-          document.getElementById("bz-antwort-inp").focus();
-        } else if(gedrückt){
-          btn.disabled=true;btn.className="buzzer-btn locked";
-          status.textContent=gedrückt.gruppe+" war schneller!";
-          document.getElementById("bz-antwort-box").style.display="none";
-        } else if(sess.buzzerOffen){
-          btn.disabled=false;btn.className="buzzer-btn ready";
-          status.textContent="⬇️ Antwort eingeben & BUZZ drücken!";
-        } else {
-          btn.disabled=true;btn.className="buzzer-btn waiting";
-          status.textContent="⬇️ Antwort eingeben & BUZZ drücken!";
-        }
-      // ── Steal-Modus: alle anderen ──
-      } else if(sess.buzzerAlleOffen){
-        btn.style.display="block";
-        document.getElementById("bz-picker").innerHTML="";
-        document.getElementById("bz-ziel").textContent="⚡ STEAL – alle können buzzen!";
-        document.getElementById("bz-antwort-box").style.display="block";
-        if(gedrückt&&gedrückt.gruppe===S.gruppe){
-          btn.disabled=true;btn.className="buzzer-btn pressed";
-          status.textContent="✓ Gedrückt!";
-        } else if(gedrückt){
-          btn.disabled=true;btn.className="buzzer-btn locked";
-          status.textContent=gedrückt.gruppe+" war schneller!";
-          document.getElementById("bz-antwort-box").style.display="none";
-        } else {
-          btn.disabled=false;btn.className="buzzer-btn ready steal";
-          status.textContent="⚡ STEAL – JETZT!";
-        }
-      // ── Andere Gruppe wartet ──
-      } else {
-        btn.style.display="block";
-        btn.disabled=true;btn.className="buzzer-btn waiting";
+      if(istFragengruppe&&!sess.zielGruppe){
+        btn.style.display="none";
+        var used=sess.verwendeteZielgruppen||[];
+        var alle=(S.klassen.find(function(x){return x.name===S.klasse;})||{gruppen:[]}).gruppen;
+        var waehlbar=alle.filter(function(g){return g.name!==S.gruppe&&!used.includes(g.name);});
+        document.getElementById("bz-ziel").textContent="Wählt eine Gruppe aus, der ihr die Frage stellt:";
+        status.textContent="";
+        document.getElementById("bz-picker").innerHTML=
+          waehlbar.map(function(g){
+            return "<button class='btn-gruppe-wahl' onclick='zielVorschlagSenden(\""+g.name+"\")'>"+g.name+"</button>";
+          }).join("");
+      } else if(istFragengruppe&&sess.zielGruppe){
+        btn.style.display="none";
         document.getElementById("bz-picker").innerHTML="";
         document.getElementById("bz-antwort-box").style.display="none";
-        document.getElementById("bz-ziel").textContent=sess.zielGruppe
-          ?"➡️ "+sess.zielGruppe+" ist dran"
-          :"⏳ Zielgruppe wird gewählt…";
-        status.textContent="";
+        document.getElementById("bz-ziel").textContent="✅ Frage geht an: "+sess.zielGruppe;
+        status.textContent="⏳ Warte auf Antwort…";
+      } else {
+        btn.style.display="block";
+        document.getElementById("bz-picker").innerHTML="";
+        document.getElementById("bz-ziel").textContent=istZiel?"🎯 Ihr seid gefragt!":"➡️ Frage für: "+(sess.zielGruppe||"wird gewählt…");
+        var istBestaetigt=(sess.zielGruppe===S.gruppe)||sess.buzzerAlleOffen;
+        if(istBestaetigt){
+          document.getElementById("bz-antwort-box").style.display="block";
+        }
+        var kannBuzzen=((istZiel&&sess.buzzerOffen)||(sess.buzzerAlleOffen&&!istFragengruppe))&&!gedrückt;
+        if(kannBuzzen){
+          btn.disabled=false;
+          btn.className="buzzer-btn ready"+(sess.buzzerAlleOffen?" steal":"");
+          status.textContent=sess.buzzerAlleOffen?"⚡ STEAL – JETZT!":"⬇️ Antwort eingeben & BUZZ drücken!";
+        } else if(gedrückt&&gedrückt.gruppe===S.gruppe){
+          btn.disabled=true;btn.className="buzzer-btn pressed";status.textContent="✓ Gedrückt!";
+          document.getElementById("bz-antwort-box").style.display="block";
+          document.getElementById("bz-antwort-inp").focus();
+        } else if(gedrückt){
+          btn.disabled=true;btn.className="buzzer-btn locked";status.textContent=gedrückt.gruppe+" war schneller!";
+          document.getElementById("bz-antwort-box").style.display="none";
+        } else {
+          btn.disabled=true;btn.className="buzzer-btn waiting";
+          status.textContent=istZiel?"⬇️ Antwort eingeben, dann BUZZ!":sess.zielGruppe?"Andere Gruppe ist dran":"Ziel wird gewählt…";
+        }
       }
     });
     S.unsub.push(unsub);
