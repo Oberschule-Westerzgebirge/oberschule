@@ -178,41 +178,38 @@
         document.getElementById("bz-antwort-box").style.display="none";
         document.getElementById("bz-ziel").textContent="✅ Frage geht an: "+sess.zielGruppe;
         status.textContent="⏳ Warte auf Antwort…";
-      } else {
-        btn.style.display="block";
+      } else if(istZiel){
+        // ── Zielgruppe: nur Antwortfeld, kein Buzzer ──
+        btn.style.display="none";
         document.getElementById("bz-picker").innerHTML="";
-        document.getElementById("bz-ziel").textContent=istZiel?"🎯 Ihr seid gefragt!":"➡️ Frage für: "+(sess.zielGruppe||"wird gewählt…");
-        if(istZiel){
-          // Zielgruppe: kein Buzzer – nur Antwortfeld
-          btn.style.display="none";
-          document.getElementById("bz-antwort-box").style.display="block";
-          if(sess.gruppenAntwort&&sess.gruppenAntwort.gruppe===S.gruppe){
-            status.textContent="✅ Antwort gesendet – warte auf Lehrer…";
-          } else {
-            status.textContent="⬇️ Antwort eingeben und senden!";
-            document.getElementById("bz-antwort-inp").focus();
-          }
+        document.getElementById("bz-ziel").textContent="🎯 Ihr seid gefragt!";
+        document.getElementById("bz-antwort-box").style.display="block";
+        if(sess.gruppenAntwort&&sess.gruppenAntwort.gruppe===S.gruppe){
+          status.textContent="✅ Antwort gesendet – warte auf Lehrer…";
         } else {
-          // Alle anderen Gruppen: Steal-Modus nach 30 Sek
+          status.textContent="⬇️ Antwort eingeben und absenden!";
+          setTimeout(function(){document.getElementById("bz-antwort-inp").focus();},100);
+        }
+      } else {
+        // ── Andere Gruppen: warten oder Steal ──
+        document.getElementById("bz-picker").innerHTML="";
+        document.getElementById("bz-antwort-box").style.display="none";
+        document.getElementById("bz-ziel").textContent="➡️ Frage für: "+(sess.zielGruppe||"wird gewählt…");
+        if(sess.buzzerAlleOffen&&!istFragengruppe){
           btn.style.display="block";
-          var kannSteal=(sess.buzzerAlleOffen&&!istFragengruppe)&&!gedrückt;
-          if(kannSteal){
-            btn.disabled=false;
-            btn.className="buzzer-btn ready steal";
-            status.textContent="⚡ STEAL – JETZT!";
-            document.getElementById("bz-antwort-box").style.display="block";
-          } else if(gedrückt&&gedrückt.gruppe===S.gruppe){
+          if(gedrückt&&gedrückt.gruppe===S.gruppe){
             btn.disabled=true;btn.className="buzzer-btn pressed";status.textContent="✓ Gedrückt!";
             document.getElementById("bz-antwort-box").style.display="block";
-            document.getElementById("bz-antwort-inp").focus();
           } else if(gedrückt){
             btn.disabled=true;btn.className="buzzer-btn locked";status.textContent=gedrückt.gruppe+" war schneller!";
-            document.getElementById("bz-antwort-box").style.display="none";
           } else {
-            btn.disabled=true;btn.className="buzzer-btn waiting";
-            status.textContent=sess.zielGruppe?"Andere Gruppe antwortet…":"Ziel wird gewählt…";
-            document.getElementById("bz-antwort-box").style.display="none";
+            btn.disabled=false;btn.className="buzzer-btn ready steal";status.textContent="⚡ STEAL – JETZT!";
+            document.getElementById("bz-antwort-box").style.display="block";
           }
+        } else {
+          btn.style.display="block";
+          btn.disabled=true;btn.className="buzzer-btn waiting";
+          status.textContent=sess.zielGruppe?"⏳ Warte…":"⏳ Zielgruppe wird gewählt…";
         }
       }
     });
@@ -554,7 +551,7 @@
       :(sess.buzzerOffen?"⏳ Warte auf Buzzer…":"🔒 Buzzer geschlossen"));
     var vorschlagHTML="";
     if(sess.zielGruppe){
-      vorschlagHTML="<div class='vorschlag-box'>✅ Zielgruppe: <strong>"+sess.zielGruppe+"</strong> – Timer läuft</div>";
+      vorschlagHTML="<div class='vorschlag-box'>✅ Zielgruppe: <strong>"+sess.zielGruppe+"</strong></div>";
     } else {
       vorschlagHTML="<div class='vorschlag-box warten'>⏳ Fragenstellende Gruppe wählt Zielgruppe…</div>";
     }
@@ -563,8 +560,20 @@
       var vergangen=Math.floor((Date.now()-sess.timerStart)/1000);
       var rest=Math.max(0,(sess.timerDauer||30)-vergangen);
       var farbe=rest<=5?"var(--red)":rest<=10?"var(--gold)":"var(--green)";
-      timerHTML="<div class='q-timer' style='color:"+farbe+"'>⏱ "+rest+"s "+
-        (rest===0?"→ Steal-Modus!":"bis Steal-Modus")+"</div>";
+      timerHTML="<div class='q-timer' id='lehrer-countdown' style='color:"+farbe+"'>⏱ "+rest+"s bis Steal-Modus</div>";
+      // Countdown-Interval starten
+      if(S.countdownInterval)clearInterval(S.countdownInterval);
+      S.countdownInterval=setInterval(function(){
+        var el=document.getElementById("lehrer-countdown");
+        if(!el){clearInterval(S.countdownInterval);return;}
+        var r=Math.max(0,(sess.timerDauer||30)-Math.floor((Date.now()-sess.timerStart)/1000));
+        var f=r<=5?"var(--red)":r<=10?"var(--gold)":"var(--green)";
+        el.style.color=f;
+        el.textContent="⏱ "+r+"s "+(r===0?"→ Steal-Modus!":"bis Steal-Modus");
+        if(r===0)clearInterval(S.countdownInterval);
+      },1000);
+    } else {
+      if(S.countdownInterval){clearInterval(S.countdownInterval);S.countdownInterval=null;}
     }
     var zielAnzeige=sess.zielGruppe||"(wird gewählt…)";
     var usedHTML="";
