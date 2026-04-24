@@ -182,25 +182,37 @@
         btn.style.display="block";
         document.getElementById("bz-picker").innerHTML="";
         document.getElementById("bz-ziel").textContent=istZiel?"🎯 Ihr seid gefragt!":"➡️ Frage für: "+(sess.zielGruppe||"wird gewählt…");
-        var istBestaetigt=(sess.zielGruppe===S.gruppe)||sess.buzzerAlleOffen;
-        if(istBestaetigt){
+        if(istZiel){
+          // Zielgruppe: kein Buzzer – nur Antwortfeld
+          btn.style.display="none";
           document.getElementById("bz-antwort-box").style.display="block";
-        }
-        var kannBuzzen=((istZiel&&sess.buzzerOffen)||(sess.buzzerAlleOffen&&!istFragengruppe))&&!gedrückt;
-        if(kannBuzzen){
-          btn.disabled=false;
-          btn.className="buzzer-btn ready"+(sess.buzzerAlleOffen?" steal":"");
-          status.textContent=sess.buzzerAlleOffen?"⚡ STEAL – JETZT!":"⬇️ Antwort eingeben & BUZZ drücken!";
-        } else if(gedrückt&&gedrückt.gruppe===S.gruppe){
-          btn.disabled=true;btn.className="buzzer-btn pressed";status.textContent="✓ Gedrückt!";
-          document.getElementById("bz-antwort-box").style.display="block";
-          document.getElementById("bz-antwort-inp").focus();
-        } else if(gedrückt){
-          btn.disabled=true;btn.className="buzzer-btn locked";status.textContent=gedrückt.gruppe+" war schneller!";
-          document.getElementById("bz-antwort-box").style.display="none";
+          if(sess.gruppenAntwort&&sess.gruppenAntwort.gruppe===S.gruppe){
+            status.textContent="✅ Antwort gesendet – warte auf Lehrer…";
+          } else {
+            status.textContent="⬇️ Antwort eingeben und senden!";
+            document.getElementById("bz-antwort-inp").focus();
+          }
         } else {
-          btn.disabled=true;btn.className="buzzer-btn waiting";
-          status.textContent=istZiel?"⬇️ Antwort eingeben, dann BUZZ!":sess.zielGruppe?"Andere Gruppe ist dran":"Ziel wird gewählt…";
+          // Alle anderen Gruppen: Steal-Modus nach 30 Sek
+          btn.style.display="block";
+          var kannSteal=(sess.buzzerAlleOffen&&!istFragengruppe)&&!gedrückt;
+          if(kannSteal){
+            btn.disabled=false;
+            btn.className="buzzer-btn ready steal";
+            status.textContent="⚡ STEAL – JETZT!";
+            document.getElementById("bz-antwort-box").style.display="block";
+          } else if(gedrückt&&gedrückt.gruppe===S.gruppe){
+            btn.disabled=true;btn.className="buzzer-btn pressed";status.textContent="✓ Gedrückt!";
+            document.getElementById("bz-antwort-box").style.display="block";
+            document.getElementById("bz-antwort-inp").focus();
+          } else if(gedrückt){
+            btn.disabled=true;btn.className="buzzer-btn locked";status.textContent=gedrückt.gruppe+" war schneller!";
+            document.getElementById("bz-antwort-box").style.display="none";
+          } else {
+            btn.disabled=true;btn.className="buzzer-btn waiting";
+            status.textContent=sess.zielGruppe?"Andere Gruppe antwortet…":"Ziel wird gewählt…";
+            document.getElementById("bz-antwort-box").style.display="none";
+          }
         }
       }
     });
@@ -569,7 +581,7 @@
       "<div class='q-buzzer'>"+bInfo+"</div>"+
       (sess.gruppenAntwort?"<div class='q-antwort-gruppe'>✏️ <strong>"+sess.gruppenAntwort.gruppe+"</strong> antwortet: <em>"+sess.gruppenAntwort.text+"</em></div>":"")
       +"</div>";
-    if(sess.buzzerGedrückt){
+    if(sess.buzzerGedrückt||sess.gruppenAntwort){
       document.getElementById("btn-richtig").disabled=false;
       document.getElementById("btn-falsch").disabled=false;
     }
@@ -659,8 +671,10 @@
 
   window.antwortRichtig=async function(){
     if(S.stealTimer){clearTimeout(S.stealTimer);S.stealTimer=null;}
-    var sess=S.session;if(!sess||!sess.buzzerGedrückt)return;
-    var gruppe=sess.buzzerGedrückt.gruppe;
+    var sess=S.session;if(!sess)return;
+    // Entweder Buzzer gedrückt (Steal) oder Gruppe hat Antwort getippt
+    var gruppe=(sess.buzzerGedrückt&&sess.buzzerGedrückt.gruppe)||(sess.gruppenAntwort&&sess.gruppenAntwort.gruppe);
+    if(!gruppe)return;
     var docId=(sess.klasse+"_GR_"+gruppe).replace(/[\s/]/g,"_");
     var ref=db.collection(C_PUNKTE).doc(docId);
     var snap=await ref.get();
