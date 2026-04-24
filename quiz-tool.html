@@ -464,9 +464,23 @@
     var klasseId=val("dd-l-kl-quiz");if(!klasseId)return;
     S.quizKlasse=S.klassen.find(function(x){return x.id===klasseId;});
     await ladeFragen(S.quizKlasse.name);await ladePunkte(S.quizKlasse.name);
-    renderFragenSel();renderZielSel();
+    renderFragenSel();
     startSessionListener();
   };
+
+  document.addEventListener("change", function(e){
+    if(e.target.id !== "sel-frage") return;
+    var fragVal = e.target.value;
+    var info = document.getElementById("sel-ziel-info");
+    var nameEl = document.getElementById("sel-ziel-name");
+    if(!fragVal){ info.style.display="none"; return; }
+    var parts = fragVal.split("__");
+    var sub = S.fragen.find(function(x){ return x.id===parts[0]; });
+    if(sub && sub.gruppe){
+      nameEl.textContent = sub.gruppe;
+      info.style.display = "block";
+    }
+  });
 
   function renderFragenSel(){
     var sel=document.getElementById("sel-frage");
@@ -545,10 +559,11 @@
   }
 
   window.quizStarten=async function(){
-    var fragVal=val("sel-frage"),ziel=val("sel-ziel");
-    if(!fragVal||!ziel){toast("Frage + Zielgruppe wählen!","error");return;}
+    var fragVal=val("sel-frage");
+    if(!fragVal){toast("Frage wählen!","error");return;}
     var parts=fragVal.split("__");
     var sub=S.fragen.find(function(x){return x.id===parts[0];});
+    var ziel=sub.gruppe;
     var fq=sub.fragen[parseInt(parts[1])];
     var fqText   = fq.f||fq.frage||fq.question||"";
     var fqAntwort= fq.a||fq.antwort||fq.answer||"";
@@ -1176,8 +1191,9 @@
       </div>
       <label>Frage auswählen</label>
       <select id="sel-frage"><option value="">– zuerst Klasse laden –</option></select>
-      <label>Fragenstellende Gruppe (stellt die Frage)</label>
-      <select id="sel-ziel"><option value="">– Gruppe wählen –</option></select>
+      <div id="sel-ziel-info" style="font-size:.82rem;color:var(--muted);margin-top:6px;padding:7px 12px;background:var(--bg4);border-radius:8px;display:none">
+        🎯 Fragenstellende Gruppe: <strong id="sel-ziel-name" style="color:var(--gold)"></strong>
+      </div>
       <div class="quiz-actions">
         <button class="btn-primary" style="width:auto" onclick="quizStarten()">▶ Frage starten</button>
         <button class="btn-secondary" onclick="buzzerFreigeben(false)">🔔 Buzzer öffnen</button>
