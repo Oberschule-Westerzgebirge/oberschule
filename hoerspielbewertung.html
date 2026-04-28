@@ -409,7 +409,7 @@
           var cls = v >= 4 ? "noten-gut" : v >= 3 ? "noten-mittel" : "noten-schwach";
           var note = sterneZuNote(v);
           return '<span class="noten-badge ' + cls + '">' + v.toFixed(2) + ' ★</span>'
-               + ' <span class="noten-schulnote">→ Note ' + note.toFixed(1) + '</span>';
+               + ' <span class="noten-schulnote">→ Note ' + note + '</span>';
         }
 
         var html = '<table class="noten-table"><thead><tr>'
