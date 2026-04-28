@@ -401,6 +401,10 @@
                 </tr>`).join("")}
               </tbody>
             </table>
+            ${sBews.length > 0 ? `<div class="bewertet-von">
+              <span class="bewertet-von-label">👁️ Bewertet von:</span>
+              ${sBews.map(b => `<span class="bewerter-chip">${b.bewerterName} <small>(${b.bewerterGruppe})</small></span>`).join("")}
+            </div>` : `<div class="bewertet-von bewertet-von-leer"><span class="bewertet-von-label">👁️ Noch keine Schüler-Bewertungen</span></div>`}
             <div class="lehrer-bewertung-section">
               <button class="btn-sm btn-lehrerbew" onclick="zeigeLehrerBewertung('${g.id}','${g.name.replace(/'/g,"\'")}')">
                 ${lBew?"✏️ Lehrerbewertung bearbeiten":"➕ Lehrerbewertung hinzufügen"}
@@ -914,6 +918,37 @@
     .bew-table th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--border); }
     .bew-table td { padding: 8px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); }
     .bew-table tr:last-child td { border-bottom: none; }
+
+    /* ── NEU: Wer hat bewertet? (nur Admin) ── */
+    .bewertet-von {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 12px;
+      padding: 9px 14px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+    }
+    .bewertet-von-leer { opacity: 0.45; }
+    .bewertet-von-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--muted);
+      margin-right: 4px;
+      white-space: nowrap;
+    }
+    .bewerter-chip {
+      background: rgba(245,166,35,0.10);
+      border: 1px solid rgba(245,166,35,0.22);
+      color: var(--amber);
+      font-size: 0.78rem;
+      padding: 2px 10px;
+      border-radius: 20px;
+    }
+    .bewerter-chip small { color: var(--muted); }
 
     .lehrer-bewertung-section { display: flex; gap: 8px; flex-wrap: wrap; }
     .lehrer-kommentar { margin-top: 12px; font-size: 0.85rem; color: var(--muted); font-style: italic; background: var(--bg3); padding: 10px 14px; border-radius: 8px; }
