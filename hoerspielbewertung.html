@@ -395,10 +395,15 @@
           return alle.length ? alle.reduce(function(a,x){ return a+x; }, 0) / alle.length : null;
         }
 
+        function sterneZuNote(v) {
+          return Math.max(1, Math.min(6, 7.25 - v * 1.25));
+        }
         function badge(v) {
           if (v === null) return '<span class="noten-badge noten-leer">–</span>';
           var cls = v >= 4 ? "noten-gut" : v >= 3 ? "noten-mittel" : "noten-schwach";
-          return '<span class="noten-badge ' + cls + '">' + v.toFixed(2) + ' ★</span>';
+          var note = sterneZuNote(v);
+          return '<span class="noten-badge ' + cls + '">' + v.toFixed(2) + ' ★</span>'
+               + ' <span class="noten-schulnote">→ Note ' + note.toFixed(1) + '</span>';
         }
 
         var html = '<table class="noten-table"><thead><tr>'
@@ -1064,6 +1069,7 @@
     .noten-leer    { background: var(--bg3); color: var(--muted); border: 1px solid var(--border); font-weight: 400; }
     .noten-gruppe  { font-size: 0.82rem; color: var(--muted); }
     .noten-hint    { color: var(--muted); font-size: 0.75rem; }
+    .noten-schulnote { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.88rem; color: var(--text); }
 
     .lehrer-bewertung-section { display: flex; gap: 8px; flex-wrap: wrap; }
     .lehrer-kommentar { margin-top: 12px; font-size: 0.85rem; color: var(--muted); font-style: italic; background: var(--bg3); padding: 10px 14px; border-radius: 8px; }
