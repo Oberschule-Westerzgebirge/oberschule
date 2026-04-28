@@ -360,70 +360,78 @@
       const c = document.getElementById("noten-uebersicht");
       if (!c) return;
       c.innerHTML = "<p class='muted'>Lade Noten…</p>";
-      const mitBews = await ladeMitgliederBewertungen();
+      try {
+        const mitBews = await ladeMitgliederBewertungen();
 
-      // Hörspiel-Ø pro Gruppe (gewichtet, Ø über alle Kriterien)
-      function hoerspielAvgGruppe(g) {
-        const bews  = bewertungen.filter(b => b.gruppeId === g.id);
-        const sBews = bews.filter(b => b.rolle === "schueler");
-        const lBew  = bews.find(b => b.rolle === "lehrer");
-        const vals  = KRITERIEN.map(k => {
-          const sv = sBews.map(b => b.kriterien?.[k.id] ?? 0).filter(x => x > 0);
-          const sAvg = sv.length ? sv.reduce((a,b) => a+b, 0) / sv.length : null;
-          const lVal = lBew?.kriterien?.[k.id] ?? null;
-          if (sAvg !== null && lVal !== null) return lVal * GEWICHTUNG.lehrer + sAvg * GEWICHTUNG.schueler;
-          return lVal ?? sAvg ?? null;
-        }).filter(x => x !== null);
-        return vals.length ? (vals.reduce((a,b) => a+b, 0) / vals.length) : null;
-      }
+        // Hörspiel-Ø pro Gruppe (gewichtet, Ø über alle Kriterien)
+        function hoerspielAvgGruppe(gruppe) {
+          const bews  = bewertungen.filter(function(b){ return b.gruppeId === gruppe.id; });
+          const sBews = bews.filter(function(b){ return b.rolle === "schueler"; });
+          const lBew  = bews.find(function(b){ return b.rolle === "lehrer"; });
+          var vals = [];
+          KRITERIEN.forEach(function(k) {
+            var sv = sBews.map(function(b){ return b.kriterien && b.kriterien[k.id] ? b.kriterien[k.id] : 0; }).filter(function(x){ return x > 0; });
+            var sAvg = sv.length ? sv.reduce(function(a,x){ return a+x; }, 0) / sv.length : null;
+            var lVal = (lBew && lBew.kriterien && lBew.kriterien[k.id]) ? lBew.kriterien[k.id] : null;
+            var v = (sAvg !== null && lVal !== null) ? lVal * GEWICHTUNG.lehrer + sAvg * GEWICHTUNG.schueler
+                  : lVal !== null ? lVal
+                  : sAvg !== null ? sAvg : null;
+            if (v !== null) vals.push(v);
+          });
+          return vals.length ? vals.reduce(function(a,x){ return a+x; }, 0) / vals.length : null;
+        }
 
-      // Gruppenarbeit-Ø pro Schüler (Ø aller Peer-Bewertungen für diesen Schüler)
-      function gruppenarbeitAvg(schuelerName) {
-        const bews = mitBews.filter(b => b.mitgliedName.trim().toLowerCase() === schuelerName.trim().toLowerCase());
-        if (!bews.length) return null;
-        const alle = [];
-        bews.forEach(b => MITGLIEDER_KRITERIEN.forEach(k => {
-          const v = b.kriterien?.[k.id] ?? 0;
-          if (v > 0) alle.push(v);
-        }));
-        return alle.length ? alle.reduce((a,b) => a+b, 0) / alle.length : null;
-      }
+        // Gruppenarbeit-Ø pro Schüler (Ø aller Peer-Bewertungen für diesen Schüler)
+        function gruppenarbeitAvg(schuelerName) {
+          var bews = mitBews.filter(function(b){ return b.mitgliedName && b.mitgliedName.trim().toLowerCase() === schuelerName.trim().toLowerCase(); });
+          if (!bews.length) return null;
+          var alle = [];
+          bews.forEach(function(b) {
+            MITGLIEDER_KRITERIEN.forEach(function(k) {
+              var v = (b.kriterien && b.kriterien[k.id]) ? b.kriterien[k.id] : 0;
+              if (v > 0) alle.push(v);
+            });
+          });
+          return alle.length ? alle.reduce(function(a,x){ return a+x; }, 0) / alle.length : null;
+        }
 
-      const badge = v => {
-        if (v === null) return `<span class="noten-badge noten-leer">–</span>`;
-        const cls = v >= 4 ? "noten-gut" : v >= 3 ? "noten-mittel" : "noten-schwach";
-        return `<span class="noten-badge ${cls}">${v.toFixed(2)} ★</span>`;
-      };
+        function badge(v) {
+          if (v === null) return '<span class="noten-badge noten-leer">–</span>';
+          var cls = v >= 4 ? "noten-gut" : v >= 3 ? "noten-mittel" : "noten-schwach";
+          return '<span class="noten-badge ' + cls + '">' + v.toFixed(2) + ' ★</span>';
+        }
 
-      let html = `<table class="noten-table">
-        <thead><tr>
-          <th>Schüler/in</th>
-          <th>Gruppe</th>
-          <th>🎙️ Hörspiel-Note</th>
-          <th>👥 Gruppenarbeit-Note</th>
-        </tr></thead><tbody>`;
+        var html = '<table class="noten-table"><thead><tr>'
+          + '<th>Schüler/in</th><th>Gruppe</th>'
+          + '<th>🎙️ Hörspiel-Note</th><th>👥 Gruppenarbeit-Note</th>'
+          + '</tr></thead><tbody>';
 
-      let irgendwas = false;
-      gruppen.forEach(g => {
-        const mitglieder = g.mitglieder || [];
-        const hAvg = hoerspielAvgGruppe(g);
-        mitglieder.forEach(name => {
-          irgendwas = true;
-          const gAvg = gruppenarbeitAvg(name);
-          html += `<tr>
-            <td><strong>${name}</strong></td>
-            <td><span class="noten-gruppe">🎙️ ${g.name}</span></td>
-            <td>${badge(hAvg)} <small class="noten-hint">gleich für alle in der Gruppe</small></td>
-            <td>${badge(gAvg)}${gAvg === null ? ' <small class="noten-hint">noch keine Peer-Bewertungen</small>' : ''}</td>
-          </tr>`;
+        var irgendwas = false;
+        gruppen.forEach(function(g) {
+          var mitglieder = g.mitglieder || [];
+          var hAvg = hoerspielAvgGruppe(g);
+          mitglieder.forEach(function(name) {
+            irgendwas = true;
+            var gAvg = gruppenarbeitAvg(name);
+            html += '<tr>'
+              + '<td><strong>' + name + '</strong></td>'
+              + '<td><span class="noten-gruppe">🎙️ ' + g.name + '</span></td>'
+              + '<td>' + badge(hAvg) + ' <small class="noten-hint">gleich für alle in der Gruppe</small></td>'
+              + '<td>' + badge(gAvg) + (gAvg === null ? ' <small class="noten-hint">noch keine Peer-Bewertungen</small>' : '') + '</td>'
+              + '</tr>';
+          });
         });
-      });
 
-      if (!irgendwas) {
-        html += `<tr><td colspan="4"><p class="muted">Noch keine Mitglieder eingetragen.</p></td></tr>`;
+        if (!irgendwas) {
+          html += '<tr><td colspan="4"><p class="muted">Noch keine Mitglieder eingetragen.</p></td></tr>';
+        }
+        html += '</tbody></table>';
+        c.innerHTML = html;
+
+      } catch(err) {
+        c.innerHTML = '<p style="color:var(--red)">Fehler: ' + err.message + '</p>';
+        console.error("renderNotenUebersicht Fehler:", err);
       }
-      html += "</tbody></table>";
-      c.innerHTML = html;
     }
 
     function renderLehrerGruppen() {
