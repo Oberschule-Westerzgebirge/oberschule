@@ -396,7 +396,13 @@
         }
 
         function sterneZuNote(v) {
-          return Math.max(1, Math.min(6, 7.25 - v * 1.25));
+          var pct = v / 5 * 100;
+          if (pct >= 96) return 1;
+          if (pct >= 80) return 2;
+          if (pct >= 60) return 3;
+          if (pct >= 40) return 4;
+          if (pct >= 20) return 5;
+          return 6;
         }
         function badge(v) {
           if (v === null) return '<span class="noten-badge noten-leer">–</span>';
