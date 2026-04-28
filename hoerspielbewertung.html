@@ -353,6 +353,77 @@
       show("screen-lehrer");
       renderLehrerGruppen();
       renderBewertungsUebersicht();
+      renderNotenUebersicht();
+    }
+
+    async function renderNotenUebersicht() {
+      const c = document.getElementById("noten-uebersicht");
+      if (!c) return;
+      c.innerHTML = "<p class='muted'>Lade Noten…</p>";
+      const mitBews = await ladeMitgliederBewertungen();
+
+      // Hörspiel-Ø pro Gruppe (gewichtet, Ø über alle Kriterien)
+      function hoerspielAvgGruppe(g) {
+        const bews  = bewertungen.filter(b => b.gruppeId === g.id);
+        const sBews = bews.filter(b => b.rolle === "schueler");
+        const lBew  = bews.find(b => b.rolle === "lehrer");
+        const vals  = KRITERIEN.map(k => {
+          const sv = sBews.map(b => b.kriterien?.[k.id] ?? 0).filter(x => x > 0);
+          const sAvg = sv.length ? sv.reduce((a,b) => a+b, 0) / sv.length : null;
+          const lVal = lBew?.kriterien?.[k.id] ?? null;
+          if (sAvg !== null && lVal !== null) return lVal * GEWICHTUNG.lehrer + sAvg * GEWICHTUNG.schueler;
+          return lVal ?? sAvg ?? null;
+        }).filter(x => x !== null);
+        return vals.length ? (vals.reduce((a,b) => a+b, 0) / vals.length) : null;
+      }
+
+      // Gruppenarbeit-Ø pro Schüler (Ø aller Peer-Bewertungen für diesen Schüler)
+      function gruppenarbeitAvg(schuelerName) {
+        const bews = mitBews.filter(b => b.mitgliedName.trim().toLowerCase() === schuelerName.trim().toLowerCase());
+        if (!bews.length) return null;
+        const alle = [];
+        bews.forEach(b => MITGLIEDER_KRITERIEN.forEach(k => {
+          const v = b.kriterien?.[k.id] ?? 0;
+          if (v > 0) alle.push(v);
+        }));
+        return alle.length ? alle.reduce((a,b) => a+b, 0) / alle.length : null;
+      }
+
+      const badge = v => {
+        if (v === null) return `<span class="noten-badge noten-leer">–</span>`;
+        const cls = v >= 4 ? "noten-gut" : v >= 3 ? "noten-mittel" : "noten-schwach";
+        return `<span class="noten-badge ${cls}">${v.toFixed(2)} ★</span>`;
+      };
+
+      let html = `<table class="noten-table">
+        <thead><tr>
+          <th>Schüler/in</th>
+          <th>Gruppe</th>
+          <th>🎙️ Hörspiel-Note</th>
+          <th>👥 Gruppenarbeit-Note</th>
+        </tr></thead><tbody>`;
+
+      let irgendwas = false;
+      gruppen.forEach(g => {
+        const mitglieder = g.mitglieder || [];
+        const hAvg = hoerspielAvgGruppe(g);
+        mitglieder.forEach(name => {
+          irgendwas = true;
+          const gAvg = gruppenarbeitAvg(name);
+          html += `<tr>
+            <td><strong>${name}</strong></td>
+            <td><span class="noten-gruppe">🎙️ ${g.name}</span></td>
+            <td>${badge(hAvg)} <small class="noten-hint">gleich für alle in der Gruppe</small></td>
+            <td>${badge(gAvg)}${gAvg === null ? ' <small class="noten-hint">noch keine Peer-Bewertungen</small>' : ''}</td>
+          </tr>`;
+        });
+      });
+
+      if (!irgendwas) {
+        html += `<tr><td colspan="4"><p class="muted">Noch keine Mitglieder eingetragen.</p></td></tr>`;
+      }
+      html += "</tbody></table>";
+      c.innerHTML = html;
     }
 
     function renderLehrerGruppen() {
@@ -950,6 +1021,42 @@
     }
     .bewerter-chip small { color: var(--muted); }
 
+    /* ── NEU: Notenübersicht ── */
+    .noten-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    .noten-table th {
+      text-align: left;
+      color: var(--muted);
+      font-weight: 500;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .noten-table td {
+      padding: 10px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      vertical-align: middle;
+    }
+    .noten-table tr:last-child td { border-bottom: none; }
+    .noten-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .noten-badge {
+      display: inline-block;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 0.9rem;
+      padding: 3px 10px;
+      border-radius: 8px;
+      margin-right: 6px;
+    }
+    .noten-gut     { background: rgba(74,222,128,0.15);  color: #4ade80; border: 1px solid rgba(74,222,128,0.3); }
+    .noten-mittel  { background: rgba(245,166,35,0.15);  color: var(--amber); border: 1px solid rgba(245,166,35,0.3); }
+    .noten-schwach { background: rgba(248,113,113,0.15); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+    .noten-leer    { background: var(--bg3); color: var(--muted); border: 1px solid var(--border); font-weight: 400; }
+    .noten-gruppe  { font-size: 0.82rem; color: var(--muted); }
+    .noten-hint    { color: var(--muted); font-size: 0.75rem; }
+
     .lehrer-bewertung-section { display: flex; gap: 8px; flex-wrap: wrap; }
     .lehrer-kommentar { margin-top: 12px; font-size: 0.85rem; color: var(--muted); font-style: italic; background: var(--bg3); padding: 10px 14px; border-radius: 8px; }
 
@@ -1174,6 +1281,16 @@
     <button class="btn-primary" style="width:auto;padding:9px 22px" onclick="gruppeHinzufuegen()">+ Gruppe hinzufügen</button>
     <hr class="divider">
     <div id="lehrer-gruppen"></div>
+  </div>
+
+  <!-- Notenübersicht -->
+  <div class="lehrer-section">
+    <h2>📝 Notenübersicht pro Schüler/in</h2>
+    <p style="font-size:0.85rem;color:var(--muted);margin-bottom:14px">
+      <strong>🎙️ Hörspiel-Note:</strong> gewichteter Ø (70% Lehrer + 30% Schüler) – gleich für alle Mitglieder der Gruppe.<br>
+      <strong>👥 Gruppenarbeit-Note:</strong> individueller Ø aus den Peer-Bewertungen der Mitschüler.
+    </p>
+    <div id="noten-uebersicht"><p class="muted">Wird geladen…</p></div>
   </div>
 
   <!-- Bewertungsübersicht -->
