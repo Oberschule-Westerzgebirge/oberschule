@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>🎵 Song-Voting</title>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <!-- 🖼️ LOGO: Base64-String hier einfügen (wie im Quiz-Tool) -->
+  <script>
+    var LOGO_B64 = "EUER_BASE64_STRING_HIER";
+  </script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script>
@@ -17,6 +21,9 @@
       appId: "1:224718576254:web:54a9aa2e8690f44e44162f"
     });
     const db = firebase.firestore();
+    // Logo setzen
+    var logo = document.getElementById("school-logo");
+    if(logo && LOGO_B64 !== "EUER_BASE64_STRING_HIER") logo.src = "data:image/jpeg;base64," + LOGO_B64;
   </script>
   <style>
     :root {
@@ -110,6 +117,7 @@
 </head>
 <body>
 <header>
+  <img id="school-logo" src="" style="width:36px;height:36px;border-radius:8px;object-fit:contain;">
   <div class="logo">🎵 Voting</div>
   <div class="phase-badge" id="phase-badge">Warten</div>
 </header>
