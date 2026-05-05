@@ -5,267 +5,129 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>🎵 Song-Voting</title>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script>
+    firebase.initializeApp({
+      apiKey: "AIzaSyBYubfEPbipWGWrpvMZAoMZN1F98p0jiw4",
+      authDomain: "oberschule-moderation.firebaseapp.com",
+      projectId: "oberschule-moderation",
+      storageBucket: "oberschule-moderation.firebasestorage.app",
+      messagingSenderId: "224718576254",
+      appId: "1:224718576254:web:54a9aa2e8690f44e44162f"
+    });
+    const db = firebase.firestore();
+  </script>
   <style>
     :root {
-      --bg: #0f0e17;
-      --surface: #1a1928;
-      --card: #232236;
-      --accent: #f4a261;
-      --accent2: #e76f51;
-      --gold: #ffd166;
-      --text: #fffffe;
-      --muted: #a7a9be;
-      --green: #06d6a0;
-      --radius: 16px;
+      --bg: #0f0e17; --surface: #1a1928; --card: #232236;
+      --accent: #f4a261; --gold: #ffd166; --text: #fffffe;
+      --muted: #a7a9be; --green: #06d6a0; --radius: 16px;
     }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100dvh; display: flex; flex-direction: column; align-items: center; }
 
-    body {
-      font-family: 'DM Sans', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100dvh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    /* ─── HEADER ─── */
-    header {
-      width: 100%;
-      padding: 20px 24px 0;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .logo { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: var(--accent); letter-spacing: 1px; }
-    .phase-badge {
-      margin-left: auto;
-      padding: 4px 12px;
-      border-radius: 99px;
-      font-size: 12px;
-      font-weight: 600;
-      background: var(--surface);
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
+    header { width: 100%; padding: 20px 24px 0; display: flex; align-items: center; }
+    .logo { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: var(--accent); }
+    .phase-badge { margin-left: auto; padding: 4px 12px; border-radius: 99px; font-size: 12px; font-weight: 600; background: var(--surface); color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
     .phase-badge.active { background: var(--accent); color: var(--bg); }
 
-    /* ─── MAIN ─── */
-    main {
-      width: 100%;
-      max-width: 480px;
-      padding: 24px 20px 40px;
-      flex: 1;
-    }
+    main { width: 100%; max-width: 480px; padding: 24px 20px 40px; flex: 1; }
 
-    /* ─── NAME SCREEN ─── */
-    #screen-name { display: flex; flex-direction: column; gap: 20px; padding-top: 40px; }
+    /* alle Screens standardmäßig versteckt */
+    #screen-name, #screen-waiting, #screen-listening,
+    #screen-voting, #screen-already-voted, #screen-results {
+      display: none; flex-direction: column; gap: 16px;
+    }
+    #screen-name { display: flex; padding-top: 40px; gap: 20px; }
+
     .big-title { font-family: 'Bebas Neue', sans-serif; font-size: 52px; line-height: 1; }
     .big-title span { color: var(--accent); }
     .subtitle { color: var(--muted); font-size: 16px; }
 
-    input[type="text"] {
-      width: 100%;
-      padding: 16px 20px;
-      border-radius: var(--radius);
-      border: 2px solid var(--surface);
-      background: var(--card);
-      color: var(--text);
-      font-family: 'DM Sans', sans-serif;
-      font-size: 18px;
-      outline: none;
-      transition: border-color .2s;
-    }
+    input[type="text"] { width: 100%; padding: 16px 20px; border-radius: var(--radius); border: 2px solid var(--surface); background: var(--card); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 18px; outline: none; transition: border-color .2s; }
     input[type="text"]:focus { border-color: var(--accent); }
     input[type="text"]::placeholder { color: var(--muted); }
 
-    .btn {
-      width: 100%;
-      padding: 16px;
-      border-radius: var(--radius);
-      border: none;
-      background: var(--accent);
-      color: var(--bg);
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 22px;
-      letter-spacing: 1px;
-      cursor: pointer;
-      transition: transform .1s, opacity .2s;
-    }
+    .btn { width: 100%; padding: 16px; border-radius: var(--radius); border: none; background: var(--accent); color: var(--bg); font-family: 'Bebas Neue', sans-serif; font-size: 22px; cursor: pointer; transition: transform .1s, opacity .2s; }
     .btn:active { transform: scale(.97); }
     .btn:disabled { opacity: .4; cursor: not-allowed; }
-    .btn.secondary { background: var(--surface); color: var(--text); font-size: 18px; }
     .btn.success { background: var(--green); }
 
-    /* ─── WAITING SCREEN ─── */
-    #screen-waiting { display: none; flex-direction: column; align-items: center; gap: 20px; padding-top: 60px; text-align: center; }
-    .vinyl {
-      width: 140px; height: 140px;
-      border-radius: 50%;
-      background: conic-gradient(#2d2d2d 0%, #1a1a1a 50%, #2d2d2d 100%);
-      box-shadow: 0 0 40px rgba(244,162,97,.3);
-      animation: spin 4s linear infinite;
-      position: relative;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .vinyl::after {
-      content: '';
-      width: 36px; height: 36px;
-      border-radius: 50%;
-      background: var(--bg);
-      position: absolute;
-    }
+    /* WAITING */
+    #screen-waiting { align-items: center; padding-top: 60px; text-align: center; }
+    .vinyl { width: 140px; height: 140px; border-radius: 50%; background: conic-gradient(#2d2d2d 0%,#1a1a1a 50%,#2d2d2d 100%); box-shadow: 0 0 40px rgba(244,162,97,.3); animation: spin 4s linear infinite; display: flex; align-items: center; justify-content: center; position: relative; }
+    .vinyl::after { content:''; width:36px; height:36px; border-radius:50%; background:var(--bg); position:absolute; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .waiting-text { font-size: 18px; color: var(--muted); }
+    .waiting-text { color: var(--muted); font-size: 18px; }
     .player-name-display { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: var(--accent); }
 
-    /* ─── LISTENING SCREEN ─── */
-    #screen-listening { display: none; flex-direction: column; gap: 16px; }
+    /* LISTENING */
     .now-playing-label { font-size: 13px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 2px; }
-    .now-playing-card {
-      background: var(--card);
-      border-radius: var(--radius);
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      border-left: 4px solid var(--accent);
-      animation: pulse 2s ease-in-out infinite;
-    }
-    @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(244,162,97,.2); } 50% { box-shadow: 0 0 0 12px rgba(244,162,97,0); } }
+    .now-playing-card { background: var(--card); border-radius: var(--radius); padding: 24px; display: flex; flex-direction: column; gap: 8px; border-left: 4px solid var(--accent); animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(244,162,97,.2)}50%{box-shadow:0 0 0 12px rgba(244,162,97,0)} }
     .now-playing-title { font-family: 'Bebas Neue', sans-serif; font-size: 32px; }
     .now-playing-artist { color: var(--muted); font-size: 15px; }
     .hint-box { background: var(--surface); border-radius: 12px; padding: 16px; color: var(--muted); font-size: 14px; line-height: 1.5; text-align: center; }
-    .songs-heard { display: flex; flex-direction: column; gap: 8px; }
     .songs-heard-title { font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
-    .heard-chip {
-      background: var(--surface);
-      border-radius: 10px;
-      padding: 10px 14px;
-      font-size: 14px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .heard-chip::before { content: '✓'; color: var(--green); font-weight: 700; }
+    .heard-chip { background: var(--surface); border-radius: 10px; padding: 10px 14px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+    .heard-chip::before { content:'✓'; color:var(--green); font-weight:700; }
 
-    /* ─── VOTING SCREEN ─── */
-    #screen-voting { display: none; flex-direction: column; gap: 16px; }
+    /* VOTING */
     .voting-header { font-family: 'Bebas Neue', sans-serif; font-size: 40px; line-height: 1; }
     .voting-header span { color: var(--accent); }
     .voting-sub { color: var(--muted); font-size: 14px; }
-
-    .song-card {
-      background: var(--card);
-      border-radius: var(--radius);
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      transition: border .2s;
-      border: 2px solid transparent;
-    }
+    .song-card { background: var(--card); border-radius: var(--radius); padding: 20px; display: flex; flex-direction: column; gap: 14px; border: 2px solid transparent; }
     .song-card.voted { border-color: var(--green); }
     .song-card-title { font-family: 'Bebas Neue', sans-serif; font-size: 24px; }
     .song-card-artist { color: var(--muted); font-size: 13px; margin-top: -8px; }
-
     .point-buttons { display: flex; gap: 10px; }
-    .point-btn {
-      flex: 1;
-      padding: 14px 8px;
-      border-radius: 12px;
-      border: 2px solid var(--surface);
-      background: var(--surface);
-      color: var(--muted);
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 22px;
-      cursor: pointer;
-      transition: all .15s;
-      text-align: center;
-    }
-    .point-btn:hover { border-color: var(--accent); color: var(--text); }
-    .point-btn.selected-1 { background: #2d6a4f; border-color: #52b788; color: white; }
-    .point-btn.selected-2 { background: #b5451b; border-color: var(--accent); color: white; }
-    .point-btn.selected-3 { background: #9c6b00; border-color: var(--gold); color: white; }
+    .point-btn { flex:1; padding:14px 8px; border-radius:12px; border:2px solid var(--surface); background:var(--surface); color:var(--muted); font-family:'Bebas Neue',sans-serif; font-size:22px; cursor:pointer; transition:all .15s; text-align:center; }
+    .point-btn:hover { border-color:var(--accent); color:var(--text); }
+    .point-btn.selected-1 { background:#2d6a4f; border-color:#52b788; color:white; }
+    .point-btn.selected-2 { background:#b5451b; border-color:var(--accent); color:white; }
+    .point-btn.selected-3 { background:#9c6b00; border-color:var(--gold); color:white; }
+    .point-label { font-size:10px; display:block; font-family:'DM Sans',sans-serif; font-weight:600; text-transform:uppercase; letter-spacing:.5px; margin-top:2px; }
+    .vote-counter { text-align:center; font-size:13px; color:var(--muted); }
 
-    .point-label { font-size: 10px; display: block; font-family: 'DM Sans', sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; margin-top: 2px; color: inherit; }
-
-    .submit-area { margin-top: 8px; }
-    .vote-counter { text-align: center; font-size: 13px; color: var(--muted); margin-bottom: 12px; }
-
-    /* ─── RESULTS SCREEN ─── */
-    #screen-results { display: none; flex-direction: column; gap: 16px; }
-    .results-header { font-family: 'Bebas Neue', sans-serif; font-size: 44px; line-height: 1; }
-    .result-card {
-      background: var(--card);
-      border-radius: var(--radius);
-      padding: 20px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-    .result-card.winner {
-      background: linear-gradient(135deg, #2d1f00, #3d2800);
-      border: 2px solid var(--gold);
-      box-shadow: 0 0 30px rgba(255,209,102,.15);
-    }
-    .rank {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 36px;
-      width: 44px;
-      text-align: center;
-      color: var(--muted);
-    }
-    .result-card.winner .rank { color: var(--gold); }
-    .result-info { flex: 1; }
-    .result-title { font-family: 'Bebas Neue', sans-serif; font-size: 22px; }
-    .result-artist { color: var(--muted); font-size: 13px; }
-    .result-points {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 28px;
-      color: var(--accent);
-      text-align: right;
-    }
-    .result-card.winner .result-points { color: var(--gold); }
-    .result-points span { display: block; font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
-    .trophy { font-size: 28px; }
-
-    /* ─── ALREADY VOTED ─── */
-    #screen-already-voted { display: none; flex-direction: column; align-items: center; gap: 16px; padding-top: 60px; text-align: center; }
+    /* ALREADY VOTED */
+    #screen-already-voted { align-items: center; padding-top: 60px; text-align: center; }
     .check-big { font-size: 64px; }
 
-    /* ─── HIDDEN ─── */
-    .hidden { display: none !important; }
+    /* RESULTS */
+    .results-header { font-family: 'Bebas Neue', sans-serif; font-size: 44px; line-height: 1; }
+    .result-card { background:var(--card); border-radius:var(--radius); padding:20px; display:flex; align-items:center; gap:16px; }
+    .result-card.winner { background:linear-gradient(135deg,#2d1f00,#3d2800); border:2px solid var(--gold); box-shadow:0 0 30px rgba(255,209,102,.15); }
+    .rank { font-family:'Bebas Neue',sans-serif; font-size:36px; width:44px; text-align:center; color:var(--muted); }
+    .result-card.winner .rank { color:var(--gold); }
+    .result-info { flex:1; }
+    .result-title { font-family:'Bebas Neue',sans-serif; font-size:22px; }
+    .result-artist { color:var(--muted); font-size:13px; }
+    .result-points { font-family:'Bebas Neue',sans-serif; font-size:28px; color:var(--accent); text-align:right; }
+    .result-card.winner .result-points { color:var(--gold); }
+    .result-points span { display:block; font-family:'DM Sans',sans-serif; font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
   </style>
 </head>
 <body>
-
 <header>
   <div class="logo">🎵 Voting</div>
   <div class="phase-badge" id="phase-badge">Warten</div>
 </header>
-
 <main>
 
-  <!-- NAME EINGABE -->
   <div id="screen-name">
     <div class="big-title">Song<br><span>Voting</span></div>
     <p class="subtitle">Gib deinen Namen ein, um mitzumachen.</p>
     <input type="text" id="name-input" placeholder="Dein Name..." maxlength="30" />
-    <button class="btn" id="name-btn" onclick="enterVoting()">Weiter →</button>
+    <button class="btn" onclick="enterVoting()">Weiter →</button>
   </div>
 
-  <!-- WARTEN -->
   <div id="screen-waiting">
     <div class="vinyl"></div>
     <div class="player-name-display" id="waiting-name"></div>
     <p class="waiting-text">Gleich geht's los –<br>dein Lehrer startet das Voting.</p>
   </div>
 
-  <!-- ZUHÖREN -->
   <div id="screen-listening">
     <p class="now-playing-label">▶ Läuft gerade</p>
     <div class="now-playing-card">
@@ -273,238 +135,155 @@
       <div class="now-playing-artist" id="listening-artist"></div>
     </div>
     <div class="hint-box">🎧 Hör gut zu – nach allen Liedern kannst du abstimmen!</div>
-    <div class="songs-heard" id="songs-heard-list"></div>
+    <div id="songs-heard-list"></div>
   </div>
 
-  <!-- ABSTIMMEN -->
   <div id="screen-voting">
     <div class="voting-header">Jetzt<br><span>Abstimmen!</span></div>
-    <p class="voting-sub">Vergib 1–3 Punkte pro Song. Du kannst jeden Song nur einmal bewerten.</p>
+    <p class="voting-sub">Vergib 1–3 Punkte pro Song. Jeden Song einmal bewerten.</p>
     <div id="song-vote-list"></div>
-    <div class="submit-area">
-      <p class="vote-counter" id="vote-counter"></p>
-      <button class="btn success" id="submit-btn" onclick="submitVotes()" disabled>Abstimmen!</button>
-    </div>
+    <p class="vote-counter" id="vote-counter"></p>
+    <button class="btn success" id="submit-btn" onclick="submitVotes()" disabled>Abstimmen!</button>
   </div>
 
-  <!-- BEREITS ABGESTIMMT -->
   <div id="screen-already-voted">
     <div class="check-big">✅</div>
     <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;">Danke!</div>
     <p style="color:var(--muted)">Du hast bereits abgestimmt.<br>Warte auf das Ergebnis.</p>
   </div>
 
-  <!-- ERGEBNIS -->
   <div id="screen-results">
     <div class="results-header">🏆 Ergebnis</div>
     <div id="results-list"></div>
   </div>
 
 </main>
+<script>
+  let playerName = "", songs = {}, myVotes = {}, hasSubmitted = false, heardSongs = [];
 
-<!-- Firebase SDKs -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getDatabase, ref, onValue, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-
-  // ── FIREBASE CONFIG ──────────────────────────────────────────────
-  const firebaseConfig = {
-    apiKey: "EUER_API_KEY",
-    authDomain: "EUER_PROJEKT.firebaseapp.com",
-    databaseURL: "https://EUER_PROJEKT-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "EUER_PROJEKT",
-    storageBucket: "EUER_PROJEKT.appspot.com",
-    messagingSenderId: "EURE_SENDER_ID",
-    appId: "EURE_APP_ID"
-  };
-  // ─────────────────────────────────────────────────────────────────
-
-  const app = initializeApp(firebaseConfig);
-  const db = getDatabase(app);
-
-  let playerName = "";
-  let songs = {};
-  let currentPhase = "waiting";
-  let myVotes = {}; // songId -> points
-  let hasSubmitted = false;
-  let heardSongs = [];
-
-  // ── SCREENS ──────────────────────────────────────────────────────
-  const screens = ["name","waiting","listening","voting","already-voted","results"];
-  function showScreen(id) {
-    screens.forEach(s => {
+  function show(id) {
+    ["name","waiting","listening","voting","already-voted","results"].forEach(s => {
       const el = document.getElementById(`screen-${s}`);
-      el.style.display = 'none';
+      el.style.display = s === id ? 'flex' : 'none';
     });
-    document.getElementById(`screen-${id}`).style.display = 'flex';
   }
 
-  // ── NAME EINGABE ─────────────────────────────────────────────────
-  window.enterVoting = function() {
+  function enterVoting() {
     const val = document.getElementById("name-input").value.trim();
     if (!val) return;
     playerName = val;
     document.getElementById("waiting-name").textContent = "Hey, " + playerName + "! 👋";
-    showScreen("waiting");
+    show("waiting");
     startListening();
-  };
+  }
+  document.getElementById("name-input").addEventListener("keydown", e => { if (e.key==="Enter") enterVoting(); });
 
-  document.getElementById("name-input").addEventListener("keydown", e => {
-    if (e.key === "Enter") window.enterVoting();
-  });
-
-  // ── FIREBASE LISTENER ─────────────────────────────────────────────
   function startListening() {
-    // Songs
-    onValue(ref(db, "songs"), snap => {
-      songs = snap.val() || {};
+    // Songs live laden
+    db.collection("voting_songs").orderBy("order").onSnapshot(snap => {
+      songs = {};
+      snap.forEach(doc => { songs[doc.id] = doc.data(); });
     });
 
-    // Current song
-    onValue(ref(db, "currentSong"), snap => {
-      const id = snap.val();
-      if (id && songs[id]) {
-        document.getElementById("listening-title").textContent = songs[id].title;
-        document.getElementById("listening-artist").textContent = songs[id].artist || "";
-        if (!heardSongs.includes(id)) {
-          heardSongs.push(id);
-          renderHeardList();
-        }
-      } else {
-        document.getElementById("listening-title").textContent = "–";
-        document.getElementById("listening-artist").textContent = "";
+    // State (Phase + aktueller Song)
+    db.collection("voting_session").doc("state").onSnapshot(async snap => {
+      if (!snap.exists) return;
+      const data = snap.data();
+      const phase = data.phase || "waiting";
+      const songId = data.currentSong;
+
+      // Badge
+      const labels = {waiting:"Warten",listening:"Zuhören",voting:"Abstimmen",results:"Ergebnis"};
+      const badge = document.getElementById("phase-badge");
+      badge.textContent = labels[phase] || phase;
+      badge.className = "phase-badge" + (phase!=="waiting"?" active":"");
+
+      // Aktuellen Song anzeigen
+      if (songId && songs[songId]) {
+        document.getElementById("listening-title").textContent = songs[songId].title;
+        document.getElementById("listening-artist").textContent = songs[songId].artist || "";
+        if (!heardSongs.includes(songId)) { heardSongs.push(songId); renderHeardList(); }
       }
-    });
 
-    // Phase
-    onValue(ref(db, "phase"), async snap => {
-      const phase = snap.val() || "waiting";
-      currentPhase = phase;
-      updatePhaseBadge(phase);
+      if (!playerName) return;
 
-      if (!playerName) return; // noch kein Name
-
-      if (phase === "waiting") showScreen("waiting");
-      else if (phase === "listening") showScreen("listening");
+      if (phase === "waiting") show("waiting");
+      else if (phase === "listening") show("listening");
       else if (phase === "voting") {
-        // Schon abgestimmt?
-        const voteSnap = await get(ref(db, `votes/${sanitize(playerName)}`));
-        if (voteSnap.exists()) {
-          hasSubmitted = true;
-          showScreen("already-voted");
-        } else {
-          buildVotingUI();
-          showScreen("voting");
-        }
+        const voteDoc = await db.collection("voting_votes").doc(playerName).get();
+        if (voteDoc.exists) { hasSubmitted = true; show("already-voted"); }
+        else { buildVotingUI(); show("voting"); }
       }
-      else if (phase === "results") {
-        buildResultsUI();
-        showScreen("results");
-      }
+      else if (phase === "results") { await buildResultsUI(); show("results"); }
     });
   }
 
-  // ── BADGE ────────────────────────────────────────────────────────
-  const phaseLabels = { waiting: "Warten", listening: "Zuhören", voting: "Abstimmen", results: "Ergebnis" };
-  function updatePhaseBadge(phase) {
-    const badge = document.getElementById("phase-badge");
-    badge.textContent = phaseLabels[phase] || phase;
-    badge.className = "phase-badge" + (phase !== "waiting" ? " active" : "");
-  }
-
-  // ── HEARD LIST ───────────────────────────────────────────────────
   function renderHeardList() {
     const list = document.getElementById("songs-heard-list");
-    if (heardSongs.length === 0) { list.innerHTML = ''; return; }
-    list.innerHTML = `<p class="songs-heard-title">Gehörte Songs</p>` +
-      heardSongs.map(id => songs[id]
-        ? `<div class="heard-chip">${songs[id].title}${songs[id].artist ? ' – ' + songs[id].artist : ''}</div>`
-        : ''
-      ).join('');
+    list.innerHTML = heardSongs.length
+      ? '<p class="songs-heard-title">Gehörte Songs</p>' +
+        heardSongs.map(id => songs[id]
+          ? `<div class="heard-chip">${songs[id].title}${songs[id].artist?' – '+songs[id].artist:''}</div>` : ''
+        ).join('')
+      : '';
   }
 
-  // ── VOTING UI ────────────────────────────────────────────────────
   function buildVotingUI() {
-    const list = document.getElementById("song-vote-list");
-    const songArr = Object.entries(songs).sort((a,b) => (a[1].order||0) - (b[1].order||0));
-    list.innerHTML = songArr.map(([id, song]) => `
-      <div class="song-card" id="card-${id}">
+    const arr = Object.entries(songs).sort((a,b)=>(a[1].order||0)-(b[1].order||0));
+    document.getElementById("song-vote-list").innerHTML = arr.map(([id,s]) => `
+      <div class="song-card" id="card-${id}" style="margin-bottom:10px">
         <div>
-          <div class="song-card-title">${song.title}</div>
-          ${song.artist ? `<div class="song-card-artist">${song.artist}</div>` : ''}
+          <div class="song-card-title">${s.title}</div>
+          ${s.artist?`<div class="song-card-artist">${s.artist}</div>`:''}
         </div>
         <div class="point-buttons">
-          ${[1,2,3].map(p => `
-            <button class="point-btn" id="btn-${id}-${p}" onclick="selectPoints('${id}', ${p})">
-              ${p}<span class="point-label">${p===1?'Ok':p===2?'Gut':'Super'}</span>
-            </button>
-          `).join('')}
+          ${[1,2,3].map(p=>`<button class="point-btn" id="btn-${id}-${p}" onclick="selectPoints('${id}',${p})">
+            ${p}<span class="point-label">${p===1?'Ok':p===2?'Gut':'Super'}</span>
+          </button>`).join('')}
         </div>
-      </div>
-    `).join('');
+      </div>`).join('');
     updateVoteCounter();
   }
 
-  window.selectPoints = function(songId, points) {
+  function selectPoints(songId, points) {
     myVotes[songId] = points;
-    // Update button styles
-    const song = songs[songId];
-    if (!song) return;
     [1,2,3].forEach(p => {
-      const btn = document.getElementById(`btn-${songId}-${p}`);
-      btn.className = "point-btn" + (p === points ? ` selected-${p}` : '');
+      document.getElementById(`btn-${songId}-${p}`).className = "point-btn"+(p===points?` selected-${p}`:'');
     });
     document.getElementById(`card-${songId}`).className = "song-card voted";
     updateVoteCounter();
-  };
+  }
 
   function updateVoteCounter() {
-    const total = Object.keys(songs).length;
-    const done = Object.keys(myVotes).length;
+    const total = Object.keys(songs).length, done = Object.keys(myVotes).length;
     document.getElementById("vote-counter").textContent = `${done} von ${total} Songs bewertet`;
     document.getElementById("submit-btn").disabled = done < total;
   }
 
-  // ── SUBMIT ───────────────────────────────────────────────────────
-  window.submitVotes = async function() {
+  async function submitVotes() {
     if (hasSubmitted) return;
     hasSubmitted = true;
     document.getElementById("submit-btn").disabled = true;
     document.getElementById("submit-btn").textContent = "Wird gespeichert…";
-    await set(ref(db, `votes/${sanitize(playerName)}`), myVotes);
-    showScreen("already-voted");
-  };
-
-  // ── RESULTS ──────────────────────────────────────────────────────
-  async function buildResultsUI() {
-    const votesSnap = await get(ref(db, "votes"));
-    const allVotes = votesSnap.val() || {};
-    const totals = {};
-    Object.values(allVotes).forEach(v => {
-      Object.entries(v).forEach(([songId, pts]) => {
-        totals[songId] = (totals[songId] || 0) + pts;
-      });
-    });
-    const songArr = Object.entries(songs)
-      .map(([id, s]) => ({ ...s, id, total: totals[id] || 0 }))
-      .sort((a, b) => b.total - a.total);
-
-    const medals = ["🥇","🥈","🥉"];
-    document.getElementById("results-list").innerHTML = songArr.map((s, i) => `
-      <div class="result-card ${i===0?'winner':''}">
-        <div class="rank">${medals[i] || (i+1)}</div>
-        <div class="result-info">
-          <div class="result-title">${s.title}</div>
-          ${s.artist ? `<div class="result-artist">${s.artist}</div>` : ''}
-        </div>
-        <div class="result-points">${s.total}<span>Punkte</span></div>
-      </div>
-    `).join('');
+    await db.collection("voting_votes").doc(playerName).set(myVotes);
+    show("already-voted");
   }
 
-  // ── HELPER ───────────────────────────────────────────────────────
-  function sanitize(name) {
-    return name.replace(/[.#$\[\]/]/g, '_');
+  async function buildResultsUI() {
+    const snap = await db.collection("voting_votes").get();
+    const totals = {};
+    snap.forEach(doc => Object.entries(doc.data()).forEach(([id,pts]) => { totals[id]=(totals[id]||0)+pts; }));
+    const arr = Object.entries(songs).map(([id,s])=>({...s,id,total:totals[id]||0})).sort((a,b)=>b.total-a.total);
+    const medals = ["🥇","🥈","🥉"];
+    document.getElementById("results-list").innerHTML = arr.map((s,i)=>`
+      <div class="result-card ${i===0?'winner':''}" style="margin-bottom:8px">
+        <div class="rank">${medals[i]||(i+1)}</div>
+        <div class="result-info">
+          <div class="result-title">${s.title}</div>
+          ${s.artist?`<div class="result-artist">${s.artist}</div>`:''}
+        </div>
+        <div class="result-points">${s.total}<span>Punkte</span></div>
+      </div>`).join('');
   }
 </script>
 </body>
