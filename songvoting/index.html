@@ -22,8 +22,11 @@
     });
     const db = firebase.firestore();
     // Logo setzen
-    var logo = document.getElementById("school-logo");
-    if(logo && LOGO_B64 !== "EUER_BASE64_STRING_HIER") logo.src = "data:image/jpeg;base64," + LOGO_B64;
+    document.addEventListener("DOMContentLoaded", function() {
+  var logo = document.getElementById("school-logo");
+  if(logo && LOGO_B64 !== "EUER_BASE64_STRING_HIER") 
+    logo.src = "data:image/jpeg;base64," + LOGO_B64;
+});
   </script>
   <style>
     :root {
