@@ -230,7 +230,6 @@
     var gruppe = gruppen.find(function(g){ return g.id === gruppeId; });
     if (!gruppe) return;
     currentUser = { name: "Lehrer", gruppe: gruppe.name, rolle: "lehrer" };
-    // Lehrer bewertet nur mit einer Gesamtnote
     hideAll();
     show("screen-bewertung");
     document.getElementById("bew-titel").textContent = "Lehrerbewertung";
@@ -239,10 +238,42 @@
     document.getElementById("btn-abbrechen").style.display = "none";
     var c = document.getElementById("mitglieder-container");
     c.innerHTML = "";
-    // Prüfe ob schon bewertet
     var bews = await ladeBewertungen();
     var vorh = bews.find(function(b){ return b.mitgliedName === mitglied && b.gruppe === gruppe.name && b.rolle === "lehrer"; });
     var aktWert = (vorh && vorh.kriterien && vorh.kriterien["gesamt"]) || 0;
+
+    // Schülerbewertungen anzeigen
+    var sBews = bews.filter(function(b){ return b.mitgliedName === mitglied && b.gruppe === gruppe.name && b.rolle !== "lehrer"; });
+    if (sBews.length > 0) {
+      var sBox = document.createElement("div");
+      sBox.style = "background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:16px 20px;margin-bottom:20px";
+      var sTitle = document.createElement("div");
+      sTitle.style = "font-family:'Syne',sans-serif;font-weight:700;font-size:.95rem;margin-bottom:12px;color:var(--amber)";
+      sTitle.textContent = "📊 Schülerbewertungen (" + sBews.length + " Bewertung" + (sBews.length > 1 ? "en" : "") + ")";
+      sBox.appendChild(sTitle);
+      KRITERIEN.forEach(function(k) {
+        var avg = avgVal(sBews, k.id);
+        if (avg === null) return;
+        var row = document.createElement("div");
+        row.style = "display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:.88rem";
+        var stars = [1,2,3,4,5].map(function(n){
+          return '<span style="color:' + (n <= Math.round(avg) ? 'var(--amber)' : 'rgba(255,255,255,0.15)') + ';font-size:1.1rem">★</span>';
+        }).join("");
+        row.innerHTML = '<span style="min-width:130px;color:var(--muted)">' + k.emoji + ' ' + k.label + '</span>' +
+          stars + '<span style="color:var(--muted);margin-left:4px">Ø ' + avg.toFixed(1) + '</span>';
+        sBox.appendChild(row);
+      });
+      // Gesamtdurchschnitt
+      var alleAvg = KRITERIEN.map(function(k){ return avgVal(sBews, k.id); }).filter(function(x){ return x !== null; });
+      if (alleAvg.length) {
+        var gesAvg = alleAvg.reduce(function(a,b){return a+b;},0)/alleAvg.length;
+        var divEl = document.createElement("div");
+        divEl.style = "margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:.88rem;font-weight:700;color:var(--green)";
+        divEl.textContent = "⌀ Gesamtdurchschnitt Schüler: " + gesAvg.toFixed(2) + " / 5";
+        sBox.appendChild(divEl);
+      }
+      c.appendChild(sBox);
+    }
     var block = document.createElement("div");
     block.className = "mitglied-block";
     block.setAttribute("data-mitglied", mitglied);
@@ -300,7 +331,7 @@
       for (var i = 0; i < ergebnisse.length; i++) {
         var e = ergebnisse[i];
         var rolle = currentUser.rolle || "schueler";
-        var docId = (e.gruppeName + "_" + rolle + "_" + currentUser.name + "_bewertet_" + e.mitglied).replace(/[\s\/\\.,#$\[\]]/g,"_");
+        var docId = (e.gruppeName + "_" + rolle + "_" + currentUser.name + "_bewertet_" + e.mitglied).replace(/\s/g,"_");
         await db.collection(BEWERTUNG_COL).doc(docId).set({
           gruppe:       e.gruppeName,
           gruppeId:     e.gruppeId,
