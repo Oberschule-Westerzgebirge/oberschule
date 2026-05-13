@@ -51,6 +51,15 @@
   function sterneText(v) {
     return ["","Ungenügend","Ausreichend","Gut","Sehr gut","Hervorragend"][v] || "";
   }
+  function punkteZuNote(p) {
+    var pct = (p / 5) * 100;
+    if (pct >= 96) return "1";
+    if (pct >= 80) return "2";
+    if (pct >= 60) return "3";
+    if (pct >= 40) return "4";
+    if (pct >= 20) return "5";
+    return "6";
+  }
   function avgVal(list, kid) {
     var v = list.map(function(b){ return (b.kriterien && b.kriterien[kid]) || 0; }).filter(function(x){ return x > 0; });
     return v.length ? v.reduce(function(a,b){ return a+b; },0)/v.length : null;
@@ -403,7 +412,7 @@
           html += "<span class='mr-count'>" + sInfo + (sGesamt !== null ? " · Ø " + sGesamt.toFixed(1) : "") + "</span>";
           if (gewichtet !== null) {
             var detailTitle = "Lehrer: " + (lPunkte !== null ? lPunkte + "/5" : "–") + " · Schüler-Ø: " + (sGesamt !== null ? sGesamt.toFixed(2) + "/5" : "–") + " · Gesamt (70/30): " + gewichtet.toFixed(2) + "/5";
-            html += "<span class='mr-note' title='" + detailTitle + "'>✅ " + gewichtet.toFixed(2) + "/5 Ges.</span>";
+            html += "<span class='mr-note' title='" + detailTitle + "'>✅ " + gewichtet.toFixed(2) + "/5 · Note " + punkteZuNote(gewichtet) + "</span>";
           } else {
             html += "<span class='mr-note mr-offen'>– noch keine Lehrerbew.</span>";
           }
