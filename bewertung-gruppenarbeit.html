@@ -390,12 +390,23 @@
           var lBew  = bews.find(function(b){ return b.mitgliedName === m && b.gruppe === g.name && b.rolle === "lehrer"; });
           var sInfo = sBews.length > 0 ? sBews.length + " Schüler-Bew." : "Noch keine Schüler-Bew.";
           var lPunkte = (lBew && lBew.kriterien && lBew.kriterien["gesamt"]) || null;
+          // Schüler-Ø berechnen
+          var sAvgs = KRITERIEN.map(function(k){ return avgVal(sBews, k.id); }).filter(function(x){ return x !== null; });
+          var sGesamt = sAvgs.length ? sAvgs.reduce(function(a,b){return a+b;},0)/sAvgs.length : null;
+          // Gewichteter Gesamtwert 70% Lehrer + 30% Schüler
+          var gewichtet = null;
+          if (lPunkte !== null && sGesamt !== null) gewichtet = lPunkte * 0.7 + sGesamt * 0.3;
+          else if (lPunkte !== null) gewichtet = lPunkte;
+          else if (sGesamt !== null) gewichtet = sGesamt;
           html += "<div class='mitglied-row'>";
           html += "<span class='mr-name'>👤 " + m + "</span>";
-          html += "<span class='mr-count'>" + sInfo + "</span>";
-          html += lBew
-            ? "<span class='mr-note'>✅ " + lPunkte + "/5 Pkt.</span>"
-            : "<span class='mr-note mr-offen'>– noch keine Lehrerbew.</span>";
+          html += "<span class='mr-count'>" + sInfo + (sGesamt !== null ? " · Ø " + sGesamt.toFixed(1) : "") + "</span>";
+          if (gewichtet !== null) {
+            var detailTitle = "Lehrer: " + (lPunkte !== null ? lPunkte + "/5" : "–") + " · Schüler-Ø: " + (sGesamt !== null ? sGesamt.toFixed(2) + "/5" : "–") + " · Gesamt (70/30): " + gewichtet.toFixed(2) + "/5";
+            html += "<span class='mr-note' title='" + detailTitle + "'>✅ " + gewichtet.toFixed(2) + "/5 Ges.</span>";
+          } else {
+            html += "<span class='mr-note mr-offen'>– noch keine Lehrerbew.</span>";
+          }
           html += "<button class='btn-sm " + (lBew?"btn-edit":"btn-lehrerbew") + "' onclick='zeigeLehrerBewertungFuer(\"" + g.id + "\",\"" + m.replace(/"/g,"&quot;") + "\")'>"
             + (lBew ? "✏️ Einzeln ändern" : "➕ Einzeln bewerten") + "</button>";
           html += "</div>";
