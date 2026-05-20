@@ -340,7 +340,7 @@
       for (var i = 0; i < ergebnisse.length; i++) {
         var e = ergebnisse[i];
         var rolle = currentUser.rolle || "schueler";
-        var docId = (e.gruppeName + "_" + rolle + "_" + currentUser.name + "_bewertet_" + e.mitglied).replace(/\s/g,"_");
+        var docId = (e.gruppeName + "_" + rolle + "_" + currentUser.name + "_bewertet_" + e.mitglied).replace(/[\s\/\\.,#$\[\]]/g,"_");
         await db.collection(BEWERTUNG_COL).doc(docId).set({
           gruppe:       e.gruppeName,
           gruppeId:     e.gruppeId,
