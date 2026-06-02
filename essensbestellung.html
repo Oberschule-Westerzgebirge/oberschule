@@ -180,16 +180,45 @@
     color: #744210;
     margin: 18px 0 6px;
   }
+  .allergen-legend {
+    margin: 0 0 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fafafa;
+  }
+  .allergen-legend summary {
+    cursor: pointer;
+    padding: 12px 14px;
+    font-weight: bold;
+    color: #2d3748;
+    list-style: none;
+  }
+  .allergen-legend summary::-webkit-details-marker { display: none; }
+  .allergen-legend summary::before { content: '▸ '; color: #667eea; }
+  .allergen-legend[open] summary::before { content: '▾ '; }
+  .allergen-legend .legend-body { padding: 0 16px 16px; }
+  .allergen-legend .legend-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .allergen-legend h4 { font-size: 13px; color: #4a5568; margin: 6px 0 8px; }
+  .allergen-legend ul { list-style: none; font-size: 13px; color: #2d3748; }
+  .allergen-legend li { padding: 3px 0; }
+  .allergen-legend li code {
+    background: #edf2f7; border-radius: 3px; padding: 0 5px; margin-right: 8px;
+    font-weight: 700; color: #b7791f; display: inline-block; min-width: 26px; text-align: center;
+  }
+  .allergen-legend li.sub { font-size: 12px; color: #718096; padding-left: 36px; }
+  .allergen-legend .legend-foot { font-size: 11px; color: #718096; margin-top: 12px; }
 
   @media (max-width: 600px) {
     .day-head { flex-direction: column; gap: 4px; }
     .button-group { flex-direction: column; }
+    .allergen-legend .legend-cols { grid-template-columns: 1fr; gap: 8px; }
   }
 </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
+    <img id="logo" alt="Logo" style="display:none; max-height:70px; margin:0 auto 14px;">
     <h1 id="titel">Essensbestellung</h1>
     <p id="untertitel">Klassenfahrt</p>
   </div>
@@ -255,6 +284,52 @@
         Angaben ohne Gewähr – Änderungen vorbehalten.
       </div>
 
+      <details class="allergen-legend">
+        <summary>🔎 Allergen-Legende anzeigen</summary>
+        <div class="legend-body">
+          <div class="legend-cols">
+            <div>
+              <h4>Allergene</h4>
+              <ul>
+                <li><code>A</code>Glutenhaltiges Getreide</li>
+                <li class="sub">Aw Weizen · Ar Roggen · Ag Gerste · Ah Hafer · Ad Dinkel</li>
+                <li><code>B</code>Krebstiere</li>
+                <li><code>C</code>Eier</li>
+                <li><code>D</code>Fisch</li>
+                <li><code>E</code>Erdnüsse</li>
+                <li><code>F</code>Sojabohnen</li>
+                <li><code>G</code>Milch / Laktose</li>
+                <li><code>H</code>Schalenfrüchte (Nüsse)</li>
+                <li><code>I</code>Sellerie</li>
+                <li><code>J</code>Senf</li>
+                <li><code>K</code>Sesam</li>
+                <li><code>L</code>Schwefeldioxid / Sulfite</li>
+                <li><code>M</code>Lupinen</li>
+                <li><code>N</code>Weichtiere</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Zusatzstoffe</h4>
+              <ul>
+                <li><code>1</code>mit Farbstoff</li>
+                <li><code>2</code>mit Konservierungsstoff</li>
+                <li><code>3</code>mit Antioxidationsmittel</li>
+                <li><code>4</code>mit Geschmacksverstärker</li>
+                <li><code>5</code>geschwefelt</li>
+                <li><code>6</code>geschwärzt</li>
+                <li><code>7</code>mit Phosphat</li>
+                <li><code>8</code>mit Milcheiweiß</li>
+                <li><code>9</code>koffeinhaltig</li>
+              </ul>
+            </div>
+          </div>
+          <p class="legend-foot">
+            Legende nach den 14 gesetzlich definierten Allergengruppen (LMIV, Anlage 2); die Kürzel folgen dem
+            üblichen Caterer-Schema. Maßgeblich ist der offizielle Speiseplan – Angaben ohne Gewähr, Änderungen vorbehalten.
+          </p>
+        </div>
+      </details>
+
       <div class="total-section">
         <div class="calc-line" id="calcLine">0 Essen × 0,00 €</div>
         <div class="total-amount" id="totalAmount">0,00 €</div>
@@ -273,6 +348,19 @@
    1) HIER die Web-App-URL deines Apps Scripts eintragen
    ============================================================ */
 const scriptURL = 'https://script.google.com/macros/s/AKfycbzimcmqUxYIPFQLncpQKHTr8AqBJaNG7b-qKIvVaGTwyboyjEKE0GhIA7PxCzAaSX410w/exec';
+
+/* ============================================================
+   Logo: hier den Base64-String deines Logos einsetzen.
+   Format z. B.: 'data:image/png;base64,iVBORw0KGgoAAA...'
+   Leer lassen = kein Logo.
+   ============================================================ */
+const LOGO_BASE64 = '';
+
+(function zeigeLogo() {
+  if (!LOGO_BASE64) return;
+  const l = document.getElementById('logo');
+  if (l) { l.src = LOGO_BASE64; l.style.display = 'block'; }
+})();
 
 let konfig = {};
 let schuelerData = {};
