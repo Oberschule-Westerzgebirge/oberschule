@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Essensbestellung</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 20px;
+    min-height: 100vh;
+    color: #2d3748;
+  }
+
+  .container {
+    max-width: 820px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 15px;
+    box-shadow: 0 10px 40px rgba(0,0,0,.2);
+    overflow: hidden;
+  }
+
+  .header {
+    background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+    color: #fff;
+    padding: 30px;
+    text-align: center;
+  }
+  .header h1 { font-size: 26px; margin-bottom: 8px; }
+  .header p { font-size: 15px; opacity: .9; }
+
+  .deadline {
+    background: #fed7d7;
+    color: #c53030;
+    padding: 14px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 14px;
+    border-bottom: 3px solid #fc8181;
+  }
+
+  .form-content { padding: 30px; }
+
+  .loading, .error-box, .closed-message {
+    text-align: center;
+    padding: 40px 20px;
+    font-size: 17px;
+  }
+  .loading { color: #667eea; }
+  .error-box { display: none; background: #fff5f5; color: #c53030; border-radius: 8px; }
+  .closed-message { display: none; }
+  .closed-message h2 { margin-bottom: 12px; color: #2d3748; }
+
+  .form-group { margin-bottom: 22px; }
+  .form-group label { display: block; font-weight: bold; margin-bottom: 8px; }
+  .form-group input, .form-group select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 16px;
+    background: #fff;
+    transition: border-color .25s;
+  }
+  .form-group input:focus, .form-group select:focus { outline: none; border-color: #667eea; }
+  .required { color: #e53e3e; }
+
+  .info-box {
+    background: #ebf8ff;
+    border-left: 4px solid #3182ce;
+    padding: 14px;
+    border-radius: 6px;
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+
+  .section-title {
+    color: #2d3748;
+    margin: 28px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 3px solid #667eea;
+    font-size: 19px;
+  }
+
+  .day-card {
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .day-card.has-selection { border-color: #667eea; }
+  .day-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 14px 18px;
+    background: #f7fafc;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .day-head .day-name { font-size: 17px; font-weight: bold; }
+  .day-head .day-date { font-size: 14px; color: #718096; }
+  .day-head .day-line { font-size: 14px; font-weight: bold; color: #38a169; }
+
+  .options { padding: 12px 18px 18px; display: grid; gap: 8px; }
+  .option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 11px 14px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .option:hover { border-color: #b3bcf5; background: #f8f9ff; }
+  .option.selected { border-color: #667eea; background: #eef0ff; }
+  .option input { width: 18px; height: 18px; accent-color: #667eea; flex: none; }
+  .option .opt-text { flex: 1; }
+  .option .opt-text b { display: block; }
+  .option .opt-text small { color: #718096; }
+  .option.none-opt .opt-text b { color: #a0aec0; }
+
+  .total-section {
+    margin-top: 26px;
+    padding: 22px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    border-radius: 10px;
+    text-align: center;
+  }
+  .total-section .calc-line { font-size: 14px; opacity: .9; margin-bottom: 6px; }
+  .total-section .total-amount { font-size: 34px; font-weight: bold; }
+
+  .button-group { display: flex; gap: 12px; margin-top: 26px; }
+  .btn {
+    flex: 1;
+    padding: 15px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn-primary { background: #667eea; color: #fff; }
+  .btn-primary:hover { background: #5568d3; }
+  .btn-primary:disabled { background: #a0aec0; cursor: not-allowed; }
+  .btn-secondary { background: #e2e8f0; color: #2d3748; }
+  .btn-secondary:hover { background: #cbd5e0; }
+
+  .success-message {
+    display: none;
+    background: #c6f6d5;
+    border: 2px solid #68d391;
+    color: #22543d;
+    padding: 22px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+  }
+  .success-message.show { display: block; }
+  .success-message h3 { margin-bottom: 10px; }
+
+  .option .opt-text .allergene {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: #4a5568;
+  }
+  .option .opt-text .allergene b { color: #b7791f; font-weight: 700; }
+  .allergen-note {
+    background: #fffaf0;
+    border-left: 4px solid #ed8936;
+    padding: 12px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #744210;
+    margin: 18px 0 6px;
+  }
+
+  @media (max-width: 600px) {
+    .day-head { flex-direction: column; gap: 4px; }
+    .button-group { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1 id="titel">Essensbestellung</h1>
+    <p id="untertitel">Klassenfahrt</p>
+  </div>
+
+  <div class="deadline" id="deadline">⚠️ Lädt Abgabetermin …</div>
+
+  <div class="form-content">
+    <div class="loading" id="loading">⏳ Lade Daten …</div>
+
+    <div class="error-box" id="errorBox">
+      <strong>⚠️ Fehler beim Laden!</strong>
+      <p>Bitte kontaktiere das Sekretariat.</p>
+    </div>
+
+    <div class="closed-message" id="closedBox">
+      <h2>🔒 Bestellung derzeit geschlossen</h2>
+      <p id="closedText">Das Bestellformular ist aktuell nicht verfügbar.</p>
+    </div>
+
+    <div class="success-message" id="successBox">
+      <h3>✅ Bestellung erfolgreich übermittelt!</h3>
+      <p>Du erhältst gleich eine Bestätigungs-E-Mail mit deiner Auswahl. Bitte prüfe sie kurz –
+        falls etwas nicht stimmt, melde dich beim angegebenen Kontakt.</p>
+    </div>
+
+    <form id="orderForm" style="display:none;">
+      <div class="form-group">
+        <label>Klasse: <span class="required">*</span></label>
+        <select id="klasse" required onchange="updateSchueler()">
+          <option value="">Bitte wählen …</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Name, Vorname: <span class="required">*</span></label>
+        <select id="schueler" required>
+          <option value="">Erst Klasse wählen …</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>E-Mail (für Bestätigung): <span class="required">*</span></label>
+        <input type="email" id="email" required placeholder="beispiel@email.de">
+      </div>
+
+      <div class="form-group">
+        <label>E-Mail wiederholen: <span class="required">*</span></label>
+        <input type="email" id="emailConfirm" required placeholder="beispiel@email.de">
+        <small id="emailError" style="color:#e53e3e; display:none;">⚠️ Die E-Mail-Adressen stimmen nicht überein!</small>
+      </div>
+
+      <div class="info-box">
+        Wähle für jeden Tag <strong>ein Menü</strong> aus – oder „Kein Essen", wenn an dem Tag nichts benötigt wird.
+        Der Preis pro Essen beträgt <strong><span id="preisHinweis">–</span></strong>.
+      </div>
+
+      <h2 class="section-title">📅 Essen je Tag wählen</h2>
+      <div id="daysContainer"></div>
+
+      <div class="allergen-note" id="allergenNote">
+        <strong>Allergene &amp; Zusatzstoffe:</strong> Die Kürzel hinter jedem Menü beziehen sich auf den
+        offiziellen Speiseplan. <span id="allergenLegende"></span>
+        Angaben ohne Gewähr – Änderungen vorbehalten.
+      </div>
+
+      <div class="total-section">
+        <div class="calc-line" id="calcLine">0 Essen × 0,00 €</div>
+        <div class="total-amount" id="totalAmount">0,00 €</div>
+      </div>
+
+      <div class="button-group">
+        <button type="button" class="btn btn-secondary" onclick="resetForm()">Zurücksetzen</button>
+        <button type="submit" class="btn btn-primary">Bestellung absenden</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   1) HIER die Web-App-URL deines Apps Scripts eintragen
+   ============================================================ */
+const scriptURL = 'https://script.google.com/macros/s/AKfycbzimcmqUxYIPFQLncpQKHTr8AqBJaNG7b-qKIvVaGTwyboyjEKE0GhIA7PxCzAaSX410w/exec';
+
+let konfig = {};
+let schuelerData = {};
+
+function euro(n) { return n.toFixed(2).replace('.', ',') + ' €'; }
+
+/* ============================================================
+   2) Daten laden
+   ============================================================ */
+async function ladeAlles() {
+  const urlFehlt = !scriptURL || scriptURL.indexOf('HIER_DEINE') === 0;
+
+  if (urlFehlt) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('errorBox').innerHTML =
+      '<strong>⚠️ Noch nicht eingerichtet</strong>' +
+      '<p>Bitte trage unten im Quelltext bei <code>scriptURL</code> die Web-App-Adresse deines Apps Scripts ein.</p>';
+    document.getElementById('errorBox').style.display = 'block';
+    return;
+  }
+
+  try {
+    const kRes = await fetch(scriptURL + '?action=getEinstellungen');
+    konfig = JSON.parse(await kRes.text());
+
+    const sRes = await fetch(scriptURL + '?action=getSchueler');
+    schuelerData = JSON.parse(await sRes.text());
+  } catch (err) {
+    console.error('Fehler beim Laden:', err);
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('errorBox').style.display = 'block';
+    return;
+  }
+
+  document.getElementById('loading').style.display = 'none';
+
+  document.getElementById('titel').textContent = konfig.titel || 'Essensbestellung';
+  document.getElementById('untertitel').textContent = konfig.untertitel || '';
+  document.getElementById('preisHinweis').textContent = euro(konfig.einzelpreis || 0);
+  document.getElementById('deadline').innerHTML =
+    '⚠️ Bestellschluss: ' + (konfig.abgabetermin || '–') + ' – bitte bis dahin auswählen.';
+
+  if (konfig.allergenHinweis) {
+    document.getElementById('allergenLegende').textContent = konfig.allergenHinweis + ' ';
+  }
+
+  if (!konfig.bestellungOffen) {
+    document.getElementById('closedText').textContent = konfig.hinweis || 'Das Bestellformular ist aktuell nicht verfügbar.';
+    document.getElementById('closedBox').style.display = 'block';
+    return;
+  }
+
+  document.getElementById('orderForm').style.display = 'block';
+  baueKlassen();
+  baueTage();
+  berechne();
+}
+
+/* ============================================================
+   3) Klassen / Schüler
+   ============================================================ */
+function baueKlassen() {
+  const sel = document.getElementById('klasse');
+  sel.innerHTML = '<option value="">Bitte wählen …</option>';
+  Object.keys(schuelerData).sort().forEach(k => {
+    const o = document.createElement('option');
+    o.value = k; o.textContent = k;
+    sel.appendChild(o);
+  });
+}
+
+function updateSchueler() {
+  const k = document.getElementById('klasse').value;
+  const sel = document.getElementById('schueler');
+  sel.innerHTML = '<option value="">Bitte wählen …</option>';
+  if (k && schuelerData[k]) {
+    schuelerData[k].forEach(name => {
+      const o = document.createElement('option');
+      o.value = name; o.textContent = name;
+      sel.appendChild(o);
+    });
+  }
+}
+
+/* ============================================================
+   4) Tageskarten mit Menüauswahl (Menüs je Tag)
+   ============================================================ */
+function baueTage() {
+  const cont = document.getElementById('daysContainer');
+  cont.innerHTML = '';
+
+  konfig.tage.forEach((t, di) => {
+    const menues = t.menues || [];
+    const card = document.createElement('div');
+    card.className = 'day-card';
+    card.id = 'day_' + di;
+
+    let html =
+      '<div class="day-head">' +
+      '<span><span class="day-name">' + t.tag + '</span> ' +
+      '<span class="day-date">· ' + (t.datum || '') + '</span></span>' +
+      '<span class="day-line" id="dayLine_' + di + '"></span>' +
+      '</div><div class="options">';
+
+    html +=
+      '<label class="option none-opt selected" id="opt_' + di + '_none">' +
+      '<input type="radio" name="day_' + di + '" value="" checked ' +
+      'onchange="waehle(' + di + ', -1)">' +
+      '<span class="opt-text"><b>Kein Essen</b></span></label>';
+
+    if (menues.length === 0) {
+      html += '<div style="color:#a0aec0;font-size:14px;padding:6px 4px;">Für diesen Tag sind noch keine Menüs hinterlegt.</div>';
+    }
+
+    menues.forEach((m, mi) => {
+      const allergeneHtml = m.allergene
+        ? '<span class="allergene"><b>Allergene:</b> ' + m.allergene + '</span>'
+        : '';
+      html +=
+        '<label class="option" id="opt_' + di + '_' + mi + '">' +
+        '<input type="radio" name="day_' + di + '" value="' + mi + '" ' +
+        'onchange="waehle(' + di + ',' + mi + ')">' +
+        '<span class="opt-text"><b>' + m.name + '</b>' +
+        '<small>' + (m.beschreibung || '') + '</small>' + allergeneHtml + '</span></label>';
+    });
+
+    html += '</div>';
+    card.innerHTML = html;
+    cont.appendChild(card);
+  });
+}
+
+function waehle(dayIndex, menuIndex) {
+  const card = document.getElementById('day_' + dayIndex);
+  card.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
+  const id = menuIndex === -1 ? 'opt_' + dayIndex + '_none' : 'opt_' + dayIndex + '_' + menuIndex;
+  document.getElementById(id).classList.add('selected');
+  card.classList.toggle('has-selection', menuIndex !== -1);
+  berechne();
+}
+
+/* ============================================================
+   6) Berechnung
+   ============================================================ */
+function getAuswahl() {
+  const auswahl = [];
+  konfig.tage.forEach((t, di) => {
+    const sel = document.querySelector('input[name="day_' + di + '"]:checked');
+    if (sel && sel.value !== '') {
+      const m = (t.menues || [])[parseInt(sel.value)];
+      if (m) auswahl.push({ tag: t.tag, datum: t.datum, menue: m.name,
+                            beschreibung: m.beschreibung || '', allergene: m.allergene || '' });
+    }
+  });
+  return auswahl;
+}
+
+function berechne() {
+  const preis = konfig.einzelpreis || 0;
+  const auswahl = getAuswahl();
+  const anzahl = auswahl.length;
+  const gesamt = anzahl * preis;
+
+  konfig.tage.forEach((t, di) => {
+    const sel = document.querySelector('input[name="day_' + di + '"]:checked');
+    const line = document.getElementById('dayLine_' + di);
+    if (line) line.textContent = (sel && sel.value !== '') ? euro(preis) : '';
+  });
+
+  document.getElementById('calcLine').textContent = anzahl + ' Essen × ' + euro(preis);
+  document.getElementById('totalAmount').textContent = euro(gesamt);
+}
+
+/* ============================================================
+   7) Zurücksetzen
+   ============================================================ */
+function resetForm() {
+  if (!confirm('Formular wirklich zurücksetzen?')) return;
+  document.getElementById('orderForm').reset();
+  document.getElementById('klasse').selectedIndex = 0;
+  document.getElementById('schueler').innerHTML = '<option value="">Erst Klasse wählen …</option>';
+  baueTage();
+  berechne();
+}
+
+/* ============================================================
+   8) Absenden
+   ============================================================ */
+document.getElementById('emailConfirm').addEventListener('input', function () {
+  const a = document.getElementById('email').value;
+  document.getElementById('emailError').style.display =
+    (this.value.length > 0 && a !== this.value) ? 'block' : 'none';
+});
+
+document.getElementById('orderForm').addEventListener('submit', function (e) {
+  e.preventDefault();
+
+  const name   = document.getElementById('schueler').value;
+  const klasse = document.getElementById('klasse').value;
+  const email  = document.getElementById('email').value;
+  const email2 = document.getElementById('emailConfirm').value;
+
+  if (email !== email2) {
+    document.getElementById('emailError').style.display = 'block';
+    alert('⚠️ Die E-Mail-Adressen stimmen nicht überein!');
+    return;
+  }
+
+  const auswahl = getAuswahl();
+  if (auswahl.length === 0) {
+    alert('Bitte wähle für mindestens einen Tag ein Menü aus.');
+    return;
+  }
+
+  const preis = konfig.einzelpreis || 0;
+  const gesamt = auswahl.length * preis;
+
+  const orderData = {
+    timestamp: new Date().toISOString(),
+    name: name, klasse: klasse, email: email,
+    einzelpreis: preis, gesamtbetrag: gesamt, auswahl: auswahl
+  };
+
+  const btn = document.querySelector('.btn-primary');
+  btn.disabled = true; btn.textContent = 'Wird gesendet …';
+
+  const params = new URLSearchParams();
+  params.append('name', name);
+  params.append('klasse', klasse);
+  params.append('email', email);
+  params.append('einzelpreis', preis);
+  params.append('gesamtbetrag', gesamt);
+  params.append('bestellungen', JSON.stringify(auswahl));
+  params.append('timestamp', orderData.timestamp);
+
+  const img = document.createElement('img');
+  img.style.display = 'none';
+  img.src = scriptURL + '?' + params.toString();
+  const fertig = () => {
+    setTimeout(() => {
+      zeigeErfolg(orderData);
+      alert('✅ Bestellung übermittelt! Du erhältst gleich eine Bestätigungs-E-Mail mit deiner Auswahl.');
+      window.scrollTo(0, 0);
+      document.getElementById('orderForm').reset();
+      document.getElementById('klasse').selectedIndex = 0;
+      document.getElementById('schueler').innerHTML = '<option value="">Erst Klasse wählen …</option>';
+      baueTage(); berechne();
+      btn.disabled = false; btn.textContent = 'Bestellung absenden';
+      if (img.parentNode) document.body.removeChild(img);
+    }, 600);
+  };
+  img.onload = fertig;
+  img.onerror = fertig;
+  document.body.appendChild(img);
+});
+
+/* ============================================================
+   9) Erfolg
+   ============================================================ */
+function zeigeErfolg(d) {
+  document.getElementById('successBox').classList.add('show');
+}
+
+ladeAlles();
+</script>
+</body>
+</html>
