@@ -279,9 +279,8 @@
       <div id="daysContainer"></div>
 
       <div class="allergen-note" id="allergenNote">
-        <strong>Allergene &amp; Zusatzstoffe:</strong> Die Kürzel hinter jedem Menü beziehen sich auf den
-        offiziellen Speiseplan. <span id="allergenLegende"></span>
-        Angaben ohne Gewähr – Änderungen vorbehalten.
+        <strong>Allergene &amp; Zusatzstoffe:</strong> Die Kürzel hinter jedem Menü sind in der
+        Legende unten erklärt. Angaben ohne Gewähr – Änderungen vorbehalten.
       </div>
 
       <details class="allergen-legend">
@@ -402,10 +401,6 @@ async function ladeAlles() {
   document.getElementById('preisHinweis').textContent = euro(konfig.einzelpreis || 0);
   document.getElementById('deadline').innerHTML =
     '⚠️ Bestellschluss: ' + (konfig.abgabetermin || '–') + ' – bitte bis dahin auswählen.';
-
-  if (konfig.allergenHinweis) {
-    document.getElementById('allergenLegende').textContent = konfig.allergenHinweis + ' ';
-  }
 
   if (!konfig.bestellungOffen) {
     document.getElementById('closedText').textContent = konfig.hinweis || 'Das Bestellformular ist aktuell nicht verfügbar.';
