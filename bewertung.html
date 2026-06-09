@@ -1,1 +1,290 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bewertung – Mittagessen</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 20px; min-height: 100vh; color: #2d3748;
+  }
+  .container {
+    max-width: 760px; margin: 0 auto; background: #fff;
+    border-radius: 15px; box-shadow: 0 10px 40px rgba(0,0,0,.2); overflow: hidden;
+  }
+  .header {
+    background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+    color: #fff; padding: 28px; text-align: center;
+  }
+  .header h1 { font-size: 26px; margin-bottom: 6px; }
+  .header p { font-size: 14px; opacity: .9; }
+  .demo-banner {
+    background: #fefcbf; color: #744210; text-align: center;
+    padding: 10px; font-size: 13px; border-bottom: 2px solid #f6e05e;
+  }
+  .anon { background: #ebf8ff; border-bottom: 2px solid #bee3f8; color: #2c5282;
+    text-align: center; padding: 10px; font-size: 13px; }
+  .content { padding: 28px; }
+  .loading, .error-box, .closed-box {
+    text-align: center; padding: 40px 20px; font-size: 17px;
+  }
+  .loading { color: #667eea; }
+  .error-box, .closed-box { display: none; }
+  .error-box { background: #fff5f5; color: #c53030; border-radius: 8px; }
 
+  .top-fields { display: flex; gap: 16px; margin-bottom: 8px; flex-wrap: wrap; }
+  .field { flex: 1; min-width: 200px; margin-bottom: 14px; }
+  .field label { display: block; font-weight: bold; margin-bottom: 6px; }
+  .field input {
+    width: 100%; padding: 11px; border: 2px solid #e2e8f0; border-radius: 8px;
+    font-size: 16px; background: #fff;
+  }
+  .field input:focus { outline: none; border-color: #667eea; }
+  .required { color: #e53e3e; }
+
+  .frage {
+    border: 2px solid #e2e8f0; border-radius: 10px; padding: 16px; margin-bottom: 14px;
+  }
+  .frage.answered { border-color: #667eea; }
+  .frage-text { font-size: 16px; font-weight: bold; margin-bottom: 12px; }
+  .smileys { display: flex; gap: 8px; justify-content: space-between; max-width: 420px; }
+  .smiley {
+    flex: 1; aspect-ratio: 1; border: 2px solid #e2e8f0; border-radius: 12px;
+    background: #fff; font-size: 26px; cursor: pointer; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .08s, border-color .15s, background .15s; padding: 6px;
+  }
+  .smiley:hover { transform: scale(1.08); }
+  .smiley.sel { border-width: 3px; transform: scale(1.12); }
+  .smiley.s1.sel { border-color: #e53e3e; background: #fed7d7; }
+  .smiley.s2.sel { border-color: #ed8936; background: #feebc8; }
+  .smiley.s3.sel { border-color: #ecc94b; background: #fefcbf; }
+  .smiley.s4.sel { border-color: #68d391; background: #c6f6d5; }
+  .smiley.s5.sel { border-color: #38a169; background: #9ae6b4; }
+  .scale-ends { display: flex; justify-content: space-between; max-width: 420px;
+    font-size: 12px; color: #718096; margin-top: 4px; }
+
+  .comment label { display: block; font-weight: bold; margin: 18px 0 8px; }
+  .comment textarea {
+    width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px;
+    font-size: 16px; font-family: inherit; resize: vertical;
+  }
+  .btn {
+    width: 100%; margin-top: 22px; padding: 16px; border: none; border-radius: 8px;
+    font-size: 17px; font-weight: bold; cursor: pointer; background: #667eea; color: #fff;
+  }
+  .btn:hover { background: #5568d3; }
+  .btn:disabled { background: #a0aec0; cursor: not-allowed; }
+
+  .success-box {
+    display: none; text-align: center; padding: 30px 20px;
+    background: #c6f6d5; border: 2px solid #68d391; color: #22543d; border-radius: 10px;
+  }
+  .success-box.show { display: block; }
+  .success-box h2 { margin-bottom: 10px; }
+  .success-box button {
+    margin-top: 16px; padding: 12px 26px; border: none; border-radius: 8px;
+    background: #38a169; color: #fff; font-weight: bold; font-size: 15px; cursor: pointer;
+  }
+  @media (max-width: 520px) {
+    .smiley { font-size: 22px; }
+    .top-fields { flex-direction: column; gap: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <img id="logo" alt="Logo" style="display:none; max-height:64px; margin:0 auto 12px;">
+    <h1 id="titel">Bewertung</h1>
+    <p id="einrichtung">Mittagessen</p>
+  </div>
+
+  <div class="demo-banner" id="demoBanner" style="display:none;">
+    🛠️ <strong>Vorschau:</strong> Beispieldaten. Trage unten bei <code>scriptURL</code> deine Web-App-Adresse ein, um live zu speichern.
+  </div>
+  <div class="anon">🔒 Diese Bewertung ist <strong>anonym</strong> – es werden keine persönlichen Daten erfasst.</div>
+
+  <div class="content">
+    <div class="loading" id="loading">⏳ Lade …</div>
+    <div class="error-box" id="errorBox"><strong>⚠️ Fehler beim Laden.</strong><p>Bitte später erneut versuchen.</p></div>
+    <div class="closed-box" id="closedBox"><h2>🔒 Bewertung geschlossen</h2><p id="closedText"></p></div>
+
+    <div class="success-box" id="successBox">
+      <h2>✅ Vielen Dank für deine Bewertung!</h2>
+      <p>Deine Rückmeldung wurde anonym gespeichert.</p>
+      <button type="button" onclick="neueBewertung()">Weitere Bewertung abgeben</button>
+    </div>
+
+    <form id="form" style="display:none;">
+      <div class="top-fields">
+        <div class="field">
+          <label>Testtag (Datum): <span class="required">*</span></label>
+          <input type="date" id="testtag" required>
+        </div>
+        <div class="field">
+          <label>Menü (Nr.): <span class="required">*</span></label>
+          <input type="text" id="menue" required placeholder="z. B. 1" inputmode="numeric">
+        </div>
+      </div>
+
+      <div id="fragenContainer"></div>
+
+      <div class="comment">
+        <label>Weitere Anmerkungen / Verbesserungsvorschläge:</label>
+        <textarea id="anmerkung" rows="3" placeholder="Optional …"></textarea>
+      </div>
+
+      <button type="submit" class="btn">Bewertung absenden</button>
+    </form>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   1) Web-App-URL des Apps Scripts eintragen
+   ============================================================ */
+const scriptURL = 'HIER_DEINE_SCRIPT_URL_EINTRAGEN';
+
+/* Logo: optional Base64-String eintragen ('data:image/png;base64,...') */
+const LOGO_B64 = '';
+(function(){ if(LOGO_B64){ const l=document.getElementById('logo'); l.src = (LOGO_B64.indexOf('data:')===0?LOGO_B64:'data:image/jpeg;base64,'+LOGO_B64); l.style.display='block'; } })();
+
+/* Vorschau-Daten (falls keine URL gesetzt) */
+const DEMO = {
+  titel: 'Bewertung',
+  einrichtung: 'Oberschule Westerzgebirge / Friedrich-Schiller-Grundschule',
+  bewertungOffen: true, hinweis: '',
+  fragen: [
+    'Qualität/Geschmack der Speisen',
+    'Temperatur der Speisen',
+    'Portionsgröße',
+    'Optik der Speisen',
+    'Hat mich das Essen satt gemacht?',
+    'Würde ich das Essen wieder wählen?',
+    'Gesamteindruck des Mittagessen'
+  ]
+};
+
+const SMILEYS = ['😠','🙁','😐','🙂','😄'];
+let konfig = {};
+let antworten = [];   // pro Frage: '' oder 1..5
+let isDemo = false;
+
+async function laden() {
+  const urlFehlt = !scriptURL || scriptURL.indexOf('HIER_DEINE') === 0;
+  try {
+    if (urlFehlt) throw new Error('keine URL');
+    const res = await fetch(scriptURL + '?action=getEinstellungen');
+    konfig = JSON.parse(await res.text());
+  } catch (e) {
+    isDemo = true; konfig = DEMO;
+  }
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('titel').textContent = konfig.titel || 'Bewertung';
+  document.getElementById('einrichtung').textContent = konfig.einrichtung || '';
+  if (isDemo) document.getElementById('demoBanner').style.display = 'block';
+
+  if (!konfig.bewertungOffen) {
+    document.getElementById('closedText').textContent = konfig.hinweis || 'Die Bewertung ist aktuell geschlossen.';
+    document.getElementById('closedBox').style.display = 'block';
+    return;
+  }
+
+  // Datum auf heute vorbelegen
+  const heute = new Date();
+  document.getElementById('testtag').value =
+    heute.getFullYear() + '-' + String(heute.getMonth()+1).padStart(2,'0') + '-' + String(heute.getDate()).padStart(2,'0');
+
+  baueFragen();
+  document.getElementById('form').style.display = 'block';
+}
+
+function baueFragen() {
+  const cont = document.getElementById('fragenContainer');
+  cont.innerHTML = '';
+  antworten = konfig.fragen.map(() => '');
+  konfig.fragen.forEach((frage, idx) => {
+    let html = '<div class="frage" id="frage_' + idx + '"><div class="frage-text">' + frage + '</div><div class="smileys">';
+    for (let w = 1; w <= 5; w++) {
+      html += '<button type="button" class="smiley s' + w + '" id="sm_' + idx + '_' + w +
+              '" onclick="setRating(' + idx + ',' + w + ')">' + SMILEYS[w-1] + '</button>';
+    }
+    html += '</div><div class="scale-ends"><span>– schlecht</span><span>gut +</span></div></div>';
+    cont.insertAdjacentHTML('beforeend', html);
+  });
+}
+
+function setRating(idx, wert) {
+  antworten[idx] = wert;
+  const frage = document.getElementById('frage_' + idx);
+  frage.querySelectorAll('.smiley').forEach(b => b.classList.remove('sel'));
+  document.getElementById('sm_' + idx + '_' + wert).classList.add('sel');
+  frage.classList.add('answered');
+}
+
+document.getElementById('form').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const testtag = document.getElementById('testtag').value;
+  const menue   = document.getElementById('menue').value.trim();
+  const anmerkung = document.getElementById('anmerkung').value.trim();
+
+  if (!testtag || !menue) { alert('Bitte Testtag und Menü-Nr. angeben.'); return; }
+  if (antworten.every(v => v === '')) {
+    if (!confirm('Du hast noch keine Smileys ausgewählt. Trotzdem absenden?')) return;
+  }
+
+  // Datum als dd.mm.yyyy
+  const d = testtag.split('-');
+  const testtagDE = d.length === 3 ? (d[2] + '.' + d[1] + '.' + d[0]) : testtag;
+
+  const data = { timestamp: new Date().toISOString(), testtag: testtagDE, menue: menue,
+                 antworten: antworten, anmerkung: anmerkung };
+
+  if (isDemo) { fertig(); alert('🛠️ Vorschau: Es wurde nichts gespeichert.'); return; }
+
+  const btn = document.querySelector('.btn');
+  btn.disabled = true; btn.textContent = 'Wird gesendet …';
+
+  const params = new URLSearchParams();
+  params.append('testtag', testtagDE);
+  params.append('menue', menue);
+  params.append('anmerkung', anmerkung);
+  params.append('antworten', JSON.stringify(antworten));
+  params.append('timestamp', data.timestamp);
+
+  const img = document.createElement('img');
+  img.style.display = 'none';
+  img.src = scriptURL + '?' + params.toString();
+  const done = () => {
+    setTimeout(() => {
+      btn.disabled = false; btn.textContent = 'Bewertung absenden';
+      if (img.parentNode) document.body.removeChild(img);
+      fertig();
+    }, 600);
+  };
+  img.onload = done; img.onerror = done;
+  document.body.appendChild(img);
+});
+
+function fertig() {
+  document.getElementById('form').style.display = 'none';
+  document.getElementById('successBox').classList.add('show');
+  window.scrollTo(0, 0);
+}
+
+function neueBewertung() {
+  document.getElementById('successBox').classList.remove('show');
+  document.getElementById('menue').value = '';
+  document.getElementById('anmerkung').value = '';
+  baueFragen();
+  document.getElementById('form').style.display = 'block';
+}
+
+laden();
+</script>
+</body>
+</html>
