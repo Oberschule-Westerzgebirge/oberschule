@@ -26,29 +26,40 @@
     const BEWERTUNG_COL = "hoerspiel_bewertungen";
     const ADMIN_PW      = "Admin-OSWE";
 
-    const KRITERIEN = [
+    const KRITERIEN_DEFAULT = [
       { id:"story",    label:"📖 Drehbuch & Story",     desc:"Spannung, roter Faden, Originalität" },
       { id:"sprechen", label:"🎤 Sprachqualität",        desc:"Deutlichkeit, Ausdruck, Betonung" },
       { id:"sounds",   label:"🎵 Soundeffekte & Musik",  desc:"Passende Geräusche, Atmosphäre" },
       { id:"schnitt",  label:"✂️ Schnitt & Abmischung",  desc:"Übergänge, Lautstärken, Qualität" },
       { id:"laenge",   label:"⏱️ Länge",                 desc:"5–10 Minuten eingehalten?" },
     ];
-
-    const MITGL_KRITERIEN = [
-      { id:"informiert",   label:"Informationsstand", desc:"Hat sich immer über den aktuellen Stand informiert" },
-      { id:"ideen",        label:"Ideen & Lösungen",  desc:"Hat eigene Ideen und Problemlösungen eingebracht" },
-      { id:"termine",      label:"Termintreue",        desc:"Hat Termine beachtet und auf Ereignisse hingewiesen" },
-      { id:"unterstuetzt", label:"Unterstützung",      desc:"Hat anderen geholfen, wenn jemand nicht weiterkam" },
-      { id:"anwesend",     label:"Anwesenheit",        desc:"War bei Aufnahmen und Arbeitsphasen zuverlässig anwesend" },
-    ];
-
-    const MITGLIEDER_KRITERIEN = [
+    const MITGLIEDER_KRITERIEN_DEFAULT = [
       { id:"informiert",  label:"📋 Informationsstand",   desc:"Hat sich immer über den aktuellen Stand der Aufgabe informiert" },
       { id:"ideen",       label:"💡 Ideen & Lösungen",    desc:"Hat eigene Ideen und Problemlösungen eingebracht" },
       { id:"termine",     label:"📅 Termintreue",         desc:"Hat Termine beachtet und die Gruppe auf bevorstehende Ereignisse hingewiesen" },
       { id:"unterstuetzt",label:"🤝 Unterstützung",       desc:"Hat andere unterstützt und geholfen, wenn jemand nicht weiterkam" },
       { id:"anwesend",    label:"✅ Anwesenheit",         desc:"War bei Aufnahmen und gemeinsamen Arbeitsphasen zuverlässig anwesend" },
     ];
+
+    // Live-Kopien (werden aus Firestore überschrieben)
+    let KRITERIEN          = [...KRITERIEN_DEFAULT];
+    let MITGLIEDER_KRITERIEN = [...MITGLIEDER_KRITERIEN_DEFAULT];
+    let MITGL_KRITERIEN    = [...MITGLIEDER_KRITERIEN_DEFAULT];
+
+    const KRITERIEN_COL = "hoerspiel_kriterien";
+
+    async function ladeKriterien() {
+      try {
+        const docH = await db.collection(KRITERIEN_COL).doc("hoerspiel").get();
+        if (docH.exists && docH.data().kriterien?.length)
+          KRITERIEN = docH.data().kriterien;
+        const docM = await db.collection(KRITERIEN_COL).doc("mitglieder").get();
+        if (docM.exists && docM.data().kriterien?.length) {
+          MITGLIEDER_KRITERIEN = docM.data().kriterien;
+          MITGL_KRITERIEN      = docM.data().kriterien;
+        }
+      } catch(e) { console.warn("Kriterien-Laden fehlgeschlagen, nutze Defaults", e); }
+    }
 
     const GEWICHTUNG = { lehrer: 0.70, schueler: 0.30 };
     const MITGLIEDER_COL = "hoerspiel_mitgliederbewertungen";
@@ -136,6 +147,7 @@
         return;
       }
       currentUser = { name, gruppe: meineGruppe.name, rolle: "schueler" };
+      await ladeKriterien();
       await ladeBewertungen();
       zeigeDownloads();
     };
@@ -144,6 +156,7 @@
       const pw = document.getElementById("inp-lehrerpw").value;
       if (pw !== ADMIN_PW) { toast("Falsches Passwort!", "error"); return; }
       currentUser = { name: "Lehrer", gruppe: null, rolle: "lehrer" };
+      await ladeKriterien();
       await ladeGruppen();
       await ladeBewertungen();
       zeigeLehrer();
@@ -359,6 +372,7 @@
       renderLehrerGruppen();
       renderBewertungsUebersicht();
       renderNotenUebersicht();
+      renderKriterienEditor();
     }
 
     function renderLehrerGruppen() {
@@ -678,6 +692,116 @@
       else toast("Keine Mitglieder eingetragen.", "error");
     };
 
+    // ── KRITERIEN VERWALTEN ──────────────────────────
+    function renderKriterienEditor() {
+      renderKriterienListe("hoerspiel", KRITERIEN, "kriterien-liste-hoerspiel");
+      renderKriterienListe("mitglieder", MITGLIEDER_KRITERIEN, "kriterien-liste-mitglieder");
+    }
+
+    function renderKriterienListe(typ, liste, containerId) {
+      const c = document.getElementById(containerId);
+      if (!c) return;
+      c.innerHTML = liste.map((k, i) => `
+        <div class="kriterium-row" data-typ="${typ}" data-idx="${i}">
+          <span class="kriterium-label">${k.label}</span>
+          <span class="kriterium-desc">${k.desc}</span>
+          <div class="kriterium-actions">
+            <button class="btn-sm btn-edit" onclick="kriteriumBearbeiten('${typ}',${i})">✏️</button>
+            <button class="btn-sm" onclick="kriteriumHoch('${typ}',${i})" ${i===0?'disabled':''}>↑</button>
+            <button class="btn-sm" onclick="kriteriumRunter('${typ}',${i})" ${i===liste.length-1?'disabled':''}>↓</button>
+            <button class="btn-sm btn-del" onclick="kriteriumLoeschen('${typ}',${i})">🗑️</button>
+          </div>
+        </div>
+      `).join("") || "<p class='muted'>Keine Kriterien.</p>";
+    }
+
+    window.kriteriumBearbeiten = function(typ, idx) {
+      const liste = typ === "hoerspiel" ? KRITERIEN : MITGLIEDER_KRITERIEN;
+      const k = liste[idx];
+      document.getElementById("krit-edit-typ").value   = typ;
+      document.getElementById("krit-edit-idx").value   = idx;
+      document.getElementById("krit-edit-label").value = k.label;
+      document.getElementById("krit-edit-desc").value  = k.desc;
+      document.getElementById("krit-edit-neu").value   = "nein";
+      document.getElementById("krit-modal-titel").textContent = "✏️ Kriterium bearbeiten";
+      show("modal-kriterium");
+    };
+
+    window.kriteriumNeu = function(typ) {
+      document.getElementById("krit-edit-typ").value   = typ;
+      document.getElementById("krit-edit-idx").value   = "-1";
+      document.getElementById("krit-edit-label").value = "";
+      document.getElementById("krit-edit-desc").value  = "";
+      document.getElementById("krit-edit-neu").value   = "ja";
+      document.getElementById("krit-modal-titel").textContent = "➕ Neues Kriterium";
+      show("modal-kriterium");
+    };
+
+    window.kriteriumSpeichern = async function() {
+      const typ   = document.getElementById("krit-edit-typ").value;
+      const idx   = parseInt(document.getElementById("krit-edit-idx").value);
+      const label = document.getElementById("krit-edit-label").value.trim();
+      const desc  = document.getElementById("krit-edit-desc").value.trim();
+      const neu   = document.getElementById("krit-edit-neu").value === "ja";
+      if (!label) { toast("Bitte Bezeichnung eingeben!", "error"); return; }
+      const liste = typ === "hoerspiel" ? KRITERIEN : MITGLIEDER_KRITERIEN;
+      const id    = label.toLowerCase().replace(/[^a-z0-9]/g,"").substring(0,12) + "_" + Date.now();
+      if (neu) {
+        liste.push({ id, label, desc });
+      } else {
+        liste[idx] = { ...liste[idx], label, desc };
+      }
+      if (typ === "mitglieder") MITGL_KRITERIEN = [...liste];
+      await speichereKriterien(typ, liste);
+      hide("modal-kriterium");
+      renderKriterienListe(typ, liste, `kriterien-liste-${typ}`);
+      toast("Kriterium gespeichert ✓", "success");
+    };
+
+    window.kriteriumLoeschen = async function(typ, idx) {
+      if (!confirm("Kriterium wirklich löschen?")) return;
+      const liste = typ === "hoerspiel" ? KRITERIEN : MITGLIEDER_KRITERIEN;
+      liste.splice(idx, 1);
+      if (typ === "mitglieder") MITGL_KRITERIEN = [...liste];
+      await speichereKriterien(typ, liste);
+      renderKriterienListe(typ, liste, `kriterien-liste-${typ}`);
+      toast("Gelöscht ✓", "success");
+    };
+
+    window.kriteriumHoch = async function(typ, idx) {
+      const liste = typ === "hoerspiel" ? KRITERIEN : MITGLIEDER_KRITERIEN;
+      if (idx === 0) return;
+      [liste[idx-1], liste[idx]] = [liste[idx], liste[idx-1]];
+      if (typ === "mitglieder") MITGL_KRITERIEN = [...liste];
+      await speichereKriterien(typ, liste);
+      renderKriterienListe(typ, liste, `kriterien-liste-${typ}`);
+    };
+
+    window.kriteriumRunter = async function(typ, idx) {
+      const liste = typ === "hoerspiel" ? KRITERIEN : MITGLIEDER_KRITERIEN;
+      if (idx >= liste.length-1) return;
+      [liste[idx], liste[idx+1]] = [liste[idx+1], liste[idx]];
+      if (typ === "mitglieder") MITGL_KRITERIEN = [...liste];
+      await speichereKriterien(typ, liste);
+      renderKriterienListe(typ, liste, `kriterien-liste-${typ}`);
+    };
+
+    async function speichereKriterien(typ, liste) {
+      try {
+        await db.collection(KRITERIEN_COL).doc(typ).set({ kriterien: liste });
+      } catch(e) { toast("Fehler beim Speichern: " + e.message, "error"); console.error(e); }
+    }
+
+    window.kriterienZuruecksetzen = async function(typ) {
+      if (!confirm("Alle Kriterien auf Standard zurücksetzen?")) return;
+      const defaults = typ === "hoerspiel" ? KRITERIEN_DEFAULT : MITGLIEDER_KRITERIEN_DEFAULT;
+      if (typ === "hoerspiel") { KRITERIEN.length = 0; defaults.forEach(k => KRITERIEN.push({...k})); }
+      else { MITGLIEDER_KRITERIEN.length = 0; defaults.forEach(k => MITGLIEDER_KRITERIEN.push({...k})); MITGL_KRITERIEN = [...MITGLIEDER_KRITERIEN]; }
+      await speichereKriterien(typ, typ === "hoerspiel" ? KRITERIEN : MITGLIEDER_KRITERIEN);
+      renderKriterienListe(typ, typ === "hoerspiel" ? KRITERIEN : MITGLIEDER_KRITERIEN, `kriterien-liste-${typ}`);
+      toast("Zurückgesetzt ✓", "success");
+    };
+
     window.exportCSV = async function() {
       try {
         await ladeGruppen();
@@ -831,6 +955,13 @@
     .badge-eigene  { background: rgba(245,166,35,0.2); color: var(--amber); font-size: 0.75rem; padding: 2px 8px; border-radius: 20px; }
     .badge-ok      { background: rgba(74,222,128,0.15); color: var(--green); font-size: 0.75rem; padding: 2px 8px; border-radius: 20px; }
     .badge-typ     { background: rgba(139,92,246,0.15); color: #a78bfa; font-size: 0.72rem; padding: 2px 8px; border-radius: 20px; }
+    .kriterien-block { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+    .kriterium-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .kriterium-row:last-child { border-bottom: none; }
+    .kriterium-label { font-weight: 600; min-width: 160px; flex: 0 0 auto; }
+    .kriterium-desc  { flex: 1; font-size: 0.83rem; color: var(--muted); }
+    .kriterium-actions { display: flex; gap: 5px; flex-shrink: 0; }
+    .kriterium-actions button:disabled { opacity: 0.3; cursor: default; }
     .drive-btn { display: inline-flex; align-items: center; gap: 6px; background: #1e6fe5; color: #fff; text-decoration: none; padding: 9px 16px; border-radius: 8px; font-size: 0.88rem; transition: background .2s; }
     .drive-btn:hover { background: #1a5fc4; }
     .no-link { color: var(--muted); font-style: italic; font-size: 0.85rem; }
@@ -1040,6 +1171,33 @@
     </p>
     <div id="noten-uebersicht"><p class="muted">Lade Noten…</p></div>
   </div>
+
+  <div class="lehrer-section">
+    <h2>⚙️ Bewertungskriterien</h2>
+    <p style="font-size:0.83rem;color:var(--muted);margin-bottom:16px">Kriterien für die Hörspiel- und Gruppenarbeit-Bewertung anpassen. Änderungen gelten sofort für alle neuen Bewertungen.</p>
+
+    <div class="kriterien-block">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <strong>🎙️ Hörspiel-Kriterien</strong>
+        <div style="display:flex;gap:8px">
+          <button class="btn-sm" onclick="kriterienZuruecksetzen('hoerspiel')">↩ Reset</button>
+          <button class="btn-sm btn-edit" onclick="kriteriumNeu('hoerspiel')">+ Neu</button>
+        </div>
+      </div>
+      <div id="kriterien-liste-hoerspiel"></div>
+    </div>
+
+    <div class="kriterien-block" style="margin-top:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <strong>👥 Gruppenarbeit-Kriterien</strong>
+        <div style="display:flex;gap:8px">
+          <button class="btn-sm" onclick="kriterienZuruecksetzen('mitglieder')">↩ Reset</button>
+          <button class="btn-sm btn-edit" onclick="kriteriumNeu('mitglieder')">+ Neu</button>
+        </div>
+      </div>
+      <div id="kriterien-liste-mitglieder"></div>
+    </div>
+  </div>
 </div>
 
 <!-- SCREEN: MITGLIEDER-BEWERTUNG -->
@@ -1053,6 +1211,29 @@
   <div class="bew-actions" style="margin-top:24px">
     <button class="btn-secondary" onclick="mitgliederUeberspringen()">Überspringen</button>
     <button class="btn-primary" style="flex:1" onclick="mitgliederBewertungSpeichern()">Bewertungen abschicken 🎉</button>
+  </div>
+</div>
+
+<!-- MODAL: KRITERIUM BEARBEITEN -->
+<div id="modal-kriterium" class="modal-overlay" style="display:none" onclick="if(event.target===this)schliesseModal('modal-kriterium')">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="krit-modal-titel">✏️ Kriterium bearbeiten</h3>
+      <button class="modal-close" onclick="schliesseModal('modal-kriterium')">✕</button>
+    </div>
+    <div class="modal-form">
+      <input type="hidden" id="krit-edit-typ">
+      <input type="hidden" id="krit-edit-idx">
+      <input type="hidden" id="krit-edit-neu">
+      <label>Bezeichnung <small style="color:var(--muted)">(inkl. Emoji, z.B. 🎤 Sprachqualität)</small></label>
+      <input id="krit-edit-label" type="text" placeholder="📖 Kriterium-Name">
+      <label>Beschreibung <small style="color:var(--muted)">(kurzer Hinweis für Schüler)</small></label>
+      <input id="krit-edit-desc" type="text" placeholder="Was wird hier bewertet?">
+    </div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn-secondary" onclick="schliesseModal('modal-kriterium')">Abbrechen</button>
+      <button class="btn-primary" style="flex:1" onclick="kriteriumSpeichern()">Speichern ✓</button>
+    </div>
   </div>
 </div>
 
