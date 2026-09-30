@@ -147,9 +147,15 @@
       const name = document.getElementById("inp-name").value.trim();
       if (!name) { toast("Bitte deinen Namen eingeben!", "error"); return; }
       await ladeGruppen();
-      const meineGruppe = gruppen.find(g =>
+      // Suche in Mitgliederlisten (Gruppen) ODER direkt als Einzelperson (name = Gruppenname)
+      let meineGruppe = gruppen.find(g =>
         (g.mitglieder || []).some(m => m.trim().toLowerCase() === name.toLowerCase())
       );
+      if (!meineGruppe) {
+        meineGruppe = gruppen.find(g =>
+          g.typ === "einzelperson" && g.name.trim().toLowerCase() === name.toLowerCase()
+        );
+      }
       if (!meineGruppe) {
         toast("Name nicht gefunden! Bitte genau so schreiben wie eingetragen.", "error");
         return;
