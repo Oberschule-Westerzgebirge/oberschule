@@ -171,7 +171,8 @@
         card.className = "gruppe-card" + (istEigene ? " eigene" : "");
         card.innerHTML = `
           <div class="gruppe-header">
-            <span class="gruppe-name">🎙️ ${g.name}</span>
+            <span class="gruppe-name">${g.typ==="einzelperson"?"👤":"🎙️"} ${g.name}</span>
+            ${g.typ==="einzelperson"?'<span class="badge-typ">Einzelperson</span>':""}
             ${istEigene ? '<span class="badge-eigene">Eure Gruppe</span>' : ""}
             ${bewertet && !istEigene ? '<span class="badge-ok">✓ Bewertet</span>' : ""}
           </div>
@@ -364,10 +365,10 @@
       const c = document.getElementById("lehrer-gruppen");
       c.innerHTML = gruppen.map(g => `
         <div class="lehrer-gruppe-row">
-          <span class="lg-name">🎙️ ${g.name}</span>
-          <span class="lg-mitglieder">${g.mitglieder?.length ? "👥 " + g.mitglieder.join(", ") : "<em style='color:var(--muted)'>Keine Mitglieder</em>"}</span>
+          <span class="lg-name">${g.typ==="einzelperson"?"👤":"🎙️"} ${g.name} ${g.typ==="einzelperson"?'<span class="badge-typ">Einzelperson</span>':''}</span>
+          <span class="lg-mitglieder">${g.typ==="einzelperson"?"<em style='color:var(--muted)'>Einzelperson</em>" : (g.mitglieder?.length ? "👥 " + g.mitglieder.join(", ") : "<em style='color:var(--muted)'>Keine Mitglieder</em>")}</span>
           <a href="${g.driveLink||'#'}" target="_blank" class="lg-link ${g.driveLink?'':'no-link'}">${g.driveLink?"🔗 Drive-Link":"Kein Link"}</a>
-          <button class="btn-sm btn-edit" onclick="gruppeBearbeiten('${g.id}','${g.name.replace(/'/g,"\'")}','${(g.driveLink||'').replace(/'/g,"\'")}','${(g.mitglieder||[]).join(",").replace(/'/g,"\'")}')">✏️</button>
+          <button class="btn-sm btn-edit" onclick="gruppeBearbeiten('${g.id}','${g.name.replace(/'/g,"\'")}','${(g.driveLink||'').replace(/'/g,"\'")}','${(g.mitglieder||[]).join(",").replace(/'/g,"\'")}','${g.typ||"gruppe"}')">✏️</button>
           <button class="btn-sm btn-del"  onclick="gruppeLoeschen('${g.id}','${g.name.replace(/'/g,"\'")}')">🗑️</button>
         </div>
       `).join("") || "<p class='muted'>Noch keine Gruppen.</p>";
@@ -509,13 +510,20 @@
       }
     }
 
+    window.updateTypPlaceholder = function() {
+      const typ = document.querySelector('input[name="neuer-typ"]:checked').value;
+      document.getElementById("neue-gruppe-name").placeholder =
+        typ === "einzelperson" ? "Name (z. B. Max Mustermann)" : "Gruppenname (z. B. Gruppe Krimi)";
+    };
+
     window.gruppeHinzufuegen = async function() {
       const name = document.getElementById("neue-gruppe-name").value.trim();
       const link = document.getElementById("neue-gruppe-link").value.trim();
-      if (!name) { toast("Bitte Gruppenname eingeben!", "error"); return; }
+      const typ  = document.querySelector('input[name="neuer-typ"]:checked').value;
+      if (!name) { toast("Bitte Name eingeben!", "error"); return; }
       try {
-        await db.collection(GRUPPEN_COL).add({ name, driveLink: link, timestamp: firebase.firestore.FieldValue.serverTimestamp() });
-        toast(`Gruppe "${name}" hinzugefügt! ✓`, "success");
+        await db.collection(GRUPPEN_COL).add({ name, driveLink: link, typ, timestamp: firebase.firestore.FieldValue.serverTimestamp() });
+        toast(`"${name}" hinzugefügt! ✓`, "success");
         document.getElementById("neue-gruppe-name").value = "";
         document.getElementById("neue-gruppe-link").value = "";
         await ladeGruppen();
@@ -525,23 +533,39 @@
       } catch(e) { toast("Fehler: " + (e.message||e.code||e), "error"); console.error(e); }
     };
 
-    window.gruppeBearbeiten = function(id, name, link, mitgliederStr) {
+    window.gruppeBearbeiten = function(id, name, link, mitgliederStr, typ) {
       document.getElementById("edit-gruppe-id").value         = id;
       document.getElementById("edit-gruppe-name").value       = name;
       document.getElementById("edit-gruppe-link").value       = link;
       document.getElementById("edit-gruppe-mitglieder").value = mitgliederStr || "";
+      const t = typ || "gruppe";
+      document.querySelector(`input[name="edit-typ"][value="${t}"]`).checked = true;
+      document.getElementById("edit-name-label").textContent = t === "einzelperson" ? "Name" : "Gruppenname";
+      document.getElementById("edit-mitglieder-wrap").style.display = t === "einzelperson" ? "none" : "";
+      document.getElementById("edit-modal-titel").textContent = t === "einzelperson" ? "✏️ Einzelperson bearbeiten" : "✏️ Gruppe bearbeiten";
       show("modal-edit");
     };
+
+    // Live-Update des Edit-Modals bei Typ-Wechsel
+    document.addEventListener("change", function(e) {
+      if (e.target.name === "edit-typ") {
+        const t = e.target.value;
+        document.getElementById("edit-name-label").textContent = t === "einzelperson" ? "Name" : "Gruppenname";
+        document.getElementById("edit-mitglieder-wrap").style.display = t === "einzelperson" ? "none" : "";
+        document.getElementById("edit-modal-titel").textContent = t === "einzelperson" ? "✏️ Einzelperson bearbeiten" : "✏️ Gruppe bearbeiten";
+      }
+    });
 
     window.gruppeBearbeitenSpeichern = async function() {
       const id   = document.getElementById("edit-gruppe-id").value;
       const name = document.getElementById("edit-gruppe-name").value.trim();
       const link = document.getElementById("edit-gruppe-link").value.trim();
+      const typ  = document.querySelector('input[name="edit-typ"]:checked').value;
       if (!name) { toast("Name darf nicht leer sein!", "error"); return; }
       try {
-        const mitgliederRaw = document.getElementById("edit-gruppe-mitglieder").value;
+        const mitgliederRaw = typ === "einzelperson" ? "" : document.getElementById("edit-gruppe-mitglieder").value;
         const mitglieder = mitgliederRaw.split(",").map(m=>m.trim()).filter(Boolean);
-        await db.collection(GRUPPEN_COL).doc(id).update({ name, driveLink: link, mitglieder });
+        await db.collection(GRUPPEN_COL).doc(id).update({ name, driveLink: link, mitglieder, typ });
         toast("Gespeichert ✓", "success");
         hide("modal-edit");
         await ladeGruppen();
@@ -806,6 +830,7 @@
     .gruppe-name   { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.05rem; }
     .badge-eigene  { background: rgba(245,166,35,0.2); color: var(--amber); font-size: 0.75rem; padding: 2px 8px; border-radius: 20px; }
     .badge-ok      { background: rgba(74,222,128,0.15); color: var(--green); font-size: 0.75rem; padding: 2px 8px; border-radius: 20px; }
+    .badge-typ     { background: rgba(139,92,246,0.15); color: #a78bfa; font-size: 0.72rem; padding: 2px 8px; border-radius: 20px; }
     .drive-btn { display: inline-flex; align-items: center; gap: 6px; background: #1e6fe5; color: #fff; text-decoration: none; padding: 9px 16px; border-radius: 8px; font-size: 0.88rem; transition: background .2s; }
     .drive-btn:hover { background: #1a5fc4; }
     .no-link { color: var(--muted); font-style: italic; font-size: 0.85rem; }
@@ -828,6 +853,10 @@
     @media(max-width:540px){ .add-gruppe-form{ grid-template-columns:1fr; } }
     .add-gruppe-form input { background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 9px 14px; border-radius: 8px; font-family: inherit; font-size: 0.9rem; outline: none; }
     .add-gruppe-form input:focus { border-color: var(--amber); }
+    .typ-toggle { grid-column: 1/-1; display: flex; gap: 10px; }
+    .typ-option { display: flex; align-items: center; gap: 7px; cursor: pointer; background: var(--bg3); border: 1.5px solid var(--border); border-radius: 8px; padding: 7px 14px; font-size: 0.88rem; transition: border-color .2s; }
+    .typ-option:has(input:checked) { border-color: var(--amber); background: rgba(245,166,35,0.08); }
+    .typ-option input { display: none; }
     .lehrer-gruppe-row { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
     .lg-name { font-weight: 600; flex: 1; min-width: 120px; }
     .lg-link { font-size: 0.82rem; color: #5b9bd5; text-decoration: none; }
@@ -976,10 +1005,20 @@
   <div class="lehrer-section">
     <h2>📁 Gruppen & Google Drive Links</h2>
     <div class="add-gruppe-form">
+      <div class="typ-toggle">
+        <label class="typ-option">
+          <input type="radio" name="neuer-typ" value="gruppe" checked onchange="updateTypPlaceholder()">
+          <span>🎙️ Gruppe</span>
+        </label>
+        <label class="typ-option">
+          <input type="radio" name="neuer-typ" value="einzelperson" onchange="updateTypPlaceholder()">
+          <span>👤 Einzelperson</span>
+        </label>
+      </div>
       <input id="neue-gruppe-name" type="text" placeholder="Gruppenname (z. B. Gruppe Krimi)">
       <input id="neue-gruppe-link" type="url" placeholder="Google Drive Link (optional)">
     </div>
-    <button class="btn-primary" style="width:auto;padding:9px 22px" onclick="gruppeHinzufuegen()">+ Gruppe hinzufügen</button>
+    <button class="btn-primary" style="width:auto;padding:9px 22px" onclick="gruppeHinzufuegen()">+ Hinzufügen</button>
     <hr class="divider">
     <div id="lehrer-gruppen"></div>
   </div>
@@ -1021,17 +1060,31 @@
 <div id="modal-edit" class="modal-overlay" style="display:none" onclick="if(event.target===this)schliesseModal('modal-edit')">
   <div class="modal-box">
     <div class="modal-header">
-      <h3>✏️ Gruppe bearbeiten</h3>
+      <h3 id="edit-modal-titel">✏️ Gruppe bearbeiten</h3>
       <button class="modal-close" onclick="schliesseModal('modal-edit')">✕</button>
     </div>
     <div class="modal-form">
       <input type="hidden" id="edit-gruppe-id">
-      <label>Gruppenname</label>
+      <input type="hidden" id="edit-gruppe-typ">
+      <label>Typ</label>
+      <div class="typ-toggle" style="margin-bottom:4px">
+        <label class="typ-option">
+          <input type="radio" name="edit-typ" value="gruppe" checked>
+          <span>🎙️ Gruppe</span>
+        </label>
+        <label class="typ-option">
+          <input type="radio" name="edit-typ" value="einzelperson">
+          <span>👤 Einzelperson</span>
+        </label>
+      </div>
+      <label id="edit-name-label">Gruppenname</label>
       <input id="edit-gruppe-name" type="text" placeholder="Gruppenname">
       <label>Google Drive Link</label>
       <input id="edit-gruppe-link" type="url" placeholder="https://drive.google.com/...">
-      <label>Mitglieder <small style="color:var(--muted)">(kommagetrennt, z.B.: Max Mustermann, Lisa Schmidt)</small></label>
-      <input id="edit-gruppe-mitglieder" type="text" placeholder="Max Mustermann, Lisa Schmidt, ...">
+      <div id="edit-mitglieder-wrap">
+        <label>Mitglieder <small style="color:var(--muted)">(kommagetrennt, z.B.: Max Mustermann, Lisa Schmidt)</small></label>
+        <input id="edit-gruppe-mitglieder" type="text" placeholder="Max Mustermann, Lisa Schmidt, ...">
+      </div>
     </div>
     <div style="display:flex;gap:10px;margin-top:16px">
       <button class="btn-secondary" onclick="schliesseModal('modal-edit')">Abbrechen</button>
