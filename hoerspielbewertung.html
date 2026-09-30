@@ -6,10 +6,6 @@
   <title>🎙️ Hörspiel-Premiere – Klasse 10</title>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
 
-  <!-- ════════════════════════════════════════════════
-       FIREBASE KONFIGURATION – hier deine Daten eintragen!
-       ════════════════════════════════════════════════ -->
-  <!-- Firebase Compat SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
@@ -54,9 +50,7 @@
       { id:"anwesend",    label:"✅ Anwesenheit",         desc:"War bei Aufnahmen und gemeinsamen Arbeitsphasen zuverlässig anwesend" },
     ];
 
-    // Gewichtung: 70% Lehrer, 30% Schüler
     const GEWICHTUNG = { lehrer: 0.70, schueler: 0.30 };
-
     const MITGLIEDER_COL = "hoerspiel_mitgliederbewertungen";
 
     let currentUser = null;
@@ -81,6 +75,25 @@
       setTimeout(() => t.classList.add("show"), 10);
       setTimeout(() => { t.classList.remove("show"); setTimeout(() => t.remove(), 400); }, 3000);
     };
+
+    // ── Sterne → Schulnote (Notenspiegel) ────────────
+    function sterneZuNote(v) {
+      var pct = v / 5 * 100;
+      if (pct >= 96) return 1;
+      if (pct >= 80) return 2;
+      if (pct >= 60) return 3;
+      if (pct >= 40) return 4;
+      if (pct >= 20) return 5;
+      return 6;
+    }
+
+    function badge(v) {
+      if (v === null) return '<span class="noten-badge noten-leer">–</span>';
+      var cls = v >= 4 ? "noten-gut" : v >= 3 ? "noten-mittel" : "noten-schwach";
+      var note = sterneZuNote(v);
+      return '<span class="noten-badge ' + cls + '">' + v.toFixed(2) + ' ★</span>'
+           + ' <span class="noten-schulnote">→ Note ' + note + '</span>';
+    }
 
     // ── Daten laden ──────────────────────────────────
     async function ladeGruppen() {
@@ -114,19 +127,14 @@
     window.startSchueler = async function() {
       const name = document.getElementById("inp-name").value.trim();
       if (!name) { toast("Bitte deinen Namen eingeben!", "error"); return; }
-
       await ladeGruppen();
-
-      // Suche Gruppe anhand des Namens in den Mitgliederlisten
       const meineGruppe = gruppen.find(g =>
         (g.mitglieder || []).some(m => m.trim().toLowerCase() === name.toLowerCase())
       );
-
       if (!meineGruppe) {
         toast("Name nicht gefunden! Bitte genau so schreiben wie eingetragen.", "error");
         return;
       }
-
       currentUser = { name, gruppe: meineGruppe.name, rolle: "schueler" };
       await ladeBewertungen();
       zeigeDownloads();
@@ -145,7 +153,6 @@
     function zeigeDownloads() {
       hide("screen-start","screen-bewertung","screen-lehrer","screen-mitglieder");
       show("screen-schueler");
-      // Namen & Gruppe anzeigen
       const nameEl = document.getElementById("schueler-name-anzeige");
       const gruppeEl = document.getElementById("schueler-gruppe-anzeige");
       if (nameEl) nameEl.textContent = currentUser.name;
@@ -258,7 +265,6 @@
         toast("Hörspiel bewertet! ✓ Jetzt Gruppe bewerten...", "success");
         await ladeBewertungen();
         if (currentUser.rolle === "lehrer") { zeigeLehrer(); return; }
-        // Schüler → weiter zu Seite 2: Gruppenmitglieder bewerten
         const meineGruppe = gruppen.find(g => g.name === currentUser.gruppe);
         const mitglieder  = meineGruppe?.mitglieder || [];
         if (mitglieder.length > 0) {
@@ -275,7 +281,6 @@
       show("screen-mitglieder");
       const container = document.getElementById("mitglieder-container");
       container.innerHTML = "";
-      // Nur andere Mitglieder bewerten (nicht sich selbst)
       const andere = mitglieder.filter(m => m.toLowerCase() !== currentUser.name.toLowerCase());
       if (andere.length === 0) {
         container.innerHTML = "<p class='muted'>Keine anderen Mitglieder zum Bewerten gefunden.</p>";
@@ -298,7 +303,6 @@
             </div>
           `).join("")}
         `;
-        // Star click handlers
         block.querySelectorAll(".stars-wrap").forEach(wrap => {
           wrap.querySelectorAll(".star").forEach(s => {
             s.addEventListener("click", () => {
@@ -356,95 +360,6 @@
       renderNotenUebersicht();
     }
 
-    async function renderNotenUebersicht() {
-      const c = document.getElementById("noten-uebersicht");
-      if (!c) return;
-      c.innerHTML = "<p class='muted'>Lade Noten…</p>";
-      try {
-        const mitBews = await ladeMitgliederBewertungen();
-
-        // Hörspiel-Ø pro Gruppe (gewichtet, Ø über alle Kriterien)
-        function hoerspielAvgGruppe(gruppe) {
-          const bews  = bewertungen.filter(function(b){ return b.gruppeId === gruppe.id; });
-          const sBews = bews.filter(function(b){ return b.rolle === "schueler"; });
-          const lBew  = bews.find(function(b){ return b.rolle === "lehrer"; });
-          var vals = [];
-          KRITERIEN.forEach(function(k) {
-            var sv = sBews.map(function(b){ return b.kriterien && b.kriterien[k.id] ? b.kriterien[k.id] : 0; }).filter(function(x){ return x > 0; });
-            var sAvg = sv.length ? sv.reduce(function(a,x){ return a+x; }, 0) / sv.length : null;
-            var lVal = (lBew && lBew.kriterien && lBew.kriterien[k.id]) ? lBew.kriterien[k.id] : null;
-            var v = (sAvg !== null && lVal !== null) ? lVal * GEWICHTUNG.lehrer + sAvg * GEWICHTUNG.schueler
-                  : lVal !== null ? lVal
-                  : sAvg !== null ? sAvg : null;
-            if (v !== null) vals.push(v);
-          });
-          return vals.length ? vals.reduce(function(a,x){ return a+x; }, 0) / vals.length : null;
-        }
-
-        // Gruppenarbeit-Ø pro Schüler (Ø aller Peer-Bewertungen für diesen Schüler)
-        function gruppenarbeitAvg(schuelerName) {
-          var bews = mitBews.filter(function(b){ return b.mitgliedName && b.mitgliedName.trim().toLowerCase() === schuelerName.trim().toLowerCase(); });
-          if (!bews.length) return null;
-          var alle = [];
-          bews.forEach(function(b) {
-            MITGLIEDER_KRITERIEN.forEach(function(k) {
-              var v = (b.kriterien && b.kriterien[k.id]) ? b.kriterien[k.id] : 0;
-              if (v > 0) alle.push(v);
-            });
-          });
-          return alle.length ? alle.reduce(function(a,x){ return a+x; }, 0) / alle.length : null;
-        }
-
-        function sterneZuNote(v) {
-          var pct = v / 5 * 100;
-          if (pct >= 96) return 1;
-          if (pct >= 80) return 2;
-          if (pct >= 60) return 3;
-          if (pct >= 40) return 4;
-          if (pct >= 20) return 5;
-          return 6;
-        }
-        function badge(v) {
-          if (v === null) return '<span class="noten-badge noten-leer">–</span>';
-          var cls = v >= 4 ? "noten-gut" : v >= 3 ? "noten-mittel" : "noten-schwach";
-          var note = sterneZuNote(v);
-          return '<span class="noten-badge ' + cls + '">' + v.toFixed(2) + ' ★</span>'
-               + ' <span class="noten-schulnote">→ Note ' + note + '</span>';
-        }
-
-        var html = '<table class="noten-table"><thead><tr>'
-          + '<th>Schüler/in</th><th>Gruppe</th>'
-          + '<th>🎙️ Hörspiel-Note</th><th>👥 Gruppenarbeit-Note</th>'
-          + '</tr></thead><tbody>';
-
-        var irgendwas = false;
-        gruppen.forEach(function(g) {
-          var mitglieder = g.mitglieder || [];
-          var hAvg = hoerspielAvgGruppe(g);
-          mitglieder.forEach(function(name) {
-            irgendwas = true;
-            var gAvg = gruppenarbeitAvg(name);
-            html += '<tr>'
-              + '<td><strong>' + name + '</strong></td>'
-              + '<td><span class="noten-gruppe">🎙️ ' + g.name + '</span></td>'
-              + '<td>' + badge(hAvg) + ' <small class="noten-hint">gleich für alle in der Gruppe</small></td>'
-              + '<td>' + badge(gAvg) + (gAvg === null ? ' <small class="noten-hint">noch keine Peer-Bewertungen</small>' : '') + '</td>'
-              + '</tr>';
-          });
-        });
-
-        if (!irgendwas) {
-          html += '<tr><td colspan="4"><p class="muted">Noch keine Mitglieder eingetragen.</p></td></tr>';
-        }
-        html += '</tbody></table>';
-        c.innerHTML = html;
-
-      } catch(err) {
-        c.innerHTML = '<p style="color:var(--red)">Fehler: ' + err.message + '</p>';
-        console.error("renderNotenUebersicht Fehler:", err);
-      }
-    }
-
     function renderLehrerGruppen() {
       const c = document.getElementById("lehrer-gruppen");
       c.innerHTML = gruppen.map(g => `
@@ -461,7 +376,7 @@
     function renderBewertungsUebersicht() {
       const c = document.getElementById("bewertungs-uebersicht");
       c.innerHTML = gruppen.map(g => {
-        const bews = bewertungen.filter(b => b.gruppeId === g.id);
+        const bews  = bewertungen.filter(b => b.gruppeId === g.id);
         const sBews = bews.filter(b => b.rolle === "schueler");
         const lBew  = bews.find(b => b.rolle === "lehrer");
         const avg = (kid) => {
@@ -474,12 +389,20 @@
           if (sAvg !== null) return sAvg.toFixed(1);
           return "–";
         };
+        // "Bewertet von" chips (nur für Admin sichtbar)
+        const bewVonHtml = sBews.length > 0
+          ? `<div class="bewertet-von">
+               <span class="bewertet-von-label">👁️ Bewertet von:</span>
+               ${sBews.map(bw => `<span class="bewerter-chip">${bw.bewerterName} <small>(${bw.bewerterGruppe})</small></span>`).join("")}
+             </div>`
+          : `<div class="bewertet-von bewertet-von-leer"><span class="bewertet-von-label">👁️ Noch keine Schüler-Bewertungen</span></div>`;
         return `
           <div class="bew-card">
             <div class="bew-card-header">
               <span>🎙️ ${g.name}</span>
               <span class="bew-count">${sBews.length} Schüler-Bewertung(en)</span>
             </div>
+            ${bewVonHtml}
             <table class="bew-table">
               <thead><tr><th>Kriterium</th><th>Ø Schüler</th><th>Lehrer</th><th>Ø Gesamt</th></tr></thead>
               <tbody>
@@ -491,10 +414,6 @@
                 </tr>`).join("")}
               </tbody>
             </table>
-            ${sBews.length > 0 ? `<div class="bewertet-von">
-              <span class="bewertet-von-label">👁️ Bewertet von:</span>
-              ${sBews.map(b => `<span class="bewerter-chip">${b.bewerterName} <small>(${b.bewerterGruppe})</small></span>`).join("")}
-            </div>` : `<div class="bewertet-von bewertet-von-leer"><span class="bewertet-von-label">👁️ Noch keine Schüler-Bewertungen</span></div>`}
             <div class="lehrer-bewertung-section">
               <button class="btn-sm btn-lehrerbew" onclick="zeigeLehrerBewertung('${g.id}','${g.name.replace(/'/g,"\'")}')">
                 ${lBew?"✏️ Lehrerbewertung bearbeiten":"➕ Lehrerbewertung hinzufügen"}
@@ -505,6 +424,89 @@
             ${lBew?.kommentar?`<div class="lehrer-kommentar"><strong>Kommentar:</strong> ${lBew.kommentar}</div>`:""}
           </div>`;
       }).join("") || "<p class='muted'>Noch keine Gruppen angelegt.</p>";
+    }
+
+    // ── NOTEN-ÜBERSICHT ──────────────────────────────
+    async function renderNotenUebersicht() {
+      var c = document.getElementById("noten-uebersicht");
+      if (!c) return;
+      c.innerHTML = "<p class='muted'>Lade Noten…</p>";
+      try {
+        var mitBews = await ladeMitgliederBewertungen();
+
+        function hoerspielAvgGruppe(gruppe) {
+          var bews  = bewertungen.filter(function(b){ return b.gruppeId === gruppe.id; });
+          var sBews = bews.filter(function(b){ return b.rolle === "schueler"; });
+          var lBew  = bews.find(function(b){ return b.rolle === "lehrer"; });
+          var vals = [];
+          KRITERIEN.forEach(function(k) {
+            var sv = sBews.map(function(b){ return (b.kriterien && b.kriterien[k.id]) ? b.kriterien[k.id] : 0; }).filter(function(x){ return x > 0; });
+            var sAvg = sv.length ? sv.reduce(function(a,x){ return a+x; }, 0) / sv.length : null;
+            var lVal = (lBew && lBew.kriterien && lBew.kriterien[k.id]) ? lBew.kriterien[k.id] : null;
+            var v;
+            if (sAvg !== null && lVal !== null) {
+              v = lVal * GEWICHTUNG.lehrer + sAvg * GEWICHTUNG.schueler;
+            } else if (lVal !== null) {
+              v = lVal;
+            } else if (sAvg !== null) {
+              v = sAvg;
+            } else {
+              v = null;
+            }
+            if (v !== null) vals.push(v);
+          });
+          return vals.length ? vals.reduce(function(a,x){ return a+x; }, 0) / vals.length : null;
+        }
+
+        function gruppenarbeitAvg(schuelerName) {
+          var bews = mitBews.filter(function(bw){
+            return bw.mitgliedName && bw.mitgliedName.trim().toLowerCase() === schuelerName.trim().toLowerCase();
+          });
+          if (!bews.length) return null;
+          var alle = [];
+          bews.forEach(function(bw) {
+            MITGLIEDER_KRITERIEN.forEach(function(k) {
+              var v = (bw.kriterien && bw.kriterien[k.id]) ? bw.kriterien[k.id] : 0;
+              if (v > 0) alle.push(v);
+            });
+          });
+          return alle.length ? alle.reduce(function(a,x){ return a+x; }, 0) / alle.length : null;
+        }
+
+        var html = '<table class="noten-table"><thead><tr>'
+          + '<th>Gruppe</th><th>Schüler/in</th>'
+          + '<th>🎙️ Hörspiel-Note</th>'
+          + '<th>👥 Gruppenarbeit-Note</th>'
+          + '</tr></thead><tbody>';
+
+        gruppen.forEach(function(g) {
+          var hAvg = hoerspielAvgGruppe(g);
+          var mitglieder = g.mitglieder || [];
+          if (mitglieder.length === 0) {
+            html += '<tr><td>' + g.name + '</td><td><em style="color:var(--muted)">Keine Mitglieder</em></td>'
+              + '<td>' + badge(hAvg) + '</td><td>–</td></tr>';
+          } else {
+            mitglieder.forEach(function(schueler, idx) {
+              var gaAvg = gruppenarbeitAvg(schueler);
+              html += '<tr>';
+              if (idx === 0) {
+                html += '<td rowspan="' + mitglieder.length + '" style="vertical-align:middle;font-weight:600">🎙️ ' + g.name + '</td>';
+              }
+              html += '<td>' + schueler + '</td>'
+                + '<td>' + (idx === 0 ? badge(hAvg) : '<span style="color:var(--muted);font-size:0.8rem">↑ gleich</span>') + '</td>'
+                + '<td>' + badge(gaAvg) + '</td>'
+                + '</tr>';
+            });
+          }
+        });
+
+        html += '</tbody></table>';
+        if (gruppen.length === 0) html = '<p class="muted">Noch keine Gruppen.</p>';
+        c.innerHTML = html;
+      } catch(err) {
+        c.innerHTML = '<p style="color:var(--red)">Fehler: ' + err.message + '</p>';
+        console.error("renderNotenUebersicht Fehler:", err);
+      }
     }
 
     window.gruppeHinzufuegen = async function() {
@@ -519,7 +521,8 @@
         await ladeGruppen();
         renderLehrerGruppen();
         renderBewertungsUebersicht();
-      } catch(e) { toast("Fehler!", "error"); console.error(e); }
+        renderNotenUebersicht();
+      } catch(e) { toast("Fehler: " + (e.message||e.code||e), "error"); console.error(e); }
     };
 
     window.gruppeBearbeiten = function(id, name, link, mitgliederStr) {
@@ -544,7 +547,8 @@
         await ladeGruppen();
         renderLehrerGruppen();
         renderBewertungsUebersicht();
-      } catch(e) { toast("Fehler!", "error"); console.error(e); }
+        renderNotenUebersicht();
+      } catch(e) { toast("Fehler: " + (e.message||e.code||e), "error"); console.error(e); }
     };
 
     window.gruppeLoeschen = async function(id, name) {
@@ -555,6 +559,7 @@
         await ladeGruppen();
         renderLehrerGruppen();
         renderBewertungsUebersicht();
+        renderNotenUebersicht();
       } catch(e) { toast("Fehler!", "error"); }
     };
 
@@ -588,11 +593,9 @@
 
     window.zeigeMitgliederUebersicht = async function() {
       const bews = await ladeMitgliederBewertungen();
-      const modal = document.getElementById("modal-details");
       document.getElementById("modal-details-titel").textContent = "Gruppenmitglieder-Bewertungen";
       const body = document.getElementById("modal-details-body");
       if (bews.length === 0) { body.innerHTML = "<p class='muted'>Noch keine Bewertungen.</p>"; show("modal-details"); return; }
-      // Gruppiere nach bewertetem Mitglied
       const byMitglied = {};
       bews.forEach(b => {
         if (!byMitglied[b.mitgliedName]) byMitglied[b.mitgliedName] = [];
@@ -616,24 +619,22 @@
         ? "Wirklich ALLE Mitglieder-Bewertungen löschen?"
         : `Alle Bewertungen für "${gruppeName}" löschen? (Die Gruppe bleibt erhalten!)`;
       if (!confirm(msg)) return;
-
       try {
-        const col   = typ === "mitglieder" ? MITGLIEDER_COL : BEWERTUNG_COL;
+        const col = typ === "mitglieder" ? MITGLIEDER_COL : BEWERTUNG_COL;
         let snap;
         if (typ === "mitglieder") {
           snap = await db.collection(col).get();
         } else {
           snap = await db.collection(col).where("gruppeId", "==", gruppeId).get();
         }
-
         const batch = db.batch();
         snap.docs.forEach(d => batch.delete(d.ref));
         await batch.commit();
-
         toast(`${snap.size} Bewertung(en) gelöscht ✓`, "success");
         await ladeBewertungen();
         renderLehrerGruppen();
         renderBewertungsUebersicht();
+        renderNotenUebersicht();
       } catch(e) {
         toast("Fehler beim Löschen!", "error");
         console.error(e);
@@ -654,76 +655,74 @@
     };
 
     window.exportCSV = async function() {
-    try {
-      await ladeGruppen();
-      await ladeBewertungen();
-      var mitBews = await ladeMitgliederBewertungen();
-      var sep = ";";
-      var zeilen = [];
-      var header = ["Gruppe"];
-      KRITERIEN.forEach(function(k) {
-        header.push(k.label + " Oe Schueler (30%)");
-        header.push(k.label + " Lehrer (70%)");
-        header.push(k.label + " Oe Gewichtet");
-      });
-      header.push("Gesamt Oe Gewichtet"); header.push("NOTE EINTRAGEN");
-      zeilen.push(header.join(sep));
-      gruppen.forEach(function(g) {
-        var bews  = bewertungen.filter(function(b){ return b.gruppeId === g.id; });
-        var sBews = bews.filter(function(b){ return b.rolle === "schueler"; });
-        var lBew  = bews.find(function(b){ return b.rolle === "lehrer"; });
-        var zeile = [g.name];
-        var gewichtete = [];
+      try {
+        await ladeGruppen();
+        await ladeBewertungen();
+        var mitBews = await ladeMitgliederBewertungen();
+        var sep = ";";
+        var zeilen = [];
+        var header = ["Gruppe"];
         KRITERIEN.forEach(function(k) {
-          var sv = avgVal(sBews, k.id);
-          var lv = (lBew && lBew.kriterien && lBew.kriterien[k.id]) || null;
-          var gw = (sv !== null && lv !== null) ? lv*0.7+sv*0.3 : (lv !== null ? lv : (sv !== null ? sv : null));
-          zeile.push(sv !== null ? sv.toFixed(2).replace(".",",") : "");
-          zeile.push(lv !== null ? Number(lv).toFixed(2).replace(".",",") : "");
-          zeile.push(gw !== null ? gw.toFixed(2).replace(".",",") : "");
-          if (gw !== null) gewichtete.push(gw);
+          header.push(k.label + " Oe Schueler (30%)");
+          header.push(k.label + " Lehrer (70%)");
+          header.push(k.label + " Oe Gewichtet");
         });
-        var gs = gewichtete.length ? (gewichtete.reduce(function(a,b){return a+b;},0)/gewichtete.length).toFixed(2).replace(".",",") : "";
-        zeile.push(gs); zeile.push(""); zeilen.push(zeile.join(sep));
-      });
-      zeilen.push(""); zeilen.push("MITGLIEDER-BEWERTUNG");
-      var mh = ["Gruppe","Mitglied","Bewertet von"];
-      MITGL_KRITERIEN.forEach(function(k){ mh.push(k.label); });
-      mh.push("Oe Gesamt"); mh.push("NOTE EINTRAGEN");
-      zeilen.push(mh.join(sep));
-      var byM = {};
-      mitBews.forEach(function(b){ var key = b.gruppe+"||"+b.mitgliedName; if(!byM[key])byM[key]=[]; byM[key].push(b); });
-      Object.keys(byM).forEach(function(key) {
-        var list = byM[key]; var parts = key.split("||");
-        var zeile = [parts[0], parts[1], list.map(function(b){return b.bewerterName;}).join(" / ")];
-        var vals = [];
-        MITGL_KRITERIEN.forEach(function(k) {
-          var v = list.map(function(b){return (b.kriterien&&b.kriterien[k.id])||0;}).filter(function(x){return x>0;});
-          var a = v.length ? v.reduce(function(a,b){return a+b;},0)/v.length : null;
-          zeile.push(a !== null ? a.toFixed(2).replace(".",",") : "");
-          if (a !== null) vals.push(a);
+        header.push("Gesamt Oe Gewichtet"); header.push("NOTE EINTRAGEN");
+        zeilen.push(header.join(sep));
+        gruppen.forEach(function(g) {
+          var bews  = bewertungen.filter(function(b){ return b.gruppeId === g.id; });
+          var sBews = bews.filter(function(b){ return b.rolle === "schueler"; });
+          var lBew  = bews.find(function(b){ return b.rolle === "lehrer"; });
+          var zeile = [g.name];
+          var gewichtete = [];
+          KRITERIEN.forEach(function(k) {
+            var sv = avgVal(sBews, k.id);
+            var lv = (lBew && lBew.kriterien && lBew.kriterien[k.id]) || null;
+            var gw = (sv !== null && lv !== null) ? lv*0.7+sv*0.3 : (lv !== null ? lv : (sv !== null ? sv : null));
+            zeile.push(sv !== null ? sv.toFixed(2).replace(".",",") : "");
+            zeile.push(lv !== null ? Number(lv).toFixed(2).replace(".",",") : "");
+            zeile.push(gw !== null ? gw.toFixed(2).replace(".",",") : "");
+            if (gw !== null) gewichtete.push(gw);
+          });
+          var gs = gewichtete.length ? (gewichtete.reduce(function(a,b){return a+b;},0)/gewichtete.length).toFixed(2).replace(".",",") : "";
+          zeile.push(gs); zeile.push(""); zeilen.push(zeile.join(sep));
         });
-        var gs = vals.length ? (vals.reduce(function(a,b){return a+b;},0)/vals.length).toFixed(2).replace(".",",") : "";
-        zeile.push(gs); zeile.push(""); zeilen.push(zeile.join(sep));
-      });
-      var bom = "\uFEFF";
-      var blob = new Blob([bom + zeilen.join("\r\n")], {type:"text/csv;charset=utf-8;"});
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement("a");
-      a.href = url;
-      a.style.display = "none";
-      a.download = "Hoerspiel_" + new Date().toLocaleDateString("de-DE").split(".").join("-") + ".csv";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast("CSV exportiert!", "success");
-    } catch(err) {
-      toast("Fehler beim Export: " + err.message, "error");
-      console.error("exportCSV Fehler:", err);
-    }
+        zeilen.push(""); zeilen.push("MITGLIEDER-BEWERTUNG");
+        var mh = ["Gruppe","Mitglied","Bewertet von"];
+        MITGL_KRITERIEN.forEach(function(k){ mh.push(k.label); });
+        mh.push("Oe Gesamt"); mh.push("NOTE EINTRAGEN");
+        zeilen.push(mh.join(sep));
+        var byM = {};
+        mitBews.forEach(function(b){ var key = b.gruppe+"||"+b.mitgliedName; if(!byM[key])byM[key]=[]; byM[key].push(b); });
+        Object.keys(byM).forEach(function(key) {
+          var list = byM[key]; var parts = key.split("||");
+          var zeile = [parts[0], parts[1], list.map(function(b){return b.bewerterName;}).join(" / ")];
+          var vals = [];
+          MITGL_KRITERIEN.forEach(function(k) {
+            var v = list.map(function(b){return (b.kriterien&&b.kriterien[k.id])||0;}).filter(function(x){return x>0;});
+            var a = v.length ? v.reduce(function(a,b){return a+b;},0)/v.length : null;
+            zeile.push(a !== null ? a.toFixed(2).replace(".",",") : "");
+            if (a !== null) vals.push(a);
+          });
+          var gs = vals.length ? (vals.reduce(function(a,b){return a+b;},0)/vals.length).toFixed(2).replace(".",",") : "";
+          zeile.push(gs); zeile.push(""); zeilen.push(zeile.join(sep));
+        });
+        var bom = "﻿";
+        var blob = new Blob([bom + zeilen.join("\r\n")], {type:"text/csv;charset=utf-8;"});
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url; a.style.display = "none";
+        a.download = "Hoerspiel_" + new Date().toLocaleDateString("de-DE").split(".").join("-") + ".csv";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast("CSV exportiert!", "success");
+      } catch(err) {
+        toast("Fehler beim Export: " + err.message, "error");
+        console.error("exportCSV Fehler:", err);
+      }
     };
-
 
     window.abmelden = function() {
       currentUser = null;
@@ -732,10 +731,7 @@
       zeigeStart();
     };
 
-    window.addEventListener("error", (e) => {
-      console.error("JS Fehler:", e);
-    });
-
+    window.addEventListener("error", (e) => { console.error("JS Fehler:", e); });
     document.addEventListener("DOMContentLoaded", zeigeStart);
   </script>
 
@@ -756,40 +752,18 @@
       --r:        14px;
     }
 
-    body {
-      font-family: 'DM Sans', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      font-size: 15px;
-    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 15px; }
 
-    /* ── NAV ── */
-    nav {
-      background: var(--bg2);
-      border-bottom: 1px solid var(--border);
-      padding: 14px 24px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      position: sticky;
-      top: 0;
-      z-index: 50;
-    }
+    nav { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 50; }
     .nav-logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.1rem; color: var(--amber); }
     .nav-sub  { color: var(--muted); font-size: 0.85rem; }
     .nav-right { margin-left: auto; }
     .btn-nav  { background: var(--bg3); border: 1px solid var(--border); color: var(--muted); padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; transition: all .2s; }
     .btn-nav:hover { color: var(--text); border-color: var(--amber); }
 
-    /* ── SCREENS ── */
     .screen { display: none; max-width: 760px; margin: 0 auto; padding: 40px 20px 80px; }
 
-    /* ── START ── */
-    .start-hero {
-      text-align: center;
-      padding: 50px 0 40px;
-    }
+    .start-hero { text-align: center; padding: 50px 0 40px; }
     .start-mic { font-size: 4rem; margin-bottom: 16px; animation: pulse 2s infinite; }
     @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
     .start-title { font-family: 'Syne', sans-serif; font-size: 2.2rem; font-weight: 800; color: var(--amber); line-height: 1.1; }
@@ -798,66 +772,17 @@
     .login-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 40px; }
     @media(max-width:540px){ .login-cards{ grid-template-columns:1fr; } }
 
-    .login-card {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: var(--r);
-      padding: 28px 24px;
-    }
+    .login-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); padding: 28px 24px; }
     .login-card h3 { font-family: 'Syne', sans-serif; font-size: 1.1rem; margin-bottom: 16px; }
-    .login-card input, .login-card select {
-      width: 100%;
-      background: var(--bg3);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 10px 14px;
-      border-radius: 8px;
-      font-family: inherit;
-      font-size: 0.9rem;
-      margin-bottom: 10px;
-      outline: none;
-      transition: border-color .2s;
-    }
+    .login-card input, .login-card select { width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: 8px; font-family: inherit; font-size: 0.9rem; margin-bottom: 10px; outline: none; transition: border-color .2s; }
     .login-card input:focus, .login-card select:focus { border-color: var(--amber); }
     .login-card select option { background: #1a1820; }
 
-    /* ── BUTTONS ── */
-    .btn-primary {
-      background: var(--amber);
-      color: #0f0e11;
-      border: none;
-      padding: 11px 22px;
-      border-radius: 9px;
-      font-family: 'Syne', sans-serif;
-      font-weight: 700;
-      font-size: 0.95rem;
-      cursor: pointer;
-      transition: all .2s;
-      width: 100%;
-    }
+    .btn-primary { background: var(--amber); color: #0f0e11; border: none; padding: 11px 22px; border-radius: 9px; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: all .2s; width: 100%; }
     .btn-primary:hover { background: var(--amber2); transform: translateY(-1px); }
-
-    .btn-secondary {
-      background: transparent;
-      color: var(--muted);
-      border: 1px solid var(--border);
-      padding: 9px 18px;
-      border-radius: 9px;
-      font-family: inherit;
-      cursor: pointer;
-      transition: all .2s;
-    }
+    .btn-secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 9px 18px; border-radius: 9px; font-family: inherit; cursor: pointer; transition: all .2s; }
     .btn-secondary:hover { color: var(--text); border-color: var(--amber); }
-
-    .btn-sm {
-      padding: 6px 12px;
-      border-radius: 7px;
-      font-size: 0.82rem;
-      cursor: pointer;
-      border: none;
-      font-family: inherit;
-      transition: all .2s;
-    }
+    .btn-sm { padding: 6px 12px; border-radius: 7px; font-size: 0.82rem; cursor: pointer; border: none; font-family: inherit; transition: all .2s; }
     .btn-edit { background: var(--bg3); color: var(--amber); border: 1px solid var(--border); }
     .btn-edit:hover { border-color: var(--amber); }
     .btn-del  { background: rgba(248,113,113,0.12); color: var(--red); border: 1px solid rgba(248,113,113,0.2); }
@@ -868,337 +793,109 @@
     .btn-detail:hover { color: var(--text); border-color: var(--amber); }
     .btn-del-bew { background: rgba(248,113,113,0.08); color: var(--red); border: 1px solid rgba(248,113,113,0.2); }
     .btn-del-bew:hover { background: rgba(248,113,113,0.2); }
-    .btn-bewerten {
-      margin-top: 12px;
-      background: rgba(245,166,35,0.12);
-      color: var(--amber);
-      border: 1px solid rgba(245,166,35,0.3);
-      padding: 10px 18px;
-      border-radius: 9px;
-      font-family: inherit;
-      font-size: 0.9rem;
-      cursor: pointer;
-      transition: all .2s;
-      width: 100%;
-    }
+    .btn-bewerten { margin-top: 12px; background: rgba(245,166,35,0.12); color: var(--amber); border: 1px solid rgba(245,166,35,0.3); padding: 10px 18px; border-radius: 9px; font-family: inherit; font-size: 0.9rem; cursor: pointer; transition: all .2s; width: 100%; }
     .btn-bewerten:hover { background: rgba(245,166,35,0.25); }
 
-    /* ── SCHÜLER SCREEN ── */
     .screen-title { font-family: 'Syne', sans-serif; font-size: 1.5rem; font-weight: 800; margin-bottom: 6px; }
     .screen-sub   { color: var(--muted); margin-bottom: 28px; font-size: 0.9rem; }
 
-    .gruppe-card {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: var(--r);
-      padding: 20px;
-      margin-bottom: 16px;
-      transition: border-color .2s;
-    }
+    .gruppe-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); padding: 20px; margin-bottom: 16px; transition: border-color .2s; }
     .gruppe-card:hover { border-color: rgba(245,166,35,0.3); }
     .gruppe-card.eigene { border-color: rgba(245,166,35,0.4); background: rgba(245,166,35,0.04); }
-
     .gruppe-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
     .gruppe-name   { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.05rem; }
     .badge-eigene  { background: rgba(245,166,35,0.2); color: var(--amber); font-size: 0.75rem; padding: 2px 8px; border-radius: 20px; }
     .badge-ok      { background: rgba(74,222,128,0.15); color: var(--green); font-size: 0.75rem; padding: 2px 8px; border-radius: 20px; }
-
-    .drive-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: #1e6fe5;
-      color: #fff;
-      text-decoration: none;
-      padding: 9px 16px;
-      border-radius: 8px;
-      font-size: 0.88rem;
-      transition: background .2s;
-    }
+    .drive-btn { display: inline-flex; align-items: center; gap: 6px; background: #1e6fe5; color: #fff; text-decoration: none; padding: 9px 16px; border-radius: 8px; font-size: 0.88rem; transition: background .2s; }
     .drive-btn:hover { background: #1a5fc4; }
     .no-link { color: var(--muted); font-style: italic; font-size: 0.85rem; }
 
-    /* ── BEWERTUNGSFORMULAR ── */
-    .kriterium-block {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: var(--r);
-      padding: 18px 20px;
-      margin-bottom: 14px;
-    }
+    .kriterium-block { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); padding: 18px 20px; margin-bottom: 14px; }
     .krit-label { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem; margin-bottom: 3px; }
     .krit-desc  { color: var(--muted); font-size: 0.83rem; margin-bottom: 14px; }
     .stars-wrap { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-    .star {
-      font-size: 1.8rem;
-      cursor: pointer;
-      color: var(--bg3);
-      transition: color .15s, transform .15s;
-      filter: drop-shadow(0 0 0 transparent);
-    }
+    .star { font-size: 1.8rem; cursor: pointer; color: var(--bg3); transition: color .15s, transform .15s; filter: drop-shadow(0 0 0 transparent); }
     .star:hover, .star.active { color: var(--amber); }
     .star:hover { transform: scale(1.2); }
     .star-label { color: var(--muted); font-size: 0.82rem; margin-left: 8px; }
-
-    textarea.kommentar-input {
-      width: 100%;
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 12px 16px;
-      border-radius: 10px;
-      font-family: inherit;
-      font-size: 0.9rem;
-      resize: vertical;
-      min-height: 90px;
-      outline: none;
-      transition: border-color .2s;
-    }
+    textarea.kommentar-input { width: 100%; background: var(--bg2); border: 1px solid var(--border); color: var(--text); padding: 12px 16px; border-radius: 10px; font-family: inherit; font-size: 0.9rem; resize: vertical; min-height: 90px; outline: none; transition: border-color .2s; }
     textarea.kommentar-input:focus { border-color: var(--amber); }
-
     .bew-actions { display: flex; gap: 10px; margin-top: 20px; }
 
-    /* ── LEHRER SCREEN ── */
     .lehrer-section { margin-bottom: 36px; }
     .lehrer-section h2 { font-family: 'Syne', sans-serif; font-size: 1.2rem; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
-
-    .add-gruppe-form {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
+    .add-gruppe-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
     @media(max-width:540px){ .add-gruppe-form{ grid-template-columns:1fr; } }
-    .add-gruppe-form input {
-      background: var(--bg3);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 9px 14px;
-      border-radius: 8px;
-      font-family: inherit;
-      font-size: 0.9rem;
-      outline: none;
-    }
+    .add-gruppe-form input { background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 9px 14px; border-radius: 8px; font-family: inherit; font-size: 0.9rem; outline: none; }
     .add-gruppe-form input:focus { border-color: var(--amber); }
-
-    .lehrer-gruppe-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 0;
-      border-bottom: 1px solid var(--border);
-      flex-wrap: wrap;
-    }
+    .lehrer-gruppe-row { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
     .lg-name { font-weight: 600; flex: 1; min-width: 120px; }
     .lg-link { font-size: 0.82rem; color: #5b9bd5; text-decoration: none; }
     .lg-link.no-link { color: var(--muted); }
 
-    /* ── BEWERTUNGSTABELLE ── */
-    .bew-card {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: var(--r);
-      padding: 20px;
-      margin-bottom: 18px;
-    }
+    .bew-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); padding: 20px; margin-bottom: 18px; }
     .bew-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; font-family: 'Syne', sans-serif; font-weight: 700; }
     .bew-count { font-size: 0.8rem; color: var(--muted); font-family: inherit; font-weight: 400; }
-
     .bew-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-bottom: 14px; }
     .bew-table th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--border); }
     .bew-table td { padding: 8px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); }
     .bew-table tr:last-child td { border-bottom: none; }
-
-    /* ── NEU: Wer hat bewertet? (nur Admin) ── */
-    .bewertet-von {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 12px;
-      padding: 9px 14px;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid var(--border);
-      border-radius: 9px;
-    }
-    .bewertet-von-leer { opacity: 0.45; }
-    .bewertet-von-label {
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: .07em;
-      color: var(--muted);
-      margin-right: 4px;
-      white-space: nowrap;
-    }
-    .bewerter-chip {
-      background: rgba(245,166,35,0.10);
-      border: 1px solid rgba(245,166,35,0.22);
-      color: var(--amber);
-      font-size: 0.78rem;
-      padding: 2px 10px;
-      border-radius: 20px;
-    }
-    .bewerter-chip small { color: var(--muted); }
-
-    /* ── NEU: Notenübersicht ── */
-    .noten-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.85rem;
-    }
-    .noten-table th {
-      text-align: left;
-      color: var(--muted);
-      font-weight: 500;
-      padding: 8px 10px;
-      border-bottom: 1px solid var(--border);
-    }
-    .noten-table td {
-      padding: 10px 10px;
-      border-bottom: 1px solid rgba(255,255,255,0.04);
-      vertical-align: middle;
-    }
-    .noten-table tr:last-child td { border-bottom: none; }
-    .noten-table tr:hover td { background: rgba(255,255,255,0.02); }
-    .noten-badge {
-      display: inline-block;
-      font-family: 'Syne', sans-serif;
-      font-weight: 700;
-      font-size: 0.9rem;
-      padding: 3px 10px;
-      border-radius: 8px;
-      margin-right: 6px;
-    }
-    .noten-gut     { background: rgba(74,222,128,0.15);  color: #4ade80; border: 1px solid rgba(74,222,128,0.3); }
-    .noten-mittel  { background: rgba(245,166,35,0.15);  color: var(--amber); border: 1px solid rgba(245,166,35,0.3); }
-    .noten-schwach { background: rgba(248,113,113,0.15); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
-    .noten-leer    { background: var(--bg3); color: var(--muted); border: 1px solid var(--border); font-weight: 400; }
-    .noten-gruppe  { font-size: 0.82rem; color: var(--muted); }
-    .noten-hint    { color: var(--muted); font-size: 0.75rem; }
-    .noten-schulnote { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.88rem; color: var(--text); }
-
     .lehrer-bewertung-section { display: flex; gap: 8px; flex-wrap: wrap; }
     .lehrer-kommentar { margin-top: 12px; font-size: 0.85rem; color: var(--muted); font-style: italic; background: var(--bg3); padding: 10px 14px; border-radius: 8px; }
 
-    /* ── DETAIL MODAL ── */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.7);
-      z-index: 100;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    .modal-overlay[style*="display: flex"] {
-      display: flex !important;
-    }
-    .modal-box {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      max-width: 560px;
-      width: 100%;
-      max-height: 85vh;
-      overflow-y: auto;
-      padding: 28px;
-    }
+    /* Bewertet-von Chips */
+    .bewertet-von { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:12px; padding:9px 14px; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:9px; }
+    .bewertet-von-leer { opacity:0.45; }
+    .bewertet-von-label { font-size:0.75rem; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); margin-right:4px; white-space:nowrap; }
+    .bewerter-chip { background:rgba(245,166,35,0.10); border:1px solid rgba(245,166,35,0.22); color:var(--amber); font-size:0.78rem; padding:2px 10px; border-radius:20px; }
+    .bewerter-chip small { color:var(--muted); }
+
+    /* Noten-Übersicht */
+    .noten-table { width:100%; border-collapse:collapse; font-size:0.85rem; }
+    .noten-table th { text-align:left; color:var(--muted); font-weight:500; padding:7px 10px; border-bottom:1px solid var(--border); }
+    .noten-table td { padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.04); vertical-align:middle; }
+    .noten-badge { display:inline-block; font-family:'Syne',sans-serif; font-weight:700; font-size:0.9rem; padding:3px 10px; border-radius:8px; margin-right:6px; }
+    .noten-gut { background:rgba(74,222,128,0.15); color:#4ade80; border:1px solid rgba(74,222,128,0.3); }
+    .noten-mittel { background:rgba(245,166,35,0.15); color:var(--amber); border:1px solid rgba(245,166,35,0.3); }
+    .noten-schwach { background:rgba(248,113,113,0.15); color:var(--red); border:1px solid rgba(248,113,113,0.3); }
+    .noten-leer { background:var(--bg3); color:var(--muted); border:1px solid var(--border); font-weight:400; }
+    .noten-schulnote { font-family:'Syne',sans-serif; font-weight:700; font-size:0.88rem; color:var(--text); }
+
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+    .modal-overlay[style*="display: flex"] { display: flex !important; }
+    .modal-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; max-width: 560px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 28px; }
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
     .modal-header h3 { font-family: 'Syne', sans-serif; font-size: 1.15rem; }
     .modal-close { background: none; border: none; color: var(--muted); font-size: 1.4rem; cursor: pointer; line-height: 1; }
     .modal-close:hover { color: var(--text); }
-
     .detail-row { background: var(--bg3); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
     .detail-header { margin-bottom: 10px; font-size: 0.9rem; }
     .detail-krit { display: flex; justify-content: space-between; font-size: 0.85rem; padding: 4px 0; border-bottom: 1px solid var(--border); }
     .detail-krit:last-of-type { border-bottom: none; }
     .detail-kommentar { margin-top: 10px; font-size: 0.83rem; color: var(--muted); font-style: italic; }
-
-    .modal-form input {
-      width: 100%;
-      background: var(--bg3);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 9px 14px;
-      border-radius: 8px;
-      font-family: inherit;
-      font-size: 0.9rem;
-      outline: none;
-      margin-bottom: 10px;
-    }
+    .modal-form input { width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 9px 14px; border-radius: 8px; font-family: inherit; font-size: 0.9rem; outline: none; margin-bottom: 10px; }
     .modal-form input:focus { border-color: var(--amber); }
     .modal-form label { font-size: 0.83rem; color: var(--muted); display: block; margin-bottom: 4px; }
 
-    /* ── TOAST ── */
-    .toast {
-      position: fixed;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%) translateY(20px);
-      background: var(--bg3);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 12px 22px;
-      border-radius: 30px;
-      font-size: 0.9rem;
-      opacity: 0;
-      transition: all .3s;
-      z-index: 200;
-      white-space: nowrap;
-    }
+    .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 12px 22px; border-radius: 30px; font-size: 0.9rem; opacity: 0; transition: all .3s; z-index: 200; white-space: nowrap; }
     .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
     .toast-success { border-color: var(--green); color: var(--green); }
     .toast-error   { border-color: var(--red); color: var(--red); }
 
-    /* ── MISC ── */
     .muted { color: var(--muted); font-style: italic; font-size: 0.9rem; }
-
     .btn-export { background: rgba(74,222,128,.12); color: var(--green); border: 1px solid rgba(74,222,128,.3); padding: 10px 20px; border-radius: 9px; font-family: 'Syne', sans-serif; font-weight: 700; font-size: .9rem; cursor: pointer; transition: all .2s; }
     .btn-export:hover { background: rgba(74,222,128,.25); }
-
     .gruppenarbeit-box { background: rgba(245,166,35,.08); border: 1px solid rgba(245,166,35,.3); border-radius: var(--r); padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-
-    .badge-seite {
-      display: inline-block;
-      background: rgba(245,166,35,0.15);
-      color: var(--amber);
-      font-size: 0.75rem;
-      padding: 3px 10px;
-      border-radius: 20px;
-      margin-right: 8px;
-      font-weight: 600;
-    }
-
-    .mitglied-block {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: var(--r);
-      padding: 20px;
-      margin-bottom: 20px;
-    }
-    .mitglied-name {
-      font-family: 'Syne', sans-serif;
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: var(--amber);
-      margin-bottom: 16px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid var(--border);
-    }
-    .lg-mitglieder {
-      font-size: 0.8rem;
-      color: var(--muted);
-      flex: 2;
-    }
+    .badge-seite { display: inline-block; background: rgba(245,166,35,0.15); color: var(--amber); font-size: 0.75rem; padding: 3px 10px; border-radius: 20px; margin-right: 8px; font-weight: 600; }
+    .mitglied-block { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); padding: 20px; margin-bottom: 20px; }
+    .mitglied-name { font-family: 'Syne', sans-serif; font-size: 1.1rem; font-weight: 700; color: var(--amber); margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+    .lg-mitglieder { font-size: 0.8rem; color: var(--muted); flex: 2; }
     .section-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 6px; }
-
     .divider { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
   </style>
 </head>
 <body>
 
-<!-- ── NAV ── -->
 <nav>
   <span class="nav-logo">🎙️ Hörspiel-Premiere</span>
   <span class="nav-sub">Klasse 10 | OSWE</span>
@@ -1207,18 +904,14 @@
   </div>
 </nav>
 
-<!-- ══════════════════════════════════════
-     SCREEN: START
-══════════════════════════════════════ -->
+<!-- SCREEN: START -->
 <div id="screen-start" class="screen" style="max-width:700px;display:block">
   <div class="start-hero">
     <div class="start-mic">🎙️</div>
     <div class="start-title">Hörspiel-Premiere</div>
     <div class="start-sub">Klasse 10 · Schuljahr 2024/25 · Hörspiele anhören & bewerten</div>
   </div>
-
   <div class="login-cards">
-    <!-- Schüler -->
     <div class="login-card">
       <h3>👤 Ich bin Schüler/in</h3>
       <div class="section-label">Dein Name</div>
@@ -1226,8 +919,6 @@
       <p style="font-size:0.78rem;color:var(--muted);margin:-4px 0 10px">Bitte genau so schreiben, wie der Lehrer dich eingetragen hat.</p>
       <button class="btn-primary" onclick="startSchueler()">Weiter →</button>
     </div>
-
-    <!-- Lehrer -->
     <div class="login-card">
       <h3>👩‍🏫 Ich bin Lehrer/in</h3>
       <div class="section-label">Passwort</div>
@@ -1238,9 +929,7 @@
   </div>
 </div>
 
-<!-- ══════════════════════════════════════
-     SCREEN: SCHÜLER – DOWNLOADS & BEWERTUNG
-══════════════════════════════════════ -->
+<!-- SCREEN: SCHÜLER -->
 <div id="screen-schueler" class="screen" style="display:none">
   <div class="screen-title">🎧 Alle Hörspiele</div>
   <div class="screen-sub">
@@ -1260,38 +949,30 @@
   <div id="gruppen-liste"></div>
 </div>
 
-<!-- ══════════════════════════════════════
-     SCREEN: BEWERTUNGSFORMULAR
-══════════════════════════════════════ -->
+<!-- SCREEN: BEWERTUNGSFORMULAR -->
 <div id="screen-bewertung" class="screen" style="display:none">
   <div class="screen-title" id="bew-titel">Bewertung</div>
   <div class="screen-sub">Bewertet jedes Kriterium mit 1–5 Sternen.</div>
   <input type="hidden" id="bew-gruppe-id">
   <input type="hidden" id="bew-gruppe-name">
-
   <div id="kriterien-container"></div>
-
   <hr class="divider">
   <div class="section-label">Optionaler Kommentar</div>
   <textarea class="kommentar-input" id="bew-kommentar" placeholder="Was hat euch besonders gut gefallen? Was könnte besser sein?"></textarea>
-
   <div class="bew-actions">
     <button class="btn-secondary" id="bew-zurueck-btn" onclick="zurueckVonBewertung()">← Zurück</button>
     <button class="btn-primary" style="flex:1" onclick="bewertungSpeichern()">Bewertung abschicken ✓</button>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════
-     SCREEN: LEHRER
-══════════════════════════════════════ -->
+<!-- SCREEN: LEHRER -->
 <div id="screen-lehrer" class="screen" style="max-width:860px;display:none">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:6px">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:6px">
     <div class="screen-title" style="margin:0">👩‍🏫 Lehrer-Verwaltung</div>
     <button class="btn-export" onclick="exportCSV()">&#x2B07; CSV exportieren</button>
   </div>
   <div class="screen-sub">Gruppen verwalten, Drive-Links eintragen, Bewertungen einsehen.</div>
 
-  <!-- Gruppen verwalten -->
   <div class="lehrer-section">
     <h2>📁 Gruppen & Google Drive Links</h2>
     <div class="add-gruppe-form">
@@ -1303,17 +984,6 @@
     <div id="lehrer-gruppen"></div>
   </div>
 
-  <!-- Notenübersicht -->
-  <div class="lehrer-section">
-    <h2>📝 Notenübersicht pro Schüler/in</h2>
-    <p style="font-size:0.85rem;color:var(--muted);margin-bottom:14px">
-      <strong>🎙️ Hörspiel-Note:</strong> gewichteter Ø (70% Lehrer + 30% Schüler) – gleich für alle Mitglieder der Gruppe.<br>
-      <strong>👥 Gruppenarbeit-Note:</strong> individueller Ø aus den Peer-Bewertungen der Mitschüler.
-    </p>
-    <div id="noten-uebersicht"><p class="muted">Wird geladen…</p></div>
-  </div>
-
-  <!-- Bewertungsübersicht -->
   <div class="lehrer-section">
     <h2>📊 Bewertungsübersicht</h2>
     <div style="margin-bottom:16px">
@@ -1322,11 +992,18 @@
     </div>
     <div id="bewertungs-uebersicht"></div>
   </div>
+
+  <div class="lehrer-section">
+    <h2>🏆 Noten-Übersicht</h2>
+    <p style="font-size:0.83rem;color:var(--muted);margin-bottom:14px">
+      <strong>Hörspiel-Note</strong>: gewichteter Ø aller Kriterien (70% Lehrer + 30% Schüler) → Schulnote.<br>
+      <strong>Gruppenarbeit-Note</strong>: individuelle Peer-Bewertung je Schüler/in → Schulnote.
+    </p>
+    <div id="noten-uebersicht"><p class="muted">Lade Noten…</p></div>
+  </div>
 </div>
 
-<!-- ══════════════════════════════════════
-     SCREEN: MITGLIEDER-BEWERTUNG (Seite 2)
-══════════════════════════════════════ -->
+<!-- SCREEN: MITGLIEDER-BEWERTUNG -->
 <div id="screen-mitglieder" class="screen" style="display:none">
   <div class="screen-title">👥 Eure Gruppe bewerten</div>
   <div class="screen-sub">
@@ -1340,9 +1017,7 @@
   </div>
 </div>
 
-<!-- ══════════════════════════════════════
-     MODAL: GRUPPE BEARBEITEN
-══════════════════════════════════════ -->
+<!-- MODAL: GRUPPE BEARBEITEN -->
 <div id="modal-edit" class="modal-overlay" style="display:none" onclick="if(event.target===this)schliesseModal('modal-edit')">
   <div class="modal-box">
     <div class="modal-header">
@@ -1365,9 +1040,7 @@
   </div>
 </div>
 
-<!-- ══════════════════════════════════════
-     MODAL: DETAIL-BEWERTUNGEN
-══════════════════════════════════════ -->
+<!-- MODAL: DETAIL-BEWERTUNGEN -->
 <div id="modal-details" class="modal-overlay" style="display:none" onclick="if(event.target===this)schliesseModal('modal-details')">
   <div class="modal-box">
     <div class="modal-header">
