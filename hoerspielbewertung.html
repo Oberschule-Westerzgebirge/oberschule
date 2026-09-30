@@ -87,9 +87,9 @@
       setTimeout(() => { t.classList.remove("show"); setTimeout(() => t.remove(), 400); }, 3000);
     };
 
-    // ── Sterne → Schulnote (Notenspiegel) ────────────
+    // ── Sterne → Schulnote (normalisiert auf 0–100%) ──
     function sterneZuNote(v) {
-      var pct = v / 5 * 100;
+      var pct = v * 100;  // v kommt schon als 0–1 normalisiert rein
       if (pct >= 96) return 1;
       if (pct >= 80) return 2;
       if (pct >= 60) return 3;
@@ -98,12 +98,20 @@
       return 6;
     }
 
+    // v = normalisierter Wert 0–1 (Prozent / 100)
     function badge(v) {
       if (v === null) return '<span class="noten-badge noten-leer">–</span>';
-      var cls = v >= 4 ? "noten-gut" : v >= 3 ? "noten-mittel" : "noten-schwach";
+      var pct = v * 100;
+      var cls = pct >= 80 ? "noten-gut" : pct >= 60 ? "noten-mittel" : "noten-schwach";
       var note = sterneZuNote(v);
-      return '<span class="noten-badge ' + cls + '">' + v.toFixed(2) + ' ★</span>'
+      return '<span class="noten-badge ' + cls + '">' + pct.toFixed(1) + ' %</span>'
            + ' <span class="noten-schulnote">→ Note ' + note + '</span>';
+    }
+
+    // Hilfsfunktion: Rohwert → normalisiert (0–1), basierend auf maxPunkte des Kriteriums
+    function normKrit(val, krit) {
+      var max = (krit && krit.maxPunkte) ? krit.maxPunkte : 5;
+      return max > 0 ? val / max : 0;
     }
 
     // ── Daten laden ──────────────────────────────────
@@ -226,15 +234,17 @@
       const c = document.getElementById("kriterien-container");
       c.innerHTML = "";
       KRITERIEN.forEach(k => {
+        const max  = k.maxPunkte || 5;
         const wert = vorhandene?.kriterien?.[k.id] ?? 0;
-        const div = document.createElement("div");
+        const div  = document.createElement("div");
         div.className = "kriterium-block";
+        const punkte = Array.from({length: max}, (_,i) => i+1);
         div.innerHTML = `
-          <div class="krit-label">${k.label}</div>
+          <div class="krit-label">${k.label} <span style="font-size:0.78rem;color:var(--muted);font-weight:400">(max. ${max} Punkt${max===1?"":"e"})</span></div>
           <div class="krit-desc">${k.desc}</div>
-          <div class="stars-wrap" data-id="${k.id}" data-val="${wert}">
-            ${[1,2,3,4,5].map(n => `<span class="star ${n<=wert?'active':''}" data-val="${n}">★</span>`).join("")}
-            <span class="star-label" id="slabel-${k.id}">${wert > 0 ? sterneText(wert) : "– noch nicht bewertet"}</span>
+          <div class="stars-wrap" data-id="${k.id}" data-val="${wert}" data-max="${max}">
+            ${punkte.map(n => `<span class="star ${n<=wert?'active':''}" data-val="${n}">★</span>`).join("")}
+            <span class="star-label" id="slabel-${k.id}">${wert > 0 ? punkteText(wert, max) : "– noch nicht bewertet"}</span>
           </div>
         `;
         div.querySelectorAll(".star").forEach(s => {
@@ -246,13 +256,20 @@
 
     window.setStar = function(kritId, val) {
       const wrap = document.querySelector(`.stars-wrap[data-id="${kritId}"]`);
+      const max  = parseInt(wrap.dataset.max || 5);
       wrap.querySelectorAll(".star").forEach(s => s.classList.toggle("active", parseInt(s.dataset.val) <= val));
-      document.getElementById(`slabel-${kritId}`).textContent = sterneText(val);
+      document.getElementById(`slabel-${kritId}`).textContent = punkteText(val, max);
       wrap.dataset.val = val;
     };
 
-    function sterneText(v) {
-      return ["","⭐ Ungenügend","⭐⭐ Ausreichend","⭐⭐⭐ Gut","⭐⭐⭐⭐ Sehr gut","⭐⭐⭐⭐⭐ Hervorragend"][v]||"";
+    function punkteText(v, max) {
+      if (!max) max = 5;
+      const pct = v / max;
+      if (pct >= 0.96) return "★".repeat(v) + " Hervorragend";
+      if (pct >= 0.80) return "★".repeat(v) + " Sehr gut";
+      if (pct >= 0.60) return "★".repeat(v) + " Gut";
+      if (pct >= 0.40) return "★".repeat(v) + " Ausreichend";
+      return "★".repeat(v) + " Ungenügend";
     }
 
     window.bewertungSpeichern = async function() {
@@ -306,16 +323,18 @@
         block.dataset.mitglied = mitglied;
         block.innerHTML = `
           <div class="mitglied-name">👤 ${mitglied}</div>
-          ${MITGLIEDER_KRITERIEN.map(k => `
+          ${MITGLIEDER_KRITERIEN.map(k => {
+            const max = k.maxPunkte || 5;
+            return `
             <div class="kriterium-block" style="margin-bottom:10px">
-              <div class="krit-label" style="font-size:0.9rem">${k.label}</div>
+              <div class="krit-label" style="font-size:0.9rem">${k.label} <span style="font-size:0.75rem;color:var(--muted);font-weight:400">(max. ${max} Pkt.)</span></div>
               <div class="krit-desc">${k.desc}</div>
-              <div class="stars-wrap" data-mitglied="${mitglied}" data-kid="${k.id}" data-val="0">
-                ${[1,2,3,4,5].map(n=>`<span class="star" data-val="${n}">★</span>`).join("")}
+              <div class="stars-wrap" data-mitglied="${mitglied}" data-kid="${k.id}" data-val="0" data-max="${max}">
+                ${Array.from({length:max},(_,i)=>`<span class="star" data-val="${i+1}">★</span>`).join("")}
                 <span class="star-label" id="mslabel-${mitglied.replace(/\s/g,'_')}-${k.id}">– noch nicht bewertet</span>
               </div>
             </div>
-          `).join("")}
+          `; }).join("")}
         `;
         block.querySelectorAll(".stars-wrap").forEach(wrap => {
           wrap.querySelectorAll(".star").forEach(s => {
@@ -324,7 +343,8 @@
               wrap.querySelectorAll(".star").forEach(x => x.classList.toggle("active", parseInt(x.dataset.val) <= val));
               wrap.dataset.val = val;
               const labelId = `mslabel-${wrap.dataset.mitglied.replace(/\s/g,'_')}-${wrap.dataset.kid}`;
-              document.getElementById(labelId).textContent = sterneText(val);
+              const max2 = parseInt(wrap.dataset.max || 5);
+              document.getElementById(labelId).textContent = punkteText(val, max2);
             });
           });
         });
@@ -456,8 +476,10 @@
           var vals = [];
           KRITERIEN.forEach(function(k) {
             var sv = sBews.map(function(b){ return (b.kriterien && b.kriterien[k.id]) ? b.kriterien[k.id] : 0; }).filter(function(x){ return x > 0; });
-            var sAvg = sv.length ? sv.reduce(function(a,x){ return a+x; }, 0) / sv.length : null;
-            var lVal = (lBew && lBew.kriterien && lBew.kriterien[k.id]) ? lBew.kriterien[k.id] : null;
+            var sAvgRaw = sv.length ? sv.reduce(function(a,x){ return a+x; }, 0) / sv.length : null;
+            var lValRaw = (lBew && lBew.kriterien && lBew.kriterien[k.id]) ? lBew.kriterien[k.id] : null;
+            var sAvg = sAvgRaw !== null ? normKrit(sAvgRaw, k) : null;
+            var lVal = lValRaw !== null ? normKrit(lValRaw, k) : null;
             var v;
             if (sAvg !== null && lVal !== null) {
               v = lVal * GEWICHTUNG.lehrer + sAvg * GEWICHTUNG.schueler;
@@ -481,8 +503,8 @@
           var alle = [];
           bews.forEach(function(bw) {
             MITGLIEDER_KRITERIEN.forEach(function(k) {
-              var v = (bw.kriterien && bw.kriterien[k.id]) ? bw.kriterien[k.id] : 0;
-              if (v > 0) alle.push(v);
+              var raw = (bw.kriterien && bw.kriterien[k.id]) ? bw.kriterien[k.id] : 0;
+              if (raw > 0) alle.push(normKrit(raw, k));
             });
           });
           return alle.length ? alle.reduce(function(a,x){ return a+x; }, 0) / alle.length : null;
@@ -704,7 +726,7 @@
       c.innerHTML = liste.map((k, i) => `
         <div class="kriterium-row" data-typ="${typ}" data-idx="${i}">
           <span class="kriterium-label">${k.label}</span>
-          <span class="kriterium-desc">${k.desc}</span>
+          <span class="kriterium-desc">${k.desc} <em style="color:var(--muted);font-size:0.8rem">· max. ${k.maxPunkte||5} Pkt.</em></span>
           <div class="kriterium-actions">
             <button class="btn-sm btn-edit" onclick="kriteriumBearbeiten('${typ}',${i})">✏️</button>
             <button class="btn-sm" onclick="kriteriumHoch('${typ}',${i})" ${i===0?'disabled':''}>↑</button>
@@ -722,6 +744,7 @@
       document.getElementById("krit-edit-idx").value   = idx;
       document.getElementById("krit-edit-label").value = k.label;
       document.getElementById("krit-edit-desc").value  = k.desc;
+      document.getElementById("krit-edit-max").value   = k.maxPunkte || 5;
       document.getElementById("krit-edit-neu").value   = "nein";
       document.getElementById("krit-modal-titel").textContent = "✏️ Kriterium bearbeiten";
       show("modal-kriterium");
@@ -732,6 +755,7 @@
       document.getElementById("krit-edit-idx").value   = "-1";
       document.getElementById("krit-edit-label").value = "";
       document.getElementById("krit-edit-desc").value  = "";
+      document.getElementById("krit-edit-max").value   = "5";
       document.getElementById("krit-edit-neu").value   = "ja";
       document.getElementById("krit-modal-titel").textContent = "➕ Neues Kriterium";
       show("modal-kriterium");
@@ -740,16 +764,17 @@
     window.kriteriumSpeichern = async function() {
       const typ   = document.getElementById("krit-edit-typ").value;
       const idx   = parseInt(document.getElementById("krit-edit-idx").value);
-      const label = document.getElementById("krit-edit-label").value.trim();
-      const desc  = document.getElementById("krit-edit-desc").value.trim();
-      const neu   = document.getElementById("krit-edit-neu").value === "ja";
+      const label     = document.getElementById("krit-edit-label").value.trim();
+      const desc      = document.getElementById("krit-edit-desc").value.trim();
+      const maxPunkte = Math.max(1, Math.min(20, parseInt(document.getElementById("krit-edit-max").value) || 5));
+      const neu       = document.getElementById("krit-edit-neu").value === "ja";
       if (!label) { toast("Bitte Bezeichnung eingeben!", "error"); return; }
       const liste = typ === "hoerspiel" ? KRITERIEN : MITGLIEDER_KRITERIEN;
       const id    = label.toLowerCase().replace(/[^a-z0-9]/g,"").substring(0,12) + "_" + Date.now();
       if (neu) {
-        liste.push({ id, label, desc });
+        liste.push({ id, label, desc, maxPunkte });
       } else {
-        liste[idx] = { ...liste[idx], label, desc };
+        liste[idx] = { ...liste[idx], label, desc, maxPunkte };
       }
       if (typ === "mitglieder") MITGL_KRITERIEN = [...liste];
       await speichereKriterien(typ, liste);
@@ -1229,6 +1254,8 @@
       <input id="krit-edit-label" type="text" placeholder="📖 Kriterium-Name">
       <label>Beschreibung <small style="color:var(--muted)">(kurzer Hinweis für Schüler)</small></label>
       <input id="krit-edit-desc" type="text" placeholder="Was wird hier bewertet?">
+      <label>Maximale Punkte <small style="color:var(--muted)">(z.B. 5 Sterne, 10 Punkte …)</small></label>
+      <input id="krit-edit-max" type="number" min="1" max="20" value="5" placeholder="5">
     </div>
     <div style="display:flex;gap:10px;margin-top:16px">
       <button class="btn-secondary" onclick="schliesseModal('modal-kriterium')">Abbrechen</button>
