@@ -76,6 +76,7 @@
     var sel=document.getElementById(id);
     sel.innerHTML="<option value=''>– Klasse –</option>";
     S.klassen.forEach(function(k){sel.innerHTML+="<option value='"+k.id+"'>"+k.name+"</option>";});
+    if(id==="dd-kl-s"&&window.onKlasseChangeSchueler) window.onKlasseChangeSchueler();
   }
   function befuelleGruppenSel(selId,klasseId){
     var k=S.klassen.find(function(x){return x.id===klasseId;});
@@ -100,10 +101,58 @@
   });
 
   // ════════ SCHÜLER ════════
+  // NEU: Namensliste, wenn für die Klasse Schüler importiert wurden
+  window.onKlasseChangeSchueler=function(){
+    var klasseId=val("dd-kl-s");
+    var k=S.klassen.find(function(x){return x.id===klasseId;});
+    befuelleGruppenSel("dd-gr-s",klasseId);
+    var nameSel=document.getElementById("dd-name-s");
+    var grSel=document.getElementById("dd-gr-s");
+    var inp=document.getElementById("inp-s-name");
+    var liste=(k&&k.schueler)||[];
+    document.getElementById("s-gr-hinweis").style.display="none";
+    if(liste.length){
+      nameSel.innerHTML="<option value=''>– Dein Name –</option>"+
+        liste.map(function(s,i){return "<option value='"+i+"'>"+esc(s.vorname+" "+s.nachname)+"</option>";}).join("")+
+        "<option value='__manuell'>✎ Mein Name fehlt in der Liste</option>";
+      nameSel.style.display="";grSel.style.display="none";inp.style.display="none";
+    } else {
+      nameSel.innerHTML="";nameSel.style.display="none";grSel.style.display="";inp.style.display="";
+    }
+  };
+  window.onNameChangeSchueler=function(){
+    var k=S.klassen.find(function(x){return x.id===val("dd-kl-s");});
+    var v=val("dd-name-s");
+    var grSel=document.getElementById("dd-gr-s");
+    var inp=document.getElementById("inp-s-name");
+    var hinweis=document.getElementById("s-gr-hinweis");
+    hinweis.style.display="none";grSel.value="";
+    if(v==="__manuell"){grSel.style.display="";inp.style.display="";inp.focus();return;}
+    inp.style.display="none";
+    if(v===""||!k){grSel.style.display="none";return;}
+    var s=k.schueler[parseInt(v)];
+    if(s&&gruppeExistiert(k.gruppen,s.gruppe)){
+      grSel.style.display="none";
+      hinweis.innerHTML="👥 Deine Gruppe: <strong>"+esc(s.gruppe)+"</strong>";
+      hinweis.style.display="block";
+    } else {
+      grSel.style.display="";
+      hinweis.innerHTML="Du bist noch keiner Gruppe zugeordnet – wähle deine Gruppe:";
+      hinweis.style.display="block";
+    }
+  };
+
   window.startSchueler=async function(){
     var klasseId=val("dd-kl-s"),gruppe=val("dd-gr-s"),name=val("inp-s-name").trim();
-    if(!klasseId||!gruppe||!name){toast("Alle Felder ausfüllen!","error");return;}
     var k=S.klassen.find(function(x){return x.id===klasseId;});
+    var nameWahl=val("dd-name-s");
+    if(k&&(k.schueler||[]).length&&nameWahl!=="__manuell"){
+      if(nameWahl===""){toast("Bitte deinen Namen wählen!","error");return;}
+      var st=k.schueler[parseInt(nameWahl)];
+      name=st.vorname+" "+st.nachname;
+      if(gruppeExistiert(k.gruppen,st.gruppe)) gruppe=st.gruppe;
+    }
+    if(!klasseId||!gruppe||!name){toast("Alle Felder ausfüllen!","error");return;}
     S.klasse=k.name;S.klasseId=klasseId;S.gruppe=gruppe;S.name=name;S.rolle="schueler";
     hideAll();show("s-schueler");
     document.getElementById("s-sub-info").textContent=k.name+" · "+gruppe+" · "+name;
@@ -342,10 +391,17 @@
     if(!S.klassen.length){c.innerHTML="<p class='muted'>Noch keine Klassen.</p>";return;}
     c.innerHTML=S.klassen.map(function(k){
       var tags=(k.gruppen||[]).map(function(g){
-        return "<span class='gr-tag'>"+g.name+" <em>"+g.pw+"</em></span>";
+        var anz=(k.schueler||[]).filter(function(s){return s.gruppe===g.name;}).length;
+        return "<span class='gr-tag'>"+g.name+" <em>"+g.pw+"</em>"+(anz?" · "+anz+" 👤":"")+"</span>";
       }).join("");
-      return "<div class='kl-row'><div><strong>"+k.name+"</strong><div class='gr-tags'>"+tags+"</div></div>"+
-        "<div style='display:flex;gap:6px;margin-top:8px'>"+
+      var sch=k.schueler||[];
+      var ohne=sch.filter(function(s){return !gruppeExistiert(k.gruppen,s.gruppe);}).length;
+      var schInfo=sch.length
+        ?"<div class='hint' style='margin-top:6px'>👥 "+sch.length+" Schüler"+(ohne?" · <span style='color:var(--gold)'>⚠️ "+ohne+" ohne Gruppe</span>":" · alle zugeordnet")+"</div>"
+        :"<div class='hint' style='margin-top:6px'>Noch keine Schülerliste importiert</div>";
+      return "<div class='kl-row'><div><strong>"+k.name+"</strong><div class='gr-tags'>"+tags+"</div>"+schInfo+"</div>"+
+        "<div style='display:flex;gap:6px;margin-top:8px;flex-wrap:wrap'>"+
+        "<button class='btn-sm btn-sch' onclick='smOeffnen(\""+k.id+"\")'>👥 Schüler &amp; Gruppen</button>"+
         "<button class='btn-sm btn-edit' onclick='editKl(\""+k.id+"\")'>✏️</button>"+
         "<button class='btn-sm btn-del' onclick='delKl(\""+k.id+"\",\""+k.name+"\")'>🗑️</button>"+
         "</div></div>";
@@ -424,6 +480,271 @@
     await ladeKlassen();renderKlassenTab();
   };
   window.schliesseModal=function(id){hide(id);};
+
+  // ════════ NEU: SCHÜLER-IMPORT & GRUPPEN ════════
+  function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+  function schuelerKey(s){return ((s.nachname||"")+"|"+(s.vorname||"")).toLowerCase().replace(/\s+/g," ").trim();}
+  function sortSchueler(arr){
+    return arr.sort(function(a,b){return a.nachname.localeCompare(b.nachname,"de")||a.vorname.localeCompare(b.vorname,"de");});
+  }
+  function gruppeExistiert(gruppen,name){return !!name&&(gruppen||[]).some(function(g){return g.name===name;});}
+  function zufallsPw(){return String(1000+Math.floor(Math.random()*9000));}
+  function mischen(a){for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a;}
+
+  // CSV: erkennt ; , oder Tab, Anführungszeichen, Kopfzeile (Nr/Nachname/Vorname) optional
+  function csvZeileTeilen(line,d){
+    var out=[],cur="",q=false;
+    for(var i=0;i<line.length;i++){
+      var c=line[i];
+      if(q){
+        if(c==='"'){if(line[i+1]==='"'){cur+='"';i++;}else q=false;}
+        else cur+=c;
+      } else if(c==='"') q=true;
+      else if(c===d){out.push(cur);cur="";}
+      else cur+=c;
+    }
+    out.push(cur);
+    return out.map(function(x){return x.trim();});
+  }
+  function parseSchuelerCSV(text){
+    text=String(text||"").replace(/^﻿/,"");
+    var lines=text.split(/\r\n|\n|\r/).filter(function(l){return l.trim();});
+    if(!lines.length)return [];
+    var zaehle=function(s,ch){return s.split(ch).length-1;};
+    var d=[";","\t",","].reduce(function(best,x){return zaehle(lines[0],x)>zaehle(lines[0],best)?x:best;},";");
+    var rows=lines.map(function(l){return csvZeileTeilen(l,d);});
+    var h=rows[0].map(function(c){return c.toLowerCase();});
+    var iNr=-1,iNach=-1,iVor=-1;
+    h.forEach(function(c,i){
+      if(c.indexOf("vorname")>-1&&iVor<0)iVor=i;
+      else if((c.indexOf("nachname")>-1||c.indexOf("familienname")>-1||c==="name")&&iNach<0)iNach=i;
+      else if((c==="nr"||c==="nr."||c==="#"||c.indexOf("nummer")>-1)&&iNr<0)iNr=i;
+    });
+    var daten,einspaltig=false;
+    if(iNach>-1&&iVor>-1){daten=rows.slice(1);}
+    else{
+      daten=rows;
+      var n=rows[0].length;
+      if(n>=3){iNr=0;iNach=1;iVor=2;}
+      else if(n===2){iNach=0;iVor=1;}
+      else einspaltig=true;
+    }
+    var liste=[],gesehen={};
+    daten.forEach(function(r){
+      var nach,vor,nr="";
+      if(einspaltig){var t=(r[0]||"").split(/\s+/);nach=t.pop()||"";vor=t.join(" ");}
+      else{nach=r[iNach]||"";vor=r[iVor]||"";nr=iNr>-1?(r[iNr]||""):"";}
+      nach=nach.trim();vor=vor.trim();
+      if(!nach&&!vor)return;
+      var s={nr:nr,nachname:nach,vorname:vor,gruppe:""};
+      var key=schuelerKey(s);
+      if(gesehen[key])return;
+      gesehen[key]=true;liste.push(s);
+    });
+    return liste;
+  }
+  // UTF-8 versuchen, sonst Windows-1252 (typischer Excel-Export) → Umlaute bleiben korrekt
+  function dekodiere(buf){
+    try{return new TextDecoder("utf-8",{fatal:true}).decode(buf);}
+    catch(e){return new TextDecoder("windows-1252").decode(buf);}
+  }
+
+  S.sm=null;
+  window.smOeffnen=function(klasseId){
+    var k=S.klassen.find(function(x){return x.id===klasseId;});if(!k)return;
+    S.sm={klasseId:k.id,name:k.name,
+      schueler:JSON.parse(JSON.stringify(k.schueler||[])),
+      gruppen:JSON.parse(JSON.stringify(k.gruppen||[])),
+      dirty:false,imp:null};
+    document.getElementById("sm-kl-name").textContent=k.name;
+    document.getElementById("sm-paste").value="";
+    document.getElementById("sm-paste-box").style.display="none";
+    setHTML("sm-vorschau","");
+    document.getElementById("sm-gr-anz").value=Math.max(2,Math.ceil((S.sm.schueler.length||20)/5));
+    smRender();
+    document.getElementById("modal-sch").style.display="flex";
+  };
+  window.smSchliessen=function(){
+    if(S.sm&&S.sm.dirty&&!confirm("Ungespeicherte Änderungen verwerfen?"))return;
+    hide("modal-sch");S.sm=null;
+  };
+  function smGeaendert(){S.sm.dirty=true;smRender();}
+
+  function smRender(){
+    var sm=S.sm;if(!sm)return;
+    // Gruppen-Karten
+    var gHTML=sm.gruppen.length?sm.gruppen.map(function(g,gi){
+      var m=sm.schueler.filter(function(s){return s.gruppe===g.name;});
+      return "<div class='sm-gr-card'>"+
+        "<div class='sm-gr-head'><strong>"+esc(g.name)+"</strong><span class='sm-gr-count'>"+m.length+"</span></div>"+
+        "<div class='sm-gr-pw'>🔑 "+esc(g.pw)+"</div>"+
+        "<div class='sm-gr-members'>"+(m.length?m.map(function(s){return "<span class='sm-chip'>"+esc(s.vorname+" "+s.nachname)+"</span>";}).join(""):"<span class='muted'>noch leer</span>")+"</div>"+
+        "<button class='btn-sm btn-del' style='margin-top:8px' onclick='smGruppeLoeschen("+gi+")'>🗑️ entfernen</button>"+
+        "</div>";
+    }).join(""):"<p class='muted'>Noch keine Gruppen – lege oben welche an.</p>";
+    setHTML("sm-gruppen-uebersicht",gHTML);
+    var ohne=sm.schueler.filter(function(s){return !gruppeExistiert(sm.gruppen,s.gruppe);});
+    setHTML("sm-ohne",!sm.schueler.length?"":ohne.length
+      ?"<span style='color:var(--gold)'>⚠️ "+ohne.length+" ohne Gruppe:</span> "+ohne.map(function(s){return esc(s.vorname+" "+s.nachname);}).join(", ")
+      :"<span style='color:var(--green)'>✅ Alle "+sm.schueler.length+" Schüler sind einer Gruppe zugeordnet.</span>");
+    // Schülerliste mit Gruppen-Auswahl
+    if(!sm.schueler.length){
+      setHTML("sm-liste","<p class='muted'>Noch keine Schüler – importiere oben eine CSV-Liste.</p>");
+    } else {
+      var rows=sm.schueler.map(function(s,i){
+        var ok=gruppeExistiert(sm.gruppen,s.gruppe);
+        var opts="<option value=''>– ohne Gruppe –</option>"+sm.gruppen.map(function(g){
+          return "<option value='"+esc(g.name)+"'"+(ok&&g.name===s.gruppe?" selected":"")+">"+esc(g.name)+"</option>";
+        }).join("");
+        return "<tr><td class='sm-nr'>"+esc(s.nr||(i+1))+"</td>"+
+          "<td>"+esc(s.nachname)+"</td><td>"+esc(s.vorname)+"</td>"+
+          "<td><select class='sm-sel"+(ok?"":" sm-sel-leer")+"' onchange='smSetGruppe("+i+",this.value)'>"+opts+"</select></td>"+
+          "<td><button class='btn-sm btn-del' title='Aus Liste entfernen' onclick='smSchuelerLoeschen("+i+")'>✕</button></td></tr>";
+      }).join("");
+      setHTML("sm-liste","<table class='sm-tbl'><thead><tr><th>Nr</th><th>Nachname</th><th>Vorname</th><th>Gruppe</th><th></th></tr></thead><tbody>"+rows+"</tbody></table>");
+    }
+    var btn=document.getElementById("sm-speichern");
+    btn.textContent=sm.dirty?"Speichern ✓":"Schließen";
+    document.getElementById("sm-dirty").style.display=sm.dirty?"inline":"none";
+  }
+
+  // Import
+  window.smDateiGewaehlt=function(inp){
+    var f=inp.files&&inp.files[0];if(!f)return;
+    var r=new FileReader();
+    r.onload=function(){smImportVorbereiten(dekodiere(new Uint8Array(r.result)),f.name);inp.value="";};
+    r.readAsArrayBuffer(f);
+  };
+  window.smToggleEinfuegen=function(){
+    var b=document.getElementById("sm-paste-box");
+    b.style.display=b.style.display==="none"?"block":"none";
+    if(b.style.display==="block")document.getElementById("sm-paste").focus();
+  };
+  window.smEinfuegenVerarbeiten=function(){smImportVorbereiten(val("sm-paste"),"eingefügter Liste");};
+  function smImportVorbereiten(text,quelle){
+    var liste=parseSchuelerCSV(text);
+    if(!liste.length){toast("Keine Schüler erkannt – bitte Format prüfen!","error");return;}
+    var sm=S.sm;sm.imp=liste;
+    var vorh={};sm.schueler.forEach(function(s){vorh[schuelerKey(s)]=true;});
+    var neu=liste.filter(function(s){return !vorh[schuelerKey(s)];}).length;
+    var btns=sm.schueler.length
+      ?"<button class='btn-primary' style='width:auto;padding:8px 16px' onclick=\"smImportAnwenden('ersetzen')\">Liste ersetzen</button>"+
+       "<button class='btn-secondary' onclick=\"smImportAnwenden('ergaenzen')\">Nur neue ergänzen (+"+neu+")</button>"
+      :"<button class='btn-primary' style='width:auto;padding:8px 16px' onclick=\"smImportAnwenden('ersetzen')\">✓ Übernehmen</button>";
+    setHTML("sm-vorschau",
+      "<div class='sm-vorschau'>"+
+        "<div><strong>"+liste.length+" Schüler erkannt</strong> <span class='muted'>aus "+esc(quelle)+"</span></div>"+
+        "<div class='sm-vorschau-namen'>"+liste.map(function(s){return esc(s.vorname+" "+s.nachname);}).join(" · ")+"</div>"+
+        (sm.schueler.length?"<p class='hint'>Beim Ersetzen behalten Schüler mit gleichem Namen ihre Gruppe.</p>":"")+
+        "<div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:10px'>"+btns+
+        "<button class='btn-secondary' onclick=\"S.sm.imp=null;setHTML('sm-vorschau','')\">Abbrechen</button></div>"+
+      "</div>");
+  }
+  window.setHTML=setHTML;
+  window.smImportAnwenden=function(modus){
+    var sm=S.sm,imp=sm.imp;if(!imp)return;
+    var alt={};sm.schueler.forEach(function(s){alt[schuelerKey(s)]=s;});
+    if(modus==="ersetzen"){
+      sm.schueler=imp.map(function(s){var a=alt[schuelerKey(s)];return Object.assign({},s,{gruppe:a?(a.gruppe||""):""});});
+    } else {
+      imp.forEach(function(s){if(!alt[schuelerKey(s)])sm.schueler.push(s);});
+    }
+    sortSchueler(sm.schueler);
+    sm.imp=null;setHTML("sm-vorschau","");
+    document.getElementById("sm-paste").value="";
+    document.getElementById("sm-paste-box").style.display="none";
+    document.getElementById("sm-gr-anz").value=Math.max(2,Math.ceil(sm.schueler.length/5));
+    toast(sm.schueler.length+" Schüler in der Liste – Speichern nicht vergessen","success");
+    smGeaendert();
+  };
+
+  // Gruppen
+  window.smGruppeHinzu=function(){
+    var name=val("sm-gr-name").trim(),pw=val("sm-gr-pw").trim()||zufallsPw();
+    if(!name){toast("Gruppenname fehlt!","error");return;}
+    if(/[,:]/.test(name)||/[,:]/.test(pw)){toast("Bitte keine Kommas oder Doppelpunkte verwenden.","error");return;}
+    if(gruppeExistiert(S.sm.gruppen,name)){toast("Diese Gruppe gibt es schon!","error");return;}
+    S.sm.gruppen.push({name:name,pw:pw});
+    document.getElementById("sm-gr-name").value="";document.getElementById("sm-gr-pw").value="";
+    smGeaendert();
+  };
+  window.smGruppenAutomatisch=function(){
+    var n=parseInt(val("sm-gr-anz"))||0;
+    if(n<1||n>20){toast("Anzahl zwischen 1 und 20 wählen!","error");return;}
+    var nr=1,dazu=0;
+    while(dazu<n){var name="Gruppe "+nr;if(!gruppeExistiert(S.sm.gruppen,name)){S.sm.gruppen.push({name:name,pw:zufallsPw()});dazu++;}nr++;}
+    toast(n+" Gruppen angelegt (mit Zufalls-Passwort)","success");
+    smGeaendert();
+  };
+  window.smGruppeLoeschen=function(gi){
+    var g=S.sm.gruppen[gi];if(!g)return;
+    if(!confirm("Gruppe \""+g.name+"\" entfernen? Ihre Mitglieder sind danach ohne Gruppe."))return;
+    S.sm.gruppen.splice(gi,1);
+    S.sm.schueler.forEach(function(s){if(s.gruppe===g.name)s.gruppe="";});
+    smGeaendert();
+  };
+  window.smSetGruppe=function(i,g){S.sm.schueler[i].gruppe=g;smGeaendert();};
+  window.smSchuelerLoeschen=function(i){
+    var s=S.sm.schueler[i];if(!s)return;
+    if(!confirm(s.vorname+" "+s.nachname+" aus der Liste entfernen?"))return;
+    S.sm.schueler.splice(i,1);smGeaendert();
+  };
+  window.smZufaellig=function(nurRest){
+    var sm=S.sm;
+    if(!sm.schueler.length){toast("Erst Schüler importieren!","error");return;}
+    if(!sm.gruppen.length){toast("Erst Gruppen anlegen!","error");return;}
+    if(nurRest){
+      var ohne=sm.schueler.filter(function(s){return !gruppeExistiert(sm.gruppen,s.gruppe);});
+      if(!ohne.length){toast("Alle sind schon zugeordnet.","info");return;}
+      var cnt={};sm.gruppen.forEach(function(g){cnt[g.name]=sm.schueler.filter(function(s){return s.gruppe===g.name;}).length;});
+      mischen(ohne).forEach(function(s){
+        var kleinste=mischen(sm.gruppen.slice()).reduce(function(b,g){return cnt[g.name]<cnt[b.name]?g:b;});
+        s.gruppe=kleinste.name;cnt[kleinste.name]++;
+      });
+      toast(ohne.length+" Schüler auf die kleinsten Gruppen verteilt","success");
+    } else {
+      var hat=sm.schueler.some(function(s){return gruppeExistiert(sm.gruppen,s.gruppe);});
+      if(hat&&!confirm("Alle Schüler neu und zufällig auf "+sm.gruppen.length+" Gruppen verteilen? Die bisherige Zuordnung geht verloren."))return;
+      var gm=mischen(sm.gruppen.slice());
+      mischen(sm.schueler.slice()).forEach(function(s,i){s.gruppe=gm[i%gm.length].name;});
+      toast("Zufällig auf "+sm.gruppen.length+" Gruppen verteilt","success");
+    }
+    smGeaendert();
+  };
+  window.smZuordnungLeeren=function(){
+    if(!confirm("Alle Gruppenzuordnungen entfernen? (Gruppen und Schüler bleiben erhalten)"))return;
+    S.sm.schueler.forEach(function(s){s.gruppe="";});smGeaendert();
+  };
+  window.smGruppenExport=function(){
+    var sm=S.sm;if(!sm.schueler.length&&!sm.gruppen.length){toast("Nichts zu exportieren.","error");return;}
+    var q=function(x){return '"'+String(x==null?"":x).replace(/"/g,'""')+'"';};
+    var zeilen=[["Gruppe","Passwort","Nachname","Vorname"].join(";")];
+    sm.gruppen.forEach(function(g){
+      sm.schueler.filter(function(s){return s.gruppe===g.name;}).forEach(function(s){
+        zeilen.push([q(g.name),q(g.pw),q(s.nachname),q(s.vorname)].join(";"));
+      });
+    });
+    sm.schueler.filter(function(s){return !gruppeExistiert(sm.gruppen,s.gruppe);}).forEach(function(s){
+      zeilen.push([q("(ohne Gruppe)"),q(""),q(s.nachname),q(s.vorname)].join(";"));
+    });
+    var blob=new Blob(["﻿"+zeilen.join("\r\n")],{type:"text/csv;charset=utf-8;"});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a");a.href=url;a.style.display="none";
+    a.download="Gruppen_"+sm.name+".csv";
+    document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  };
+
+  window.smSpeichern=async function(){
+    var sm=S.sm;if(!sm)return;
+    if(!sm.dirty){hide("modal-sch");S.sm=null;return;}
+    try{
+      await db.collection(C_KLASSEN).doc(sm.klasseId).update({schueler:sm.schueler,gruppen:sm.gruppen});
+    }catch(e){toast("Fehler beim Speichern!","error");console.error(e);return;}
+    toast("Schüler & Gruppen gespeichert ✓","success");
+    hide("modal-sch");S.sm=null;
+    await ladeKlassen();renderKlassenTab();
+    ["dd-kl-s","dd-kl-g","dd-l-kl-fragen","dd-l-kl-quiz","dd-l-kl-aus"].forEach(befuelleKlassenSel);
+  };
 
   // ─── TAB FRAGEN ───
 
@@ -1183,6 +1504,42 @@
     .gr-check-label input[type='checkbox']{width:16px;height:16px;accent-color:var(--gold)}
     .pw-inline{flex:1;background:var(--bg4);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:6px;font-family:inherit;font-size:.82rem;outline:none;max-width:100px}
     .pw-inline:focus{border-color:var(--gold)}
+
+    /* NEU: SCHÜLER & GRUPPEN */
+    .btn-sch{background:rgba(74,158,255,.12);color:var(--blue);border:1px solid rgba(74,158,255,.3)}
+    .btn-sch:hover{background:rgba(74,158,255,.25)}
+    .s-gr-hinweis{display:none;font-size:.8rem;color:var(--muted);margin:-2px 0 8px 2px}
+    .s-gr-hinweis strong{color:var(--gold)}
+    .sm-overlay{overflow-y:auto;align-items:flex-start}
+    .sm-box{max-width:880px;margin:20px auto}
+    .sm-section{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:14px}
+    .sm-sec-title{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:1px;color:var(--gold);margin-bottom:6px}
+    .sm-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+    .sm-row input{background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:8px 11px;border-radius:8px;font-family:inherit;font-size:.86rem;outline:none;min-width:0}
+    .sm-row input:focus,.sm-box textarea:focus{border-color:var(--gold)}
+    .sm-box textarea{width:100%;margin-top:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-family:ui-monospace,Menlo,monospace;font-size:.8rem;outline:none;resize:vertical}
+    .sm-file{display:inline-block;cursor:pointer}
+    .sm-box .btn-secondary,.sm-box .btn-export{font-size:.85rem}
+    .sm-vorschau{margin-top:12px;padding:12px 14px;background:rgba(62,207,142,.07);border:1px solid rgba(62,207,142,.25);border-radius:10px}
+    .sm-vorschau-namen{font-size:.82rem;color:var(--muted);margin-top:6px;line-height:1.5;max-height:110px;overflow-y:auto}
+    .sm-gr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-top:12px}
+    .sm-gr-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px}
+    .sm-gr-head{display:flex;justify-content:space-between;align-items:center}
+    .sm-gr-count{background:var(--gold);color:#080b10;border-radius:20px;padding:1px 9px;font-size:.78rem;font-weight:700}
+    .sm-gr-pw{font-size:.75rem;color:var(--muted);margin:3px 0 8px}
+    .sm-gr-members{display:flex;flex-wrap:wrap;gap:4px}
+    .sm-chip{background:var(--bg4);border-radius:12px;padding:2px 8px;font-size:.76rem}
+    .sm-ohne{font-size:.82rem;margin-top:12px;line-height:1.5}
+    .sm-tbl-wrap{max-height:380px;overflow-y:auto;margin-top:8px}
+    .sm-tbl{width:100%;border-collapse:collapse;font-size:.86rem}
+    .sm-tbl th{text-align:left;color:var(--muted);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg3)}
+    .sm-tbl td{padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.04)}
+    .sm-nr{color:var(--muted);width:36px}
+    .sm-sel{background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:7px;font-family:inherit;font-size:.82rem;outline:none;max-width:160px}
+    .sm-sel option{background:#0f1520}
+    .sm-sel-leer{border-color:rgba(240,192,64,.5);color:var(--gold)}
+    .sm-footer{display:flex;gap:10px;align-items:center;flex-wrap:wrap;position:sticky;bottom:0;background:var(--bg2);padding:12px 0;border-top:1px solid var(--border)}
+    @media(max-width:600px){.sm-tbl th:first-child,.sm-tbl td.sm-nr{display:none}.sm-box{padding:18px}}
   </style>
 </head>
 <body>
@@ -1206,7 +1563,9 @@
     <!-- Schüler -->
     <div class="role-card">
       <h3>📝 Schüler</h3>
-      <select id="dd-kl-s" onchange="onKlasseChange('dd-kl-s','dd-gr-s')"></select>
+      <select id="dd-kl-s" onchange="onKlasseChangeSchueler()"></select>
+      <select id="dd-name-s" style="display:none" onchange="onNameChangeSchueler()"></select>
+      <div id="s-gr-hinweis" class="s-gr-hinweis"></div>
       <select id="dd-gr-s"></select>
       <input id="inp-s-name" type="text" placeholder="Dein Name" onkeydown="if(event.key==='Enter')startSchueler()">
       <button class="btn-primary" onclick="startSchueler()">Fragen einreichen →</button>
@@ -1397,6 +1756,62 @@
     <div style="display:flex;gap:10px">
       <button class="btn-secondary" onclick="schliesseModal('modal-gruppen')">Abbrechen</button>
       <button class="btn-primary" style="flex:1" onclick="gruppenZuweisen()">Gruppen zuweisen ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: SCHÜLER & GRUPPEN (NEU) -->
+<div id="modal-sch" class="modal-overlay sm-overlay" style="display:none" onclick="if(event.target===this)smSchliessen()">
+  <div class="modal-box sm-box">
+    <div class="modal-header">
+      <h3>👥 Schüler &amp; Gruppen · <span id="sm-kl-name"></span></h3>
+      <button class="modal-close" onclick="smSchliessen()">✕</button>
+    </div>
+
+    <div class="sm-section">
+      <div class="sm-sec-title">1 · Schülerliste importieren</div>
+      <p class="hint">CSV mit den Spalten <strong>Nr; Nachname; Vorname</strong> – Datei wählen oder Liste aus Excel/Schulverwaltung einfügen.</p>
+      <div class="sm-row">
+        <label class="btn-secondary sm-file">📄 CSV-Datei wählen<input type="file" id="sm-file" accept=".csv,.txt,text/csv" style="display:none" onchange="smDateiGewaehlt(this)"></label>
+        <button class="btn-secondary" onclick="smToggleEinfuegen()">📋 Liste einfügen</button>
+      </div>
+      <div id="sm-paste-box" style="display:none">
+        <textarea id="sm-paste" rows="6" placeholder='"Nr";"Nachname";"Vorname"&#10;1;"Muster";"Max"&#10;2;"Beispiel";"Lena"'></textarea>
+        <button class="btn-secondary" style="margin-top:8px" onclick="smEinfuegenVerarbeiten()">Liste prüfen →</button>
+      </div>
+      <div id="sm-vorschau"></div>
+    </div>
+
+    <div class="sm-section">
+      <div class="sm-sec-title">2 · Gruppen</div>
+      <div class="sm-row">
+        <input id="sm-gr-anz" type="number" min="1" max="20" value="5" style="width:70px">
+        <button class="btn-secondary" onclick="smGruppenAutomatisch()">Gruppen anlegen</button>
+        <span class="muted" style="margin:0 4px">oder einzeln:</span>
+        <input id="sm-gr-name" placeholder="Name, z.B. Die Füchse" style="flex:1;min-width:140px" onkeydown="if(event.key==='Enter')smGruppeHinzu()">
+        <input id="sm-gr-pw" placeholder="Passwort (sonst zufällig)" style="width:180px" onkeydown="if(event.key==='Enter')smGruppeHinzu()">
+        <button class="btn-secondary" onclick="smGruppeHinzu()">+ Gruppe</button>
+      </div>
+      <div class="sm-row">
+        <button class="btn-primary" style="width:auto;padding:8px 16px" onclick="smZufaellig(false)">🎲 Alle zufällig verteilen</button>
+        <button class="btn-secondary" onclick="smZufaellig(true)">🎲 Nur Rest verteilen</button>
+        <button class="btn-secondary" onclick="smZuordnungLeeren()">Zuordnung leeren</button>
+        <button class="btn-export" onclick="smGruppenExport()">⬇️ Gruppenliste CSV</button>
+      </div>
+      <div id="sm-gruppen-uebersicht" class="sm-gr-grid"></div>
+      <div id="sm-ohne" class="sm-ohne"></div>
+    </div>
+
+    <div class="sm-section">
+      <div class="sm-sec-title">3 · Zuordnung anpassen</div>
+      <p class="hint">Für jeden Schüler die Gruppe wählen – die Karten oben aktualisieren sich sofort.</p>
+      <div id="sm-liste" class="sm-tbl-wrap"></div>
+    </div>
+
+    <div class="sm-footer">
+      <span id="sm-dirty" class="hint" style="display:none;color:var(--gold);margin:0">● Ungespeicherte Änderungen</span>
+      <button class="btn-secondary" style="margin-left:auto" onclick="smSchliessen()">Abbrechen</button>
+      <button id="sm-speichern" class="btn-primary" style="width:auto;padding:10px 26px" onclick="smSpeichern()">Speichern ✓</button>
     </div>
   </div>
 </div>
