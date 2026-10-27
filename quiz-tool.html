@@ -85,10 +85,35 @@
     if(!k)return;
     (k.gruppen||[]).forEach(function(g){sel.innerHTML+="<option value='"+g.name+"'>"+g.name+"</option>";});
   }
-  window.onKlasseChange=function(selId,zielId){befuelleGruppenSel(zielId,val(selId));};
+  window.onKlasseChange=async function(selId,zielId){
+    var id=val(selId);
+    befuelleGruppenSel(zielId,id);
+    if(!id)return;
+    // Frisch aus der Datenbank laden, damit neu angelegte Gruppen sofort erscheinen
+    try{
+      await klasseFrischLaden(id);
+      if(val(selId)!==id)return;
+      var vorher=val(zielId);
+      befuelleGruppenSel(zielId,id);
+      document.getElementById(zielId).value=vorher;
+      if(zielId==="dd-gr-g"&&vorher)onGruppeChangeGruppe();
+    }catch(e){console.error(e);}
+  };
 
   // ════════ START ════════
-  function zeigeStart(){unsubAll();hideAll();show("s-start");}
+  function zeigeStart(){
+    unsubAll();hideAll();show("s-start");
+    // Klassenliste auffrischen (z.B. nach Änderungen auf einem anderen Gerät)
+    ladeKlassen().then(function(){
+      ["dd-kl-s","dd-kl-g"].forEach(function(id){
+        var v=val(id);befuelleKlassenSel(id);
+        if(v&&S.klassen.some(function(k){return k.id===v;})){document.getElementById(id).value=v;}
+      });
+      if(val("dd-kl-s"))renderSchuelerStart();
+      if(val("dd-kl-g"))befuelleGruppenSel("dd-gr-g",val("dd-kl-g"));
+      setzeGruppenPwModus(false);
+    }).catch(function(e){console.error(e);});
+  }
   window.abmelden=function(){zeigeStart();};
 
   document.addEventListener("DOMContentLoaded",async function(){
@@ -103,6 +128,13 @@
   // ════════ SCHÜLER ════════
   // NEU: Namensliste, wenn für die Klasse Schüler importiert wurden
   window.onKlasseChangeSchueler=function(){
+    renderSchuelerStart();
+    var id=val("dd-kl-s");if(!id)return;
+    klasseFrischLaden(id).then(function(){
+      if(val("dd-kl-s")===id&&!val("dd-name-s")&&!val("dd-gr-s"))renderSchuelerStart();
+    }).catch(function(e){console.error(e);});
+  };
+  function renderSchuelerStart(){
     var klasseId=val("dd-kl-s");
     var k=S.klassen.find(function(x){return x.id===klasseId;});
     befuelleGruppenSel("dd-gr-s",klasseId);
