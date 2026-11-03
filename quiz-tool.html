@@ -25,6 +25,14 @@
   var C_FRAGEN   = "quiz_fragen";
   var C_PUNKTE   = "quiz_punkte";
   var C_SESSION  = "quiz_session";
+  var C_VERLAUF  = "quiz_verlauf";   // NEU: dauerhafter Verlauf je gestellter Frage
+  // Eintrag an den Verlauf einer Frage anhängen (arrayUnion → kein Überschreiben bei gleichzeitigen Aktionen)
+  function verlaufRef(id){return id?db.collection(C_VERLAUF).doc(id):null;}
+  function verlaufEintrag(id,eintrag,extra){
+    var r=verlaufRef(id);if(!r)return Promise.resolve();
+    var upd=Object.assign({log:firebase.firestore.FieldValue.arrayUnion(eintrag)},extra||{});
+    return r.update(upd).catch(function(e){console.error("Verlauf",e);});
+  }
   var ADMIN_PW   = "Admin-OSWE";
 
   function NOTE(p) {
@@ -482,7 +490,9 @@
         if(s.buzzerGedrückt&&s.buzzerGedrückt.gruppe!==S.gruppe)return "spaet:"+s.buzzerGedrückt.gruppe;
         if(!s.buzzerGedrückt&&s.zielGruppe!==S.gruppe)return "nichtdran";
         var eintrag={gruppe:S.gruppe,text:text,zeit:Date.now()};
-        tx.update(ref,{gruppenAntwort:eintrag,antwortLog:(s.antwortLog||[]).concat([{typ:"antwort",gruppe:S.gruppe,text:text,zeit:eintrag.zeit}])});
+        var logE={typ:"antwort",gruppe:S.gruppe,text:text,zeit:eintrag.zeit};
+        tx.update(ref,{gruppenAntwort:eintrag,antwortLog:(s.antwortLog||[]).concat([logE])});
+        if(s.verlaufId)tx.update(verlaufRef(s.verlaufId),{log:firebase.firestore.FieldValue.arrayUnion(logE)});
         return "ok";
       });
     }catch(e){console.error(e);if(sendBtn)sendBtn.disabled=false;toast("Fehler beim Senden – nochmal versuchen!","error");return;}
@@ -508,7 +518,9 @@
         if(s.buzzerGedrückt)return "spaet:"+s.buzzerGedrückt.gruppe;
         if(s.fragenstellendeGruppe===S.gruppe||(s.falscheGruppen||[]).includes(S.gruppe))return "zu";
         var z=Date.now();
-        tx.update(ref,{buzzerGedrückt:{gruppe:S.gruppe,zeit:z},antwortLog:(s.antwortLog||[]).concat([{typ:"buzzer",gruppe:S.gruppe,zeit:z}])});
+        var logB={typ:"buzzer",gruppe:S.gruppe,zeit:z};
+        tx.update(ref,{buzzerGedrückt:{gruppe:S.gruppe,zeit:z},antwortLog:(s.antwortLog||[]).concat([logB])});
+        if(s.verlaufId)tx.update(verlaufRef(s.verlaufId),{log:firebase.firestore.FieldValue.arrayUnion(logB)});
         return "ok";
       });
     }catch(e){console.error(e);btn.disabled=false;return;}
@@ -1323,6 +1335,21 @@
     // Auto-reset wenn alle möglichen Zielgruppen bereits verwendet wurden
     var moeglich=alleGruppen.filter(function(n){return n!==ziel&&!prevUsed.includes(n);});
     if(moeglich.length===0) prevUsed=[];
+    // NEU: Vorherige Frage, die nicht als richtig gewertet wurde, im Verlauf abschließen
+    if(prev.aktiv&&prev.verlaufId){
+      await verlaufEintrag(prev.verlaufId,{typ:"ende",text:"ohne Wertung abgebrochen",zeit:Date.now()},{ende:Date.now(),ergebnis:"ohne Wertung"});
+    }
+    // NEU: Verlaufseintrag für diese Frage anlegen
+    var verlaufId=null;
+    try{
+      var vRef=await db.collection(C_VERLAUF).add({
+        klasse:S.quizKlasse.name,start:Date.now(),ende:null,
+        frage:fqText,antwort:fqAntwort,
+        fragenstellendeGruppe:ziel,eingereichtVon:sub.name||"",fragenDocId:sub.id,fragenIndex:parseInt(parts[1]),
+        zielGruppe:null,ergebnis:"läuft",richtigeGruppe:null,log:[]
+      });
+      verlaufId=vRef.id;
+    }catch(e){console.error("Verlauf anlegen",e);}
     await db.collection(C_SESSION).doc("current").set({
       aktiv:true,klasse:S.quizKlasse.name,
       aktuelleFrageText:fqText,aktuelleAntwort:fqAntwort,
@@ -1330,7 +1357,7 @@
       zielGruppe:null,zielVorschlag:null,
       buzzerOffen:false,buzzerAlleOffen:false,
       buzzerGedrückt:null,gruppenAntwort:null,letzteRichtigeGruppe:null,timerStart:null,timerDauer:30,
-      verwendeteZielgruppen:prevUsed,falscheGruppen:[],antwortLog:[]
+      verwendeteZielgruppen:prevUsed,falscheGruppen:[],antwortLog:[],verlaufId:verlaufId
     });
     if(S.stealTimer){clearTimeout(S.stealTimer);S.stealTimer=null;}
     toast("Frage gestartet! Gruppe wählt Zielgruppe…","success");
@@ -1360,6 +1387,7 @@
       gruppenAntwort:null,
       verwendeteZielgruppen:used
     });
+    if(sess&&sess.verlaufId)verlaufEintrag(sess.verlaufId,{typ:"ziel",gruppe:zielGruppe,zeit:jetzt},{zielGruppe:zielGruppe});
     toast("Frage geht an: "+zielGruppe,"success");
   };
 
@@ -1412,6 +1440,12 @@
     else{await ref.set({klasse:sess.klasse,gruppe:gruppe,name:"(Gruppe "+gruppe+")",typ:"gruppe",fragenPunkte:0,buzzerPunkte:1});}
     await db.collection(C_SESSION).doc("current").update({aktiv:false,buzzerOffen:false,buzzerGedrückt:null,letzteRichtigeGruppe:gruppe,
       antwortLog:(sess.antwortLog||[]).concat([{typ:"richtig",gruppe:gruppe,zeit:Date.now()}])});
+    if(sess.verlaufId){
+      var jetztR=Date.now();
+      await verlaufEintrag(sess.verlaufId,{typ:"richtig",gruppe:gruppe,
+        text:(sess.gruppenAntwort&&sess.gruppenAntwort.gruppe===gruppe)?sess.gruppenAntwort.text:"(mündlich)",zeit:jetztR},
+        {ende:jetztR,ergebnis:"richtig",richtigeGruppe:gruppe});
+    }
     toast("✓ Richtig! +1 Punkt für "+gruppe,"success");
     await ladePunkte(sess.klasse);
   };
@@ -1431,6 +1465,10 @@
       falscheGruppen:falsche,
       antwortLog:(sess.antwortLog||[]).concat(gruppe?[{typ:"falsch",gruppe:gruppe,zeit:Date.now()}]:[])
     });
+    if(gruppe&&sess.verlaufId){
+      await verlaufEintrag(sess.verlaufId,{typ:"falsch",gruppe:gruppe,
+        text:(sess.gruppenAntwort&&sess.gruppenAntwort.gruppe===gruppe)?sess.gruppenAntwort.text:"(mündlich)",zeit:Date.now()});
+    }
     var k=S.klassen.find(function(x){return x.name===sess.klasse;});
     var uebrig=((k&&k.gruppen)||[]).filter(function(g){return g.name!==sess.fragenstellendeGruppe&&!falsche.includes(g.name);});
     if(!uebrig.length)toast("✗ Falsch – keine Gruppe mehr übrig. Antwort auflösen und Frage beenden.","info");
@@ -1438,6 +1476,10 @@
   };
 
   window.quizBeenden=async function(){
+    var sess=S.session;
+    if(sess&&sess.aktiv&&sess.verlaufId){
+      await verlaufEintrag(sess.verlaufId,{typ:"ende",text:"ohne Wertung beendet",zeit:Date.now()},{ende:Date.now(),ergebnis:"ohne Wertung"});
+    }
     await db.collection(C_SESSION).doc("current").set({aktiv:false});
     toast("Quiz beendet","info");
   };
@@ -1484,6 +1526,96 @@
     var k=S.klassen.find(function(x){return x.id===klasseId;});
     await ladeFragen(k.name);await ladePunkte(k.name);
     renderAuswertung(k);
+    try{await ladeVerlauf(k.name);}catch(e){console.error(e);S.verlauf=[];}
+    befuelleVerlaufFilter(k);
+    document.getElementById("verlauf-bereich").style.display="block";
+    renderVerlauf();
+  };
+
+  // ════════ NEU: VERLAUF (Auswertung) ════════
+  S.verlauf=[];
+  function fmtDatum(z){if(!z)return "";var d=new Date(z);return d.toLocaleDateString("de-DE");}
+  function fmtZeit(z){if(!z)return "";var d=new Date(z);return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2)+":"+("0"+d.getSeconds()).slice(-2);}
+  async function ladeVerlauf(klasseName){
+    var snap=await db.collection(C_VERLAUF).where("klasse","==",klasseName).get();
+    S.verlauf=snap.docs.map(function(d){return Object.assign({id:d.id},d.data());});
+    S.verlauf.sort(function(a,b){return (b.start||0)-(a.start||0);});
+    S.verlauf.forEach(function(v){(v.log||[]).sort(function(a,b){return (a.zeit||0)-(b.zeit||0);});});
+  }
+  function logZeileText(e){
+    if(e.typ==="ziel")return "🎯 Frage an "+e.gruppe;
+    if(e.typ==="buzzer")return "🔔 "+e.gruppe+" hat gebuzzert";
+    if(e.typ==="antwort")return "✏️ "+e.gruppe+": „"+e.text+"“";
+    if(e.typ==="falsch")return "✗ "+e.gruppe+" – falsch";
+    if(e.typ==="richtig")return "✓ "+e.gruppe+" – richtig (+1)";
+    if(e.typ==="ende")return "■ "+(e.text||"beendet");
+    return e.typ;
+  }
+  function renderVerlauf(){
+    var c=document.getElementById("verlauf-container");if(!c)return;
+    if(!S.verlauf.length){c.innerHTML="<p class='muted'>Noch keine Fragen im Verlauf. Er wird ab jetzt bei jedem „▶ Frage starten“ automatisch gespeichert.</p>";return;}
+    var filter=val("verlauf-filter");
+    var liste=S.verlauf.filter(function(v){
+      if(!filter)return true;
+      return (v.log||[]).some(function(e){return e.gruppe===filter;})||v.fragenstellendeGruppe===filter;
+    });
+    c.innerHTML=liste.map(function(v){
+      var badge=v.ergebnis==="richtig"?"<span class='vl-badge vl-ok'>✓ "+esc(v.richtigeGruppe)+"</span>"
+        :v.ergebnis==="läuft"?"<span class='vl-badge vl-live'>läuft</span>"
+        :"<span class='vl-badge vl-off'>ohne Wertung</span>";
+      var log=(v.log||[]).filter(function(e){return !filter||!e.gruppe||e.gruppe===filter||e.typ==="ende";});
+      return "<div class='vl-card'>"+
+        "<div class='vl-head'><span class='vl-zeit'>"+fmtDatum(v.start)+" · "+fmtZeit(v.start).slice(0,5)+"</span>"+badge+"</div>"+
+        "<div class='vl-frage'>❓ "+esc(v.frage)+"</div>"+
+        "<div class='vl-loesung'>💡 "+esc(v.antwort)+"</div>"+
+        "<div class='vl-meta'>Von <strong>"+esc(v.fragenstellendeGruppe)+"</strong>"+(v.eingereichtVon?" ("+esc(v.eingereichtVon)+")":"")+
+          (v.zielGruppe?" → an <strong>"+esc(v.zielGruppe)+"</strong>":"")+"</div>"+
+        (log.length?"<div class='vl-log'>"+log.map(function(e){
+          var cls=e.typ==="richtig"?" class='q-log-richtig'":e.typ==="falsch"?" class='q-log-falsch'":"";
+          return "<div"+cls+"><span class='q-log-zeit'>"+fmtZeit(e.zeit)+"</span> "+esc(logZeileText(e))+"</div>";
+        }).join("")+"</div>":"<div class='hint'>Keine Buzzer oder Antworten.</div>")+
+      "</div>";
+    }).join("")||"<p class='muted'>Keine Einträge für diese Gruppe.</p>";
+  }
+  window.renderVerlauf=renderVerlauf;
+  function befuelleVerlaufFilter(k){
+    var sel=document.getElementById("verlauf-filter");if(!sel)return;
+    var namen={};
+    ((k&&k.gruppen)||[]).forEach(function(g){namen[g.name]=true;});
+    S.verlauf.forEach(function(v){(v.log||[]).forEach(function(e){if(e.gruppe)namen[e.gruppe]=true;});});
+    sel.innerHTML="<option value=''>Alle Gruppen</option>"+Object.keys(namen).sort().map(function(n){return "<option value='"+esc(n)+"'>"+esc(n)+"</option>";}).join("");
+  }
+  window.exportVerlaufCSV=async function(){
+    var klasseId=val("dd-l-kl-aus");if(!klasseId){toast("Klasse wählen!","error");return;}
+    var k=S.klassen.find(function(x){return x.id===klasseId;});
+    await ladeVerlauf(k.name);
+    if(!S.verlauf.length){toast("Kein Verlauf vorhanden.","info");return;}
+    var q=function(x){return '"'+String(x==null?"":x).replace(/"/g,'""')+'"';};
+    var typName={ziel:"Frage an",buzzer:"Buzzer",antwort:"Antwort",falsch:"Falsch gewertet",richtig:"Richtig gewertet",ende:"Beendet"};
+    var zeilen=[["Datum","Start","Frage","Lösung","Fragende Gruppe","Eingereicht von","Zielgruppe","Ergebnis","Uhrzeit","Ereignis","Gruppe","Antworttext"].map(q).join(";")];
+    S.verlauf.slice().reverse().forEach(function(v){
+      var basis=[fmtDatum(v.start),fmtZeit(v.start),v.frage,v.antwort,v.fragenstellendeGruppe,v.eingereichtVon,v.zielGruppe||"",
+        v.ergebnis==="richtig"?"richtig: "+v.richtigeGruppe:v.ergebnis];
+      var log=v.log||[];
+      if(!log.length)zeilen.push(basis.concat(["","","",""]).map(q).join(";"));
+      log.forEach(function(e){zeilen.push(basis.concat([fmtZeit(e.zeit),typName[e.typ]||e.typ,e.gruppe||"",e.text||""]).map(q).join(";"));});
+    });
+    var blob=new Blob(["﻿"+zeilen.join("\r\n")],{type:"text/csv;charset=utf-8;"});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a");a.href=url;a.style.display="none";
+    a.download="Verlauf_"+k.name+"_"+new Date().toLocaleDateString("de-DE").split(".").join("-")+".csv";
+    document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+    toast("Verlauf exportiert ✓","success");
+  };
+  window.verlaufLoeschen=async function(){
+    var klasseId=val("dd-l-kl-aus");if(!klasseId){toast("Klasse wählen!","error");return;}
+    var k=S.klassen.find(function(x){return x.id===klasseId;});
+    if(!confirm("Den gesamten Antwort-Verlauf von "+k.name+" löschen? Tipp: vorher als CSV sichern."))return;
+    var snap=await db.collection(C_VERLAUF).where("klasse","==",k.name).get();
+    var docs=snap.docs,i=0;
+    while(i<docs.length){var batch=db.batch();docs.slice(i,i+400).forEach(function(d){batch.delete(d.ref);});await batch.commit();i+=400;}
+    toast("Verlauf gelöscht ✓","success");
+    S.verlauf=[];renderVerlauf();
   };
 
   function noteAusGesamt(total, maxPkt){
@@ -1865,6 +1997,17 @@
     .sm-aktion{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;padding:10px 12px;background:rgba(240,192,64,.07);border:1px solid rgba(240,192,64,.25);border-radius:10px}
     .sm-tbl tr.sm-row-an td{background:rgba(240,192,64,.07)}
     .opt-gespielt{color:var(--green)}
+    .vl-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:10px}
+    .vl-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+    .vl-zeit{font-size:.78rem;color:var(--muted)}
+    .vl-badge{font-size:.74rem;padding:2px 9px;border-radius:12px;font-weight:600}
+    .vl-ok{background:rgba(62,207,142,.15);color:var(--green)}
+    .vl-off{background:var(--bg4);color:var(--muted)}
+    .vl-live{background:rgba(74,158,255,.15);color:var(--blue)}
+    .vl-frage{font-weight:600;font-size:.95rem;margin-bottom:2px}
+    .vl-loesung{font-size:.85rem;color:var(--green);margin-bottom:4px}
+    .vl-meta{font-size:.8rem;color:var(--muted);margin-bottom:6px}
+    .vl-log{font-size:.84rem;line-height:1.7;border-top:1px solid var(--border);padding-top:6px}
     .q-log{margin-top:12px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:9px;font-size:.84rem;line-height:1.7}
     .q-log-title{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:2px}
     .q-log-zeit{font-family:ui-monospace,Menlo,monospace;color:var(--muted);font-size:.78rem}
@@ -2074,6 +2217,17 @@
       <button class="btn-primary" style="width:auto;padding:7px 16px" onclick="auswertungLaden()">Neu berechnen</button>
     </div>
     <div id="aus-container"></div>
+    <!-- NEU: Antwort-Verlauf -->
+    <div id="verlauf-bereich" style="display:none;margin-top:28px">
+      <h3 style="margin-bottom:6px">📜 Antwort-Verlauf</h3>
+      <p class="hint" style="margin-bottom:12px">Alle gestellten Fragen mit Buzzern, Antworten und Bewertungen – neueste zuerst.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+        <select id="verlauf-filter" onchange="renderVerlauf()" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-family:inherit;font-size:.86rem;outline:none"></select>
+        <button class="btn-export" onclick="exportVerlaufCSV()">⬇️ Verlauf CSV</button>
+        <button class="btn-del-all" onclick="verlaufLoeschen()">🗑️ Verlauf löschen</button>
+      </div>
+      <div id="verlauf-container"></div>
+    </div>
   </div>
 </div>
 
