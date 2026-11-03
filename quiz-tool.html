@@ -323,7 +323,7 @@
       var sess=doc.data();S.session=sess;
       // Steal-Timer: bei jedem Snapshot alten Timer canceln
       if(S.stealTimer){clearTimeout(S.stealTimer);S.stealTimer=null;}
-      if(sess.timerStart&&!sess.buzzerAlleOffen&&!sess.buzzerGedrückt&&sess.aktiv){
+      if(sess.timerStart&&!sess.buzzerAlleOffen&&!sess.buzzerGedrückt&&!sess.gruppenAntwort&&sess.aktiv){
         var vergangen=Date.now()-sess.timerStart;
         var rest=Math.max(0,(sess.timerDauer||30)*1000-vergangen);
         if(rest<=0){
@@ -332,7 +332,7 @@
           if(S.stealTimer)clearTimeout(S.stealTimer);
           S.stealTimer=setTimeout(async function(){
             var d=await db.collection(C_SESSION).doc("current").get();
-            if(d.exists&&d.data().aktiv&&!d.data().buzzerGedrückt)
+            if(d.exists&&d.data().aktiv&&!d.data().buzzerGedrückt&&!d.data().gruppenAntwort)
               db.collection(C_SESSION).doc("current").update({buzzerOffen:true,buzzerAlleOffen:true});
           },rest);
         }
@@ -347,7 +347,7 @@
             erBox.style.border="1px solid rgba(62,207,142,.4)";
             erBox.style.color="var(--green)";
             erBox.innerHTML="🎉 Richtig! +1 Punkt für euch!";
-          } else if(sess.buzzerGedrückt&&sess.buzzerGedrückt.gruppe===S.gruppe){
+          } else if((sess.falscheGruppen||[]).includes(S.gruppe)){
             erBox.style.display="block";
             erBox.style.background="rgba(240,96,96,.12)";
             erBox.style.border="1px solid rgba(240,96,96,.3)";
@@ -359,15 +359,40 @@
         }
         zeigeBuzzerIdle();return;
       }
+      // Getippten Text merken, damit er beim Neuaufbau nicht verloren geht
+      var getippt=document.getElementById("bz-antwort-inp").value;
       // Immer zuerst UI komplett zurücksetzen, dann neu aufbauen
       resetBuzzerUI();
+      document.getElementById("bz-ergebnis-box").style.display="none";
       document.getElementById("bz-frage").textContent=sess.aktuelleFrageText||"";
       var istFragengruppe=sess.fragenstellendeGruppe===S.gruppe;
       var istZiel=sess.zielGruppe===S.gruppe;
       var gedrückt=sess.buzzerGedrückt;
+      var antwort=sess.gruppenAntwort;
+      var gesperrt=(sess.falscheGruppen||[]).includes(S.gruppe);
       var btn=document.getElementById("buzzer-btn");
       var status=document.getElementById("bz-status");
-      if(istFragengruppe&&!sess.zielGruppe){
+      var box=document.getElementById("bz-antwort-box");
+      var zeigeAntwortfeld=function(){
+        box.style.display="block";
+        document.getElementById("bz-antwort-inp").value=getippt;
+        setTimeout(function(){document.getElementById("bz-antwort-inp").focus();},100);
+      };
+      if(!istFragengruppe&&sess.zielGruppe&&(antwort||gesperrt||(gedrückt&&gedrückt.gruppe!==S.gruppe))){
+        // ── NEU: Gesperrt – es wurde schon geantwortet / gebuzzert, oder eigene Antwort war falsch ──
+        btn.style.display="block";btn.disabled=true;btn.className="buzzer-btn locked";
+        document.getElementById("bz-ziel").textContent="➡️ Frage für: "+sess.zielGruppe;
+        if(antwort&&antwort.gruppe===S.gruppe){
+          btn.className="buzzer-btn pressed";
+          status.textContent="✅ Antwort gesendet – warte auf den Lehrer…";
+        } else if(antwort){
+          status.textContent="🔒 "+antwort.gruppe+" hat geantwortet – warte auf den Lehrer…";
+        } else if(gesperrt){
+          status.textContent="✗ Eure Antwort war falsch – diese Frage ist für euch vorbei.";
+        } else {
+          status.textContent="🔒 "+gedrückt.gruppe+" war schneller!";
+        }
+      } else if(istFragengruppe&&!sess.zielGruppe){
         btn.style.display="none";
         var used=sess.verwendeteZielgruppen||[];
         var alle=(S.klassen.find(function(x){return x.name===S.klasse;})||{gruppen:[]}).gruppen;
@@ -383,35 +408,28 @@
         document.getElementById("bz-picker").innerHTML="";
         document.getElementById("bz-antwort-box").style.display="none";
         document.getElementById("bz-ziel").textContent="✅ Frage geht an: "+sess.zielGruppe;
-        status.textContent="⏳ Warte auf Antwort…";
+        status.textContent=antwort?"✏️ "+antwort.gruppe+" hat geantwortet – der Lehrer prüft…":"⏳ Warte auf Antwort…";
+      } else if(gedrückt&&gedrückt.gruppe===S.gruppe){
+        // ── NEU: Wir haben gebuzzert → nur wir dürfen jetzt antworten ──
+        btn.style.display="block";btn.disabled=true;btn.className="buzzer-btn pressed";
+        document.getElementById("bz-ziel").textContent="⚡ Ihr habt gebuzzert!";
+        status.textContent="⬇️ Schnell: Antwort eingeben und absenden!";
+        zeigeAntwortfeld();
       } else if(istZiel){
         // ── Zielgruppe: nur Antwortfeld, kein Buzzer ──
         btn.style.display="none";
         document.getElementById("bz-picker").innerHTML="";
         document.getElementById("bz-ziel").textContent="🎯 Ihr seid gefragt!";
-        document.getElementById("bz-antwort-box").style.display="block";
-        if(sess.gruppenAntwort&&sess.gruppenAntwort.gruppe===S.gruppe){
-          status.textContent="✅ Antwort gesendet – warte auf Lehrer…";
-        } else {
-          status.textContent="⬇️ Antwort eingeben und absenden!";
-          setTimeout(function(){document.getElementById("bz-antwort-inp").focus();},100);
-        }
+        status.textContent=sess.buzzerAlleOffen?"⚡ Steal läuft – antwortet schnell, bevor eine andere Gruppe buzzert!":"⬇️ Antwort eingeben und absenden!";
+        zeigeAntwortfeld();
       } else {
         // ── Andere Gruppen: warten oder Steal ──
         document.getElementById("bz-picker").innerHTML="";
-        document.getElementById("bz-antwort-box").style.display="none";
         document.getElementById("bz-ziel").textContent="➡️ Frage für: "+(sess.zielGruppe||"wird gewählt…");
         if(sess.buzzerAlleOffen&&!istFragengruppe){
+          // NEU: erst buzzern, dann erscheint das Antwortfeld
           btn.style.display="block";
-          if(gedrückt&&gedrückt.gruppe===S.gruppe){
-            btn.disabled=true;btn.className="buzzer-btn pressed";status.textContent="✓ Gedrückt!";
-            document.getElementById("bz-antwort-box").style.display="block";
-          } else if(gedrückt){
-            btn.disabled=true;btn.className="buzzer-btn locked";status.textContent=gedrückt.gruppe+" war schneller!";
-          } else {
-            btn.disabled=false;btn.className="buzzer-btn ready steal";status.textContent="⚡ STEAL – JETZT!";
-            document.getElementById("bz-antwort-box").style.display="block";
-          }
+          btn.disabled=false;btn.className="buzzer-btn ready steal";status.textContent="⚡ STEAL – erst BUZZ drücken, dann antworten!";
         } else {
           btn.style.display="block";
           btn.disabled=true;btn.className="buzzer-btn waiting";
@@ -444,22 +462,57 @@
     document.getElementById("bz-frage").textContent="Warte auf den Lehrer…";
     document.getElementById("bz-status").textContent="Kein Quiz aktiv";
   }
+  // NEU: Antworten & Buzzern per Transaktion → wer zuerst kommt, sperrt für alle anderen
   window.antwortAbschicken=async function(){
-    var text=document.getElementById("bz-antwort-inp").value.trim();
-    if(!text){document.getElementById("bz-antwort-inp").focus();return;}
+    var inp=document.getElementById("bz-antwort-inp");
+    var text=inp.value.trim();
+    if(!text){inp.focus();return;}
+    var ref=db.collection(C_SESSION).doc("current");
+    var sendBtn=document.querySelector("#bz-antwort-box button");
+    if(sendBtn)sendBtn.disabled=true;
+    var ergebnis;
     try{
-      await db.collection(C_SESSION).doc("current").update({gruppenAntwort:{gruppe:S.gruppe,text:text}});
-      var inp2=document.getElementById("bz-antwort-inp");
-      var sendBtn2=document.querySelector("#bz-antwort-box button");
-      if(inp2) inp2.disabled=true;
-      if(sendBtn2){sendBtn2.disabled=true;sendBtn2.textContent="Gesendet ✓";}
-      toast("Antwort gesendet!","success");
-    }catch(e){console.error(e);}
+      ergebnis=await db.runTransaction(async function(tx){
+        var d=await tx.get(ref);
+        if(!d.exists)return "inaktiv";
+        var s=d.data();
+        if(!s.aktiv)return "inaktiv";
+        if(s.gruppenAntwort)return "spaet:"+s.gruppenAntwort.gruppe;
+        if((s.falscheGruppen||[]).includes(S.gruppe))return "gesperrt";
+        if(s.buzzerGedrückt&&s.buzzerGedrückt.gruppe!==S.gruppe)return "spaet:"+s.buzzerGedrückt.gruppe;
+        if(!s.buzzerGedrückt&&s.zielGruppe!==S.gruppe)return "nichtdran";
+        var eintrag={gruppe:S.gruppe,text:text,zeit:Date.now()};
+        tx.update(ref,{gruppenAntwort:eintrag,antwortLog:(s.antwortLog||[]).concat([{typ:"antwort",gruppe:S.gruppe,text:text,zeit:eintrag.zeit}])});
+        return "ok";
+      });
+    }catch(e){console.error(e);if(sendBtn)sendBtn.disabled=false;toast("Fehler beim Senden – nochmal versuchen!","error");return;}
+    if(ergebnis==="ok"){toast("Antwort gesendet!","success");return;}
+    if(sendBtn)sendBtn.disabled=false;
+    if(ergebnis.indexOf("spaet:")===0)toast("Zu spät – "+ergebnis.slice(6)+" war schneller!","error");
+    else if(ergebnis==="gesperrt")toast("Eure Antwort war schon falsch.","error");
+    else if(ergebnis==="nichtdran")toast("Ihr seid gerade nicht dran.","error");
+    else toast("Die Frage ist nicht mehr aktiv.","error");
   };
 
   window.buzzerDrücken=async function(){
-    try{await db.collection(C_SESSION).doc("current").update({buzzerGedrückt:{gruppe:S.gruppe,zeit:Date.now()}});}
-    catch(e){console.error(e);}
+    var ref=db.collection(C_SESSION).doc("current");
+    var btn=document.getElementById("buzzer-btn");btn.disabled=true;
+    var ergebnis;
+    try{
+      ergebnis=await db.runTransaction(async function(tx){
+        var d=await tx.get(ref);
+        if(!d.exists)return "zu";
+        var s=d.data();
+        if(!s.aktiv||!s.buzzerAlleOffen)return "zu";
+        if(s.gruppenAntwort)return "spaet:"+s.gruppenAntwort.gruppe;
+        if(s.buzzerGedrückt)return "spaet:"+s.buzzerGedrückt.gruppe;
+        if(s.fragenstellendeGruppe===S.gruppe||(s.falscheGruppen||[]).includes(S.gruppe))return "zu";
+        var z=Date.now();
+        tx.update(ref,{buzzerGedrückt:{gruppe:S.gruppe,zeit:z},antwortLog:(s.antwortLog||[]).concat([{typ:"buzzer",gruppe:S.gruppe,zeit:z}])});
+        return "ok";
+      });
+    }catch(e){console.error(e);btn.disabled=false;return;}
+    if(ergebnis.indexOf("spaet:")===0)toast(ergebnis.slice(6)+" war schneller!","error");
   };
 
   // ════════ LEHRER ════════
@@ -1137,12 +1190,25 @@
 
   function renderFragenSel(){
     var sel=document.getElementById("sel-frage");
-    sel.innerHTML="<option value=''>– Frage wählen –</option>";
+    // NEU: Hinweis, wenn noch keine Frage freigegeben ist
+    var frei=0,offen=0;
+    S.fragen.forEach(function(sub){(sub.fragen||[]).forEach(function(fq){
+      if(fq.status==="freigegeben")frei++;else if(fq.status!=="abgelehnt")offen++;
+    });});
+    if(!frei){
+      sel.innerHTML="<option value=''>– Keine freigegebene Frage"+(offen?" ("+offen+" warten im Tab „Fragen“ auf Freigabe)":"")+" –</option>";
+      if(offen)toast(offen+" Fragen eingereicht – bitte erst im Tab „Fragen“ freigeben","info");
+      return;
+    }
+    var gesp=0;S.fragen.forEach(function(sub){(sub.fragen||[]).forEach(function(fq){if(fq.status==="freigegeben"&&fq.gespielt)gesp++;});});
+    sel.innerHTML="<option value=''>– Frage wählen ("+frei+" freigegeben"+(gesp?" · ✅ "+gesp+" schon gestellt":"")+") –</option>";
     S.fragen.forEach(function(sub){
       sub.fragen.forEach(function(fq,i){
         if(fq.status==="freigegeben"){
           var fqLabel=(fq.f||fq.frage||fq.question||"(Frage)");
-          sel.innerHTML+="<option value='"+sub.id+"__"+i+"'>"+sub.gruppe+"/"+sub.name+": "+fqLabel.substring(0,45)+"…</option>";
+          // NEU: ✅ bei Fragen, die schon im Quiz gestellt wurden
+          var gespielt=fq.gespielt?"✅ ":"";
+          sel.innerHTML+="<option value='"+sub.id+"__"+i+"'"+(fq.gespielt?" class='opt-gespielt'":"")+">"+gespielt+esc(sub.gruppe+"/"+sub.name+": "+fqLabel.substring(0,45))+"…</option>";
         }
       });
     });
@@ -1201,9 +1267,24 @@
     }
     var zielAnzeige=sess.zielGruppe||"(wird gewählt…)";
     var usedHTML="";
-    if((sess.verwendeteZielgruppen||[]).length>0){
-      usedHTML="<div class='used-gruppen'>Bereits als Ziel: "+sess.verwendeteZielgruppen.join(", ")+"</div>";
+    // NEU: nur Gruppen der aktuellen Klasse anzeigen
+    var kGr=((S.klassen.find(function(x){return x.name===sess.klasse;})||{}).gruppen||[]).map(function(g){return g.name;});
+    var usedAkt=(sess.verwendeteZielgruppen||[]).filter(function(n){return kGr.includes(n);});
+    if(usedAkt.length>0){
+      usedHTML="<div class='used-gruppen'>Bereits als Ziel: "+usedAkt.map(esc).join(", ")+"</div>";
     }
+    // NEU: Verlauf aller Buzzer und Antworten dieser Frage
+    var zeitStr=function(z){var d=new Date(z);return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2)+":"+("0"+d.getSeconds()).slice(-2);};
+    var log=sess.antwortLog||[];
+    var logHTML=log.length?"<div class='q-log'><div class='q-log-title'>Verlauf</div>"+log.map(function(e){
+      var t="<span class='q-log-zeit'>"+zeitStr(e.zeit)+"</span> ";
+      if(e.typ==="buzzer")return "<div>"+t+"🔔 <strong>"+esc(e.gruppe)+"</strong> hat gebuzzert</div>";
+      if(e.typ==="antwort")return "<div>"+t+"✏️ <strong>"+esc(e.gruppe)+"</strong>: <em>"+esc(e.text)+"</em></div>";
+      if(e.typ==="falsch")return "<div class='q-log-falsch'>"+t+"✗ "+esc(e.gruppe)+" – als falsch gewertet</div>";
+      if(e.typ==="richtig")return "<div class='q-log-richtig'>"+t+"✓ "+esc(e.gruppe)+" – richtig (+1)</div>";
+      return "";
+    }).join("")+"</div>":"";
+    if((sess.falscheGruppen||[]).length)bInfo+=" <span class='muted' style='font-weight:400'>· Raus: "+sess.falscheGruppen.map(esc).join(", ")+"</span>";
     c.innerHTML="<div class='q-box'>"+
       "<div class='q-f'>❓ "+sess.aktuelleFrageText+"</div>"+
       "<div class='q-a'>💡 "+sess.aktuelleAntwort+"</div>"+
@@ -1212,8 +1293,12 @@
         (sess.buzzerAlleOffen?" <span class='steal-badge'>⚡ STEAL!</span>":"")+"</div>"+
       usedHTML+vorschlagHTML+timerHTML+
       "<div class='q-buzzer'>"+bInfo+"</div>"+
-      (sess.gruppenAntwort?"<div class='q-antwort-gruppe'>✏️ <strong>"+sess.gruppenAntwort.gruppe+"</strong> antwortet: <em>"+sess.gruppenAntwort.text+"</em></div>":"")
+      (sess.gruppenAntwort?"<div class='q-antwort-gruppe'>✏️ <strong>"+esc(sess.gruppenAntwort.gruppe)+"</strong> antwortet: <em>"+esc(sess.gruppenAntwort.text)+"</em> <span class='muted' style='font-size:.8rem'>(gesperrt für alle anderen)</span></div>":"")+
+      logHTML
       +"</div>";
+    var bewerteteGruppe=(sess.gruppenAntwort&&sess.gruppenAntwort.gruppe)||(sess.buzzerGedrückt&&sess.buzzerGedrückt.gruppe);
+    document.getElementById("btn-richtig").textContent=bewerteteGruppe?"✓ Richtig – +1 für "+bewerteteGruppe:"✓ Richtig (+1 Pkt)";
+    document.getElementById("btn-falsch").textContent=bewerteteGruppe?"✗ Falsch – "+bewerteteGruppe+" ist raus":"✗ Falsch";
     if(sess.buzzerGedrückt||sess.gruppenAntwort){
       document.getElementById("btn-richtig").disabled=false;
       document.getElementById("btn-falsch").disabled=false;
@@ -1230,9 +1315,12 @@
     var fqText   = fq.f||fq.frage||fq.question||"";
     var fqAntwort= fq.a||fq.antwort||fq.answer||"";
     var prevDoc=await db.collection(C_SESSION).doc("current").get();
-    var prevUsed=(prevDoc.exists&&prevDoc.data().verwendeteZielgruppen)||[];
-    // Auto-reset wenn alle möglichen Zielgruppen bereits verwendet wurden
+    var prev=prevDoc.exists?prevDoc.data():{};
     var alleGruppen=(S.quizKlasse.gruppen||[]).map(function(g){return g.name;});
+    // NEU: nur Einträge derselben Klasse übernehmen – und nur Gruppen, die es noch gibt
+    var prevUsed=(prev.klasse===S.quizKlasse.name?(prev.verwendeteZielgruppen||[]):[])
+      .filter(function(n){return alleGruppen.includes(n);});
+    // Auto-reset wenn alle möglichen Zielgruppen bereits verwendet wurden
     var moeglich=alleGruppen.filter(function(n){return n!==ziel&&!prevUsed.includes(n);});
     if(moeglich.length===0) prevUsed=[];
     await db.collection(C_SESSION).doc("current").set({
@@ -1242,15 +1330,24 @@
       zielGruppe:null,zielVorschlag:null,
       buzzerOffen:false,buzzerAlleOffen:false,
       buzzerGedrückt:null,gruppenAntwort:null,letzteRichtigeGruppe:null,timerStart:null,timerDauer:30,
-      verwendeteZielgruppen:prevUsed
+      verwendeteZielgruppen:prevUsed,falscheGruppen:[],antwortLog:[]
     });
     if(S.stealTimer){clearTimeout(S.stealTimer);S.stealTimer=null;}
     toast("Frage gestartet! Gruppe wählt Zielgruppe…","success");
+    // NEU: Frage als gestellt markieren (bleibt in der Datenbank gespeichert)
+    try{
+      var idx=parseInt(parts[1]);
+      var fragenNeu=sub.fragen.map(function(f,i){return i===idx?Object.assign({},f,{gespielt:Date.now()}):f;});
+      await db.collection(C_FRAGEN).doc(sub.id).update({fragen:fragenNeu});
+      sub.fragen=fragenNeu;
+      renderFragenSel();
+      document.getElementById("sel-frage").value=fragVal;
+    }catch(e){console.error(e);}
   };
 
   window.zielVorschlagSenden=async function(zielGruppe){
     var sess=S.session;
-    var used=(sess&&sess.verwendeteZielgruppen||[]).concat([zielGruppe]);
+    var used=(sess&&sess.verwendeteZielgruppen||[]).filter(function(n){return n!==zielGruppe;}).concat([zielGruppe]);
     var jetzt=Date.now();
     await db.collection(C_SESSION).doc("current").update({
       zielGruppe:zielGruppe,
@@ -1305,28 +1402,39 @@
   window.antwortRichtig=async function(){
     if(S.stealTimer){clearTimeout(S.stealTimer);S.stealTimer=null;}
     var sess=S.session;if(!sess)return;
-    // Entweder Buzzer gedrückt (Steal) oder Gruppe hat Antwort getippt
-    var gruppe=(sess.buzzerGedrückt&&sess.buzzerGedrückt.gruppe)||(sess.gruppenAntwort&&sess.gruppenAntwort.gruppe);
+    // NEU: Die angezeigte Antwort zählt; sonst die Gruppe, die gebuzzert hat (mündliche Antwort)
+    var gruppe=(sess.gruppenAntwort&&sess.gruppenAntwort.gruppe)||(sess.buzzerGedrückt&&sess.buzzerGedrückt.gruppe);
     if(!gruppe)return;
     var docId=(sess.klasse+"_GR_"+gruppe).replace(/[\s/]/g,"_");
     var ref=db.collection(C_PUNKTE).doc(docId);
     var snap=await ref.get();
     if(snap.exists){await ref.update({buzzerPunkte:firebase.firestore.FieldValue.increment(1)});}
     else{await ref.set({klasse:sess.klasse,gruppe:gruppe,name:"(Gruppe "+gruppe+")",typ:"gruppe",fragenPunkte:0,buzzerPunkte:1});}
-    await db.collection(C_SESSION).doc("current").update({aktiv:false,buzzerOffen:false,buzzerGedrückt:null,letzteRichtigeGruppe:gruppe});
+    await db.collection(C_SESSION).doc("current").update({aktiv:false,buzzerOffen:false,buzzerGedrückt:null,letzteRichtigeGruppe:gruppe,
+      antwortLog:(sess.antwortLog||[]).concat([{typ:"richtig",gruppe:gruppe,zeit:Date.now()}])});
     toast("✓ Richtig! +1 Punkt für "+gruppe,"success");
     await ladePunkte(sess.klasse);
   };
 
+  // NEU: Falsch → diese Gruppe ist für die Frage raus, alle übrigen dürfen sofort buzzern (Steal)
   window.antwortFalsch=async function(){
     if(S.stealTimer){clearTimeout(S.stealTimer);S.stealTimer=null;}
+    var sess=S.session;if(!sess)return;
+    var gruppe=(sess.gruppenAntwort&&sess.gruppenAntwort.gruppe)||(sess.buzzerGedrückt&&sess.buzzerGedrückt.gruppe);
+    var falsche=(sess.falscheGruppen||[]).slice();
+    if(gruppe&&!falsche.includes(gruppe))falsche.push(gruppe);
     await db.collection(C_SESSION).doc("current").update({
       buzzerOffen:true,
-      buzzerAlleOffen:false,
+      buzzerAlleOffen:true,
       buzzerGedrückt:null,
-      gruppenAntwort:null
+      gruppenAntwort:null,
+      falscheGruppen:falsche,
+      antwortLog:(sess.antwortLog||[]).concat(gruppe?[{typ:"falsch",gruppe:gruppe,zeit:Date.now()}]:[])
     });
-    toast("✗ Falsch – Buzzer zurück","info");
+    var k=S.klassen.find(function(x){return x.name===sess.klasse;});
+    var uebrig=((k&&k.gruppen)||[]).filter(function(g){return g.name!==sess.fragenstellendeGruppe&&!falsche.includes(g.name);});
+    if(!uebrig.length)toast("✗ Falsch – keine Gruppe mehr übrig. Antwort auflösen und Frage beenden.","info");
+    else toast("✗ Falsch – Steal für die übrigen "+uebrig.length+" Gruppen","info");
   };
 
   window.quizBeenden=async function(){
@@ -1756,6 +1864,13 @@
     .sm-gr-pw em{font-style:normal;color:var(--blue)}
     .sm-aktion{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;padding:10px 12px;background:rgba(240,192,64,.07);border:1px solid rgba(240,192,64,.25);border-radius:10px}
     .sm-tbl tr.sm-row-an td{background:rgba(240,192,64,.07)}
+    .opt-gespielt{color:var(--green)}
+    .q-log{margin-top:12px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:9px;font-size:.84rem;line-height:1.7}
+    .q-log-title{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:2px}
+    .q-log-zeit{font-family:ui-monospace,Menlo,monospace;color:var(--muted);font-size:.78rem}
+    .q-log em{font-style:normal;color:var(--text);font-weight:600}
+    .q-log-falsch{color:var(--red)}
+    .q-log-richtig{color:var(--green)}
     .g-pw-hinweis{display:none;font-size:.8rem;color:var(--blue);margin:-2px 0 8px 2px;line-height:1.4}
     .sm-vorschau{margin-top:12px;padding:12px 14px;background:rgba(62,207,142,.07);border:1px solid rgba(62,207,142,.25);border-radius:10px}
     .sm-vorschau-namen{font-size:.82rem;color:var(--muted);margin-top:6px;line-height:1.5;max-height:110px;overflow-y:auto}
