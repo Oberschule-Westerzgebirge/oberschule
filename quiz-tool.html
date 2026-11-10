@@ -56,6 +56,64 @@
   function val(id){return document.getElementById(id).value;}
   function setHTML(id,html){document.getElementById(id).innerHTML=html;}
 
+  // ════════ NEU: VERSION & ANGEMELDET BLEIBEN ════════
+  var APP_VERSION="2026-11-10";
+  // Lehrer schreibt die Version in die Sitzung; ältere Handys laden sich dann einmal automatisch neu
+  function pruefeVersion(sess){
+    if(!sess||!sess.appVersion||sess.appVersion<=APP_VERSION)return;
+    var ziel="v="+encodeURIComponent(sess.appVersion);
+    if(location.search.indexOf(ziel)>-1)return; // schon versucht → keine Endlosschleife
+    toast("Neue Version – lade neu…","info");
+    setTimeout(function(){location.href=location.pathname+"?"+ziel;},800);
+  }
+  function lsGet(k,ss){try{return JSON.parse((ss?sessionStorage:localStorage).getItem(k)||"null");}catch(e){return null;}}
+  function lsSet(k,v,ss){try{(ss?sessionStorage:localStorage).setItem(k,JSON.stringify(v));}catch(e){}}
+  function lsDel(k,ss){try{(ss?sessionStorage:localStorage).removeItem(k);}catch(e){}}
+  // Login pro Tab (sessionStorage → automatisch nach Neuladen) und fürs Gerät (localStorage → "Weiter als …")
+  function merkeLogin(obj){var o=Object.assign({zeit:Date.now()},obj);lsSet("kq_login",o,true);lsSet("kq_login",o);}
+  function vergissLogin(){lsDel("kq_login",true);lsDel("kq_login");}
+  function loginText(L){
+    if(L.rolle==="gruppe")return "Gruppe "+L.gruppe;
+    if(L.rolle==="schueler")return L.name;
+    return "Lehrer";
+  }
+  async function autoLogin(L){
+    try{
+      if(L.rolle==="gruppe"&&S.klassen.some(function(k){return k.id===L.klasseId;})){
+        document.getElementById("dd-kl-g").value=L.klasseId;
+        await onKlasseChange("dd-kl-g","dd-gr-g");
+        document.getElementById("dd-gr-g").value=L.gruppe;
+        document.getElementById("inp-g-pw").value=L.pw||"";
+        await startGruppe();
+      } else if(L.rolle==="schueler"&&S.klassen.some(function(k){return k.id===L.klasseId;})){
+        document.getElementById("dd-kl-s").value=L.klasseId;
+        renderSchuelerStart();
+        if(L.nameWahl&&L.nameWahl!=="__manuell"){document.getElementById("dd-name-s").value=L.nameWahl;onNameChangeSchueler();}
+        else{document.getElementById("dd-name-s").value="__manuell";onNameChangeSchueler();document.getElementById("inp-s-name").value=L.name||"";}
+        if(L.gruppe)document.getElementById("dd-gr-s").value=L.gruppe;
+        await startSchueler();
+      } else if(L.rolle==="lehrer"){
+        document.getElementById("inp-l-pw").value=L.pw||"";
+        await startLehrer();
+      }
+    }catch(e){console.error("Auto-Login",e);}
+  }
+  window.weiterAls=async function(){
+    var L=lsGet("kq_login");document.getElementById("weiter-banner").style.display="none";
+    if(L)await autoLogin(L);
+  };
+  window.vergissLogin=vergissLogin;
+  function entwurfKey(){return "kq_entwurf_"+(S.klasse||"")+"_"+(S.name||"");}
+  function entwurfSpeichern(){
+    if(S.rolle!=="schueler")return;
+    var d={};for(var i=1;i<=4;i++){d["f"+i]=val("frage-"+i);d["a"+i]=val("antwort-"+i);}
+    lsSet(entwurfKey(),d);
+  }
+  function entwurfLaden(){
+    var d=lsGet(entwurfKey());if(!d)return;
+    for(var i=1;i<=4;i++){document.getElementById("frage-"+i).value=d["f"+i]||"";document.getElementById("antwort-"+i).value=d["a"+i]||"";}
+  }
+
   async function ladeKlassen(){
     var snap=await db.collection(C_KLASSEN).get();
     S.klassen=snap.docs.map(function(d){return Object.assign({id:d.id},d.data());});
@@ -78,6 +136,60 @@
     var snap=await db.collection(C_PUNKTE).where("klasse","==",klasse).get();
     S.punkte={};
     snap.docs.forEach(function(d){var data=d.data();S.punkte[d.id]=Object.assign({id:d.id},data);});
+  }
+
+  // ════════ NEU: EINHEITLICHE PUNKTEBERECHNUNG ════════
+  // Fragen-Punkte = Summe der freigegebenen Fragen (direkt aus den Fragen berechnet, nicht hochgezählt)
+  // Bonus = höchstens 1 pro Schüler · Buzzer-Punkte = pro Gruppe
+  // Schüler zählen zu ihrer AKTUELLEN Gruppe laut Schülerliste
+  function schuelerDocId(klasse,name){return (klasse+"_SCH_"+name).replace(/[\s/]/g,"_");}
+  function gruppeVonSchueler(k,name,fallback){
+    var s=((k&&k.schueler)||[]).find(function(x){return (x.vorname+" "+x.nachname)===name;});
+    if(s&&gruppeExistiert(k.gruppen,s.gruppe))return s.gruppe;
+    return fallback||"";
+  }
+  function berechnePunkte(k,fragen,punkte){
+    var sch={};
+    function hole(name,fb){
+      if(!sch[name])sch[name]={name:name,gruppe:gruppeVonSchueler(k,name,fb),fragen:0,bonus:0,anzFrei:0};
+      return sch[name];
+    }
+    (fragen||[]).forEach(function(sub){
+      var s=hole(sub.name,sub.gruppe);
+      (sub.fragen||[]).forEach(function(fq){if(fq.status==="freigegeben"){s.fragen+=(fq.punkte||0);s.anzFrei++;}});
+    });
+    var gr={};
+    ((k&&k.gruppen)||[]).forEach(function(g){gr[g.name]={name:g.name,fragen:0,bonus:0,buzzer:0,total:0};});
+    Object.values(punkte||{}).forEach(function(p){
+      if(p.typ==="schueler"){var s=hole(p.name,p.gruppe);s.bonus=Math.min(1,p.bonusPunkte||0);}
+      else if(p.typ==="gruppe"){
+        if(!gr[p.gruppe])gr[p.gruppe]={name:p.gruppe,fragen:0,bonus:0,buzzer:0,total:0,alt:true};
+        gr[p.gruppe].buzzer+=(p.buzzerPunkte||0);
+      }
+    });
+    var ohneGruppe=[];
+    Object.values(sch).forEach(function(s){
+      if(s.gruppe&&gr[s.gruppe]){gr[s.gruppe].fragen+=s.fragen;gr[s.gruppe].bonus+=s.bonus;}
+      else if(s.fragen+s.bonus>0)ohneGruppe.push(s);
+    });
+    Object.values(gr).forEach(function(g){g.total=g.fragen+g.bonus+g.buzzer;});
+    return {schueler:sch,gruppen:gr,ohneGruppe:ohneGruppe};
+  }
+  // Altdaten: Früher wurden Freigabe- und Bonuspunkte gemeinsam in "fragenPunkte" hochgezählt.
+  // Einmalig den Bonus herausrechnen (höchstens 1) und als eigenes Feld speichern.
+  async function migriereBonus(k){
+    var berechnet={};
+    S.fragen.forEach(function(sub){
+      (sub.fragen||[]).forEach(function(fq){if(fq.status==="freigegeben")berechnet[sub.name]=(berechnet[sub.name]||0)+(fq.punkte||0);});
+    });
+    var aufgaben=[];
+    Object.values(S.punkte).forEach(function(p){
+      if(p.typ!=="schueler"||p.bonusPunkte!==undefined)return;
+      var b=Math.min(1,Math.max(0,(p.fragenPunkte||0)-(berechnet[p.name]||0)));
+      p.bonusPunkte=b;
+      aufgaben.push(db.collection(C_PUNKTE).doc(p.id).update({bonusPunkte:b}).catch(function(e){console.error(e);}));
+    });
+    if(aufgaben.length)await Promise.all(aufgaben);
   }
 
   function befuelleKlassenSel(id){
@@ -122,12 +234,29 @@
       setzeGruppenPwModus(false);
     }).catch(function(e){console.error(e);});
   }
-  window.abmelden=function(){zeigeStart();};
+  window.abmelden=function(){
+    if((S.rolle==="gruppe"||S.rolle==="schueler")&&!confirm("Wirklich abmelden?"))return;
+    vergissLogin();S.rolle=null;
+    zeigeStart();
+  };
 
   document.addEventListener("DOMContentLoaded",async function(){
     await ladeKlassen();
     ["dd-kl-s","dd-kl-g"].forEach(befuelleKlassenSel);
     zeigeStart();
+    document.querySelectorAll("[id^=frage-],[id^=antwort-]").forEach(function(el){el.addEventListener("input",entwurfSpeichern);});
+    // NEU: Nach Neuladen / Bildschirmsperre im selben Tab automatisch wieder anmelden (max. 12 Stunden)
+    var Ltab=lsGet("kq_login",true),Lgeraet=lsGet("kq_login");
+    var frisch=function(L){return L&&Date.now()-(L.zeit||0)<12*3600*1000;};
+    if(frisch(Ltab)){await autoLogin(Ltab);}
+    else if(frisch(Lgeraet)&&Lgeraet.rolle!=="lehrer"){
+      // Neuer Tab / App neu geöffnet: nur anbieten, nicht automatisch
+      var bn=document.getElementById("weiter-banner");
+      bn.innerHTML="<span>Zuletzt angemeldet: <strong>"+esc(loginText(Lgeraet))+"</strong></span>"+
+        "<button class='btn-primary' style='width:auto;padding:8px 16px' onclick='weiterAls()'>▶ Weiter</button>"+
+        "<button class='btn-secondary' onclick='vergissLogin();this.parentNode.style.display=\"none\"'>✕</button>";
+      bn.style.display="flex";
+    }
     // Logo setzen
     var logo = document.getElementById('school-logo');
     if(logo) logo.src = 'data:image/jpeg;base64,' + LOGO_B64;
@@ -194,8 +323,10 @@
     }
     if(!klasseId||!gruppe||!name){toast("Alle Felder ausfüllen!","error");return;}
     S.klasse=k.name;S.klasseId=klasseId;S.gruppe=gruppe;S.name=name;S.rolle="schueler";
+    merkeLogin({rolle:"schueler",klasseId:klasseId,nameWahl:nameWahl,name:name,gruppe:gruppe});
     hideAll();show("s-schueler");
     document.getElementById("s-sub-info").textContent=k.name+" · "+gruppe+" · "+name;
+    entwurfLaden();
   };
 
   window.fragenEinreichen=async function(){
@@ -211,6 +342,7 @@
         fragen:fragen,timestamp:firebase.firestore.FieldValue.serverTimestamp()
       });
       toast("Eingereicht! ✓","success");
+      lsDel(entwurfKey());vergissLogin();S.rolle=null;
       for(var j=1;j<=4;j++){document.getElementById("frage-"+j).value="";document.getElementById("antwort-"+j).value="";}
       setTimeout(zeigeStart,1500);
     }catch(e){toast("Fehler!","error");console.error(e);}
@@ -290,6 +422,8 @@
     setzeGruppenPwModus(false);
     document.getElementById("inp-g-pw").value="";
     S.klasse=k.name;S.klasseId=klasseId;S.gruppe=gruppe;S.rolle="gruppe";
+    merkeLogin({rolle:"gruppe",klasseId:klasseId,gruppe:gruppe,pw:pw});
+    unsubAll();
     hideAll();show("s-buzzer");
     document.getElementById("bz-gruppe").textContent=gruppe;
     document.getElementById("bz-klasse").textContent=k.name;
@@ -299,73 +433,58 @@
 
   async function ladePunkteFuerGruppe(){
     if(!S.klasse||!S.gruppe) return;
-    // Einmalig laden
+    S.punkte={};S.fragenGruppe=[];
     zeigeGruppenpunkte();
-    // Live-Listener auf Punkte
+    // Live-Listener auf Punkte UND Fragen (Fragen-Punkte werden aus den Freigaben berechnet)
     var unsub=db.collection(C_PUNKTE).where("klasse","==",S.klasse).onSnapshot(function(snap){
       S.punkte={};
       snap.docs.forEach(function(d){S.punkte[d.id]=Object.assign({id:d.id},d.data());});
       zeigeGruppenpunkte();
-    });
-    S.unsub.push(unsub);
+    },function(e){console.error(e);});
+    var unsub2=db.collection(C_FRAGEN).where("klasse","==",S.klasse).onSnapshot(function(snap){
+      S.fragenGruppe=snap.docs.map(function(d){return Object.assign({id:d.id},d.data());});
+      zeigeGruppenpunkte();
+    },function(e){console.error(e);});
+    S.unsub.push(unsub,unsub2);
   }
 
+  // NEU: Alle Punkte der eigenen Gruppe zusammenzählen (vorher wurde nur EIN Eintrag angezeigt)
   function zeigeGruppenpunkte(){
     var box=document.getElementById("bz-punkte-box");
     if(!box) return;
-    // Eigene Punkte finden
-    var eigene=null;
-    Object.values(S.punkte).forEach(function(p){
-      if(p.gruppe===S.gruppe) eigene=p;
-    });
-    var fragenPkt=eigene?(eigene.fragenPunkte||0):0;
-    var buzzerPkt=eigene?(eigene.buzzerPunkte||0):0;
-    var gesamt=fragenPkt+buzzerPkt;
-    box.innerHTML="📊 Eure Punkte: <strong style='color:var(--gold)'>"
-      +gesamt+"</strong> (Fragen: "+fragenPkt+" · Buzzer: "+buzzerPkt+")";
+    var k=S.klassen.find(function(x){return x.name===S.klasse;});
+    var g=berechnePunkte(k,S.fragenGruppe||[],S.punkte).gruppen[S.gruppe]||{fragen:0,bonus:0,buzzer:0,total:0};
+    box.innerHTML="📊 Eure Punkte: <strong style='color:var(--gold)'>"+g.total+"</strong>"+
+      " (Fragen: "+g.fragen+(g.bonus?" · Bonus: "+g.bonus:"")+" · Buzzer: "+g.buzzer+")";
   }
 
   function startBuzzerListener(){
     var unsub=db.collection(C_SESSION).doc("current").onSnapshot(function(doc){
       if(!doc.exists){zeigeBuzzerIdle();return;}
       var sess=doc.data();S.session=sess;
-      // Steal-Timer: bei jedem Snapshot alten Timer canceln
-      if(S.stealTimer){clearTimeout(S.stealTimer);S.stealTimer=null;}
-      if(sess.timerStart&&!sess.buzzerAlleOffen&&!sess.buzzerGedrückt&&!sess.gruppenAntwort&&sess.aktiv){
-        var vergangen=Date.now()-sess.timerStart;
-        var rest=Math.max(0,(sess.timerDauer||30)*1000-vergangen);
-        if(rest<=0){
-          db.collection(C_SESSION).doc("current").update({buzzerOffen:true,buzzerAlleOffen:true});
-        } else {
-          if(S.stealTimer)clearTimeout(S.stealTimer);
-          S.stealTimer=setTimeout(async function(){
-            var d=await db.collection(C_SESSION).doc("current").get();
-            if(d.exists&&d.data().aktiv&&!d.data().buzzerGedrückt&&!d.data().gruppenAntwort)
-              db.collection(C_SESSION).doc("current").update({buzzerOffen:true,buzzerAlleOffen:true});
-          },rest);
-        }
-      }
+      pruefeVersion(sess);
+      // NEU: Der Steal-Timer läuft nur noch auf dem Lehrer-Gerät (Handy-Uhren gehen oft unterschiedlich).
+      // Die Handys zeigen nur einen Countdown an.
+      if(S.bzCountdown){clearInterval(S.bzCountdown);S.bzCountdown=null;}
       if(!sess.aktiv||sess.klasse!==S.klasse){
-        // Prüfen ob diese Gruppe zuletzt gepunktet hat
-        if(sess&&!sess.aktiv&&sess.letzteRichtigeGruppe){
-          var erBox=document.getElementById("bz-ergebnis-box");
-          if(sess.letzteRichtigeGruppe===S.gruppe){
-            erBox.style.display="block";
-            erBox.style.background="rgba(62,207,142,.15)";
-            erBox.style.border="1px solid rgba(62,207,142,.4)";
-            erBox.style.color="var(--green)";
-            erBox.innerHTML="🎉 Richtig! +1 Punkt für euch!";
-          } else if((sess.falscheGruppen||[]).includes(S.gruppe)){
-            erBox.style.display="block";
-            erBox.style.background="rgba(240,96,96,.12)";
-            erBox.style.border="1px solid rgba(240,96,96,.3)";
-            erBox.style.color="var(--red)";
-            erBox.innerHTML="✗ Leider falsch!";
-          } else {
-            erBox.style.display="none";
-          }
+        var erBox=document.getElementById("bz-ergebnis-box");
+        erBox.style.display="none";
+        zeigeBuzzerIdle();
+        // NEU: Nach der Auflösung sehen alle Gruppen die richtige Antwort
+        if(!sess.aktiv&&sess.klasse===S.klasse&&sess.aktuelleAntwort){
+          var kopf,bg="rgba(74,158,255,.10)",rand="1px solid rgba(74,158,255,.35)",farbe="var(--text)";
+          if(sess.letzteRichtigeGruppe===S.gruppe){kopf="🎉 Richtig! +1 Punkt für euch!";bg="rgba(62,207,142,.15)";rand="1px solid rgba(62,207,142,.4)";farbe="var(--green)";}
+          else if(sess.letzteRichtigeGruppe){kopf="✓ "+esc(sess.letzteRichtigeGruppe)+" hat den Punkt geholt.";}
+          else if((sess.falscheGruppen||[]).includes(S.gruppe)){kopf="✗ Leider falsch!";bg="rgba(240,96,96,.12)";rand="1px solid rgba(240,96,96,.3)";farbe="var(--red)";}
+          else {kopf="Frage beendet – niemand hat den Punkt geholt.";}
+          erBox.style.display="block";erBox.style.background=bg;erBox.style.border=rand;erBox.style.color=farbe;
+          erBox.innerHTML=kopf+
+            "<div class='bz-loesung'><div class='bz-loesung-frage'>❓ "+esc(sess.aktuelleFrageText||"")+"</div>"+
+            "<div class='bz-loesung-antwort'>💡 Richtige Antwort: <strong>"+esc(sess.aktuelleAntwort)+"</strong></div></div>";
+          document.getElementById("bz-frage").textContent="Warte auf die nächste Frage…";
+          document.getElementById("bz-status").textContent="";
         }
-        zeigeBuzzerIdle();return;
+        return;
       }
       // Getippten Text merken, damit er beim Neuaufbau nicht verloren geht
       var getippt=document.getElementById("bz-antwort-inp").value;
@@ -438,15 +557,50 @@
           // NEU: erst buzzern, dann erscheint das Antwortfeld
           btn.style.display="block";
           btn.disabled=false;btn.className="buzzer-btn ready steal";status.textContent="⚡ STEAL – erst BUZZ drücken, dann antworten!";
+          if(navigator.vibrate)try{navigator.vibrate(200);}catch(e){}
         } else {
           btn.style.display="block";
           btn.disabled=true;btn.className="buzzer-btn waiting";
           status.textContent=sess.zielGruppe?"⏳ Warte…":"⏳ Zielgruppe wird gewählt…";
+          // NEU: Countdown bis zum Steal – so sind alle bereit, wenn der Buzzer aufgeht
+          if(sess.zielGruppe&&!istFragengruppe)starteHandyCountdown(sess,status,"⚡ Steal in {s} s – Finger bereit!");
         }
       }
+      if(istZiel&&!sess.buzzerAlleOffen&&!antwort&&!gedrückt)starteHandyCountdown(sess,status,"⏱ Noch {s} s – dann dürfen alle anderen buzzern!");
+    },function(e){
+      console.error(e);
+      document.getElementById("bz-status").textContent="📡 Verbindung unterbrochen – verbinde neu…";
+      setTimeout(function(){if(S.rolle==="gruppe")startBuzzerListener();},3000);
     });
     S.unsub.push(unsub);
   }
+  // NEU: Wenn das Handy aus dem Standby kommt, Verbindung frisch aufbauen
+  document.addEventListener("visibilitychange",function(){
+    if(document.visibilityState!=="visible"||S.rolle!=="gruppe")return;
+    unsubAll();startBuzzerListener();ladePunkteFuerGruppe();
+  });
+  // NEU: Zeitpunkt merken, an dem DIESES Gerät die Zielgruppe zum ersten Mal gesehen hat.
+  // So hängt der Countdown nicht von unterschiedlich gestellten Uhren der Geräte ab.
+  S.zielSeit={};
+  function zielStartLokal(sess){
+    var key=(sess.verlaufId||sess.aktuelleFrageText||"")+"|"+sess.zielGruppe;
+    if(!S.zielSeit[key])S.zielSeit[key]=Date.now();
+    return S.zielSeit[key];
+  }
+  function restSekunden(sess){
+    return Math.max(0,Math.ceil(((sess.timerDauer||30)*1000-(Date.now()-zielStartLokal(sess)))/1000));
+  }
+  function starteHandyCountdown(sess,el,vorlage){
+    var tick=function(){
+      var r=restSekunden(sess);
+      el.textContent=r>0?vorlage.replace("{s}",r):"⚡ Gleich geht's los…";
+      if(r<=0&&S.bzCountdown){clearInterval(S.bzCountdown);S.bzCountdown=null;}
+    };
+    tick();
+    if(S.bzCountdown)clearInterval(S.bzCountdown);
+    S.bzCountdown=setInterval(tick,500);
+  }
+
   function resetBuzzerUI(){
     // Antwortfeld komplett zurücksetzen
     var inp=document.getElementById("bz-antwort-inp");
@@ -530,6 +684,7 @@
   // ════════ LEHRER ════════
   window.startLehrer=async function(){
     if(val("inp-l-pw")!==ADMIN_PW){toast("Falsches Passwort!","error");return;}
+    merkeLogin({rolle:"lehrer",pw:val("inp-l-pw")});
     S.rolle="lehrer";hideAll();show("s-lehrer");
     await ladeKlassen();
     ["dd-l-kl-fragen","dd-l-kl-quiz","dd-l-kl-aus"].forEach(befuelleKlassenSel);
@@ -1060,7 +1215,7 @@
         var antwortText= (fq.a||fq.antwort||fq.answer||"").replace(/"/g,'""');
         zeilen.push([
           '"'+(sub.name||"")+'"',
-          '"'+(sub.gruppe||"")+'"',
+          '"'+(gruppeVonSchueler(k,sub.name,sub.gruppe)||"")+'"',
           i+1,
           '"'+frageText+'"',
           '"'+antwortText+'"',
@@ -1083,6 +1238,7 @@
     var klasseId=val("dd-l-kl-fragen");if(!klasseId){toast("Klasse wählen!","error");return;}
     S.aktiveKlasse=S.klassen.find(function(x){return x.id===klasseId;});
     await ladeFragen(S.aktiveKlasse.name);await ladePunkte(S.aktiveKlasse.name);
+    await migriereBonus(S.aktiveKlasse);
     renderFragenListe();
   };
 
@@ -1117,12 +1273,16 @@
           "<span class=\'fq-st "+sc+"\'>"+statusText+"</span>"+pkt+
           "<div class=\'fq-btns\'>"+dropdown+btns+loeschenBtn+"</div></div>";
       }).join("");
-      var epId=(S.aktiveKlasse?S.aktiveKlasse.name:'')+"_SCH_"+sub.name;
-      epId=epId.replace(/[\s\/]/g,'_');
+      // NEU: Bonus höchstens 1× pro Schüler – Button zeigt den Stand und kann ihn wieder entfernen
+      var ep=S.punkte[schuelerDocId(S.aktiveKlasse?S.aktiveKlasse.name:"",sub.name)];
+      var hatBonus=!!(ep&&ep.bonusPunkte>=1);
+      var aktGr=gruppeVonSchueler(S.aktiveKlasse,sub.name,sub.gruppe);
       return "<div class='sub-card'>" +
         "<div class='sub-hdr'>" +
-          "<span class='sub-hdr-left'>👤 <strong>"+sub.name+"</strong> <span class='sub-gr'>"+sub.gruppe+"</span></span>" +
-          "<button class='btn-sm btn-extrapkt' onclick=\"extraPunkt('"+epId+"','"+sub.name+"')\">&#11088; Bonus-Punkt</button>" +
+          "<span class='sub-hdr-left'>👤 <strong>"+esc(sub.name)+"</strong> <span class='sub-gr'>"+esc(aktGr)+"</span></span>" +
+          (hatBonus
+            ?"<button class='btn-sm btn-extrapkt bonus-an' onclick=\"extraPunkt('"+sub.id+"')\" title='Klicken zum Entfernen'>⭐ Bonus vergeben ✓</button>"
+            :"<button class='btn-sm btn-extrapkt' onclick=\"extraPunkt('"+sub.id+"')\">☆ Bonus-Punkt</button>") +
         "</div>"+rows+"</div>";
     }).join("");
   }
@@ -1132,41 +1292,48 @@
     var sel=document.getElementById(dropdownId);
     var punkte=sel?parseInt(sel.value):2;
     if(punkte===0){window.ablehnFrage(subId,idx);return;}
-    var anz=sub.fragen.filter(function(f){return f.status==="freigegeben";}).length;
+    // NEU: max. 2 freigegebene Fragen pro Schüler – über ALLE Einreichungen dieses Schülers
+    var anz=0;
+    S.fragen.forEach(function(x){if(x.name===sub.name)(x.fragen||[]).forEach(function(f){if(f.status==="freigegeben")anz++;});});
     if(anz>=2){toast("Max. 2 Fragen pro Schüler!","error");return;}
     var fragen=sub.fragen.map(function(fq,i){
       if(i!==idx) return fq;
-      return {
+      return Object.assign({},fq,{
         f:     fq.f||fq.frage||fq.question||"",
         a:     fq.a||fq.antwort||fq.answer||"",
         status:"freigegeben", punkte:punkte
-      };
+      });
     });
     await db.collection(C_FRAGEN).doc(subId).update({fragen:fragen});
-    var docId=(sub.klasse+"_SCH_"+sub.name).replace(/[\s/]/g,"_");
-    var ref=db.collection(C_PUNKTE).doc(docId);
-    var snap=await ref.get();
-    if(snap.exists){await ref.update({fragenPunkte:firebase.firestore.FieldValue.increment(punkte)});}
-    else{await ref.set({klasse:sub.klasse,gruppe:sub.gruppe||"",name:sub.name,typ:"schueler",fragenPunkte:punkte,buzzerPunkte:0});}
+    // NEU: Punkte werden nicht mehr hochgezählt, sondern immer aus den freigegebenen Fragen berechnet
     toast("Freigegeben! +"+punkte+" Pkt für "+sub.name,"success");
     await ladeFragen(sub.klasse);await ladePunkte(sub.klasse);
     renderFragenListe();
     if(S.quizKlasse&&S.quizKlasse.name===sub.klasse) renderFragenSel();
   };
 
-  window.extraPunkt=async function(docId,name){
-    if(!confirm('+1 Bonus-Punkt fuer '+name+' vergeben?'))return;
-    var ref=db.collection(C_PUNKTE).doc(docId);
-    var snap=await ref.get();
-    if(snap.exists){
-      await ref.update({fragenPunkte:firebase.firestore.FieldValue.increment(1)});
-    } else {
-      var sub2=S.fragen.find(function(x){return x.name===name;});
-      var gr=sub2?sub2.gruppe||'':'';
-      await ref.set({klasse:S.aktiveKlasse?S.aktiveKlasse.name:'',gruppe:gr,name:name,typ:'schueler',fragenPunkte:1,buzzerPunkte:0});
-    }
-    toast('Bonus-Punkt fuer '+name+' vergeben!','success');
-    if(S.aktiveKlasse)await ladePunkte(S.aktiveKlasse.name);
+  // NEU: Bonus ist ein An/Aus-Schalter (0 oder 1) – mehrfaches Klicken kann nicht mehr hochzählen
+  S.bonusLaeuft=false;
+  window.extraPunkt=async function(subId){
+    if(S.bonusLaeuft)return;
+    var sub=S.fragen.find(function(x){return x.id===subId;});if(!sub||!S.aktiveKlasse)return;
+    var klasse=S.aktiveKlasse.name,name=sub.name;
+    var docId=schuelerDocId(klasse,name);
+    var p=S.punkte[docId];
+    var hat=!!(p&&p.bonusPunkte>=1);
+    if(!confirm(hat?"Bonus-Punkt von "+name+" wieder entfernen?":"+1 Bonus-Punkt für "+name+" vergeben? (max. 1 pro Schüler)"))return;
+    S.bonusLaeuft=true;
+    try{
+      await db.collection(C_PUNKTE).doc(docId).set({
+        klasse:klasse,name:name,typ:"schueler",
+        gruppe:gruppeVonSchueler(S.aktiveKlasse,name,sub.gruppe),
+        bonusPunkte:hat?0:1
+      },{merge:true});
+      toast(hat?"Bonus-Punkt von "+name+" entfernt":"⭐ Bonus-Punkt für "+name+" vergeben!","success");
+      await ladePunkte(klasse);
+      renderFragenListe();
+    }catch(e){console.error(e);toast("Fehler beim Speichern!","error");}
+    S.bonusLaeuft=false;
   };
 
   window.ablehnFrage=async function(subId,idx){
@@ -1194,8 +1361,9 @@
     if(!fragVal){ info.style.display="none"; return; }
     var parts = fragVal.split("__");
     var sub = S.fragen.find(function(x){ return x.id===parts[0]; });
-    if(sub && sub.gruppe){
-      nameEl.textContent = sub.gruppe;
+    var aktG = sub ? gruppeVonSchueler(S.quizKlasse, sub.name, sub.gruppe) : "";
+    if(aktG){
+      nameEl.textContent = aktG;
       info.style.display = "block";
     }
   });
@@ -1219,8 +1387,9 @@
         if(fq.status==="freigegeben"){
           var fqLabel=(fq.f||fq.frage||fq.question||"(Frage)");
           // NEU: ✅ bei Fragen, die schon im Quiz gestellt wurden
-          var gespielt=fq.gespielt?"✅ ":"";
-          sel.innerHTML+="<option value='"+sub.id+"__"+i+"'"+(fq.gespielt?" class='opt-gespielt'":"")+">"+gespielt+esc(sub.gruppe+"/"+sub.name+": "+fqLabel.substring(0,45))+"…</option>";
+          var gespielt="";
+          if(fq.gespielt){var gd=new Date(fq.gespielt);gespielt="✅ "+("0"+gd.getDate()).slice(-2)+"."+("0"+(gd.getMonth()+1)).slice(-2)+". ";}
+          sel.innerHTML+="<option value='"+sub.id+"__"+i+"'"+(fq.gespielt?" class='opt-gespielt'":"")+">"+gespielt+esc(gruppeVonSchueler(S.quizKlasse,sub.name,sub.gruppe)+"/"+sub.name+": "+fqLabel.substring(0,45))+"…</option>";
         }
       });
     });
@@ -1234,11 +1403,33 @@
   }
 
   function startSessionListener(){
+    if(S.lehrerSessionUnsub){try{S.lehrerSessionUnsub();}catch(e){}}
     var unsub=db.collection(C_SESSION).doc("current").onSnapshot(function(doc){
       S.session=doc.exists?doc.data():null;
+      stealAutomatik(S.session);
       renderQuizPanel();
-    });
+    },function(e){console.error(e);toast("Verbindung unterbrochen – verbinde neu…","error");setTimeout(startSessionListener,3000);});
+    S.lehrerSessionUnsub=unsub;
     S.unsub.push(unsub);
+  }
+
+  // NEU: Nur das Lehrer-Gerät öffnet nach Ablauf der Zeit den Steal-Modus (per Transaktion, genau einmal)
+  function stealAutomatik(sess){
+    if(S.stealTimer){clearTimeout(S.stealTimer);S.stealTimer=null;}
+    if(!(sess&&sess.aktiv&&sess.zielGruppe&&!sess.buzzerAlleOffen&&!sess.buzzerGedrückt&&!sess.gruppenAntwort))return;
+    var restMs=Math.max(0,(sess.timerDauer||30)*1000-(Date.now()-zielStartLokal(sess)));
+    S.stealTimer=setTimeout(async function(){
+      S.stealTimer=null;
+      var ref=db.collection(C_SESSION).doc("current");
+      try{
+        await db.runTransaction(async function(tx){
+          var d=await tx.get(ref);if(!d.exists)return;
+          var s=d.data();
+          if(!s.aktiv||s.buzzerAlleOffen||s.buzzerGedrückt||s.gruppenAntwort||s.zielGruppe!==sess.zielGruppe)return;
+          tx.update(ref,{buzzerOffen:true,buzzerAlleOffen:true});
+        });
+      }catch(e){console.error(e);}
+    },restMs);
   }
 
   function renderQuizPanel(){
@@ -1258,9 +1449,8 @@
       vorschlagHTML="<div class='vorschlag-box warten'>⏳ Fragenstellende Gruppe wählt Zielgruppe…</div>";
     }
     var timerHTML="";
-    if(sess.timerStart&&!sess.buzzerGedrückt&&!sess.buzzerAlleOffen){
-      var vergangen=Math.floor((Date.now()-sess.timerStart)/1000);
-      var rest=Math.max(0,(sess.timerDauer||30)-vergangen);
+    if(sess.zielGruppe&&!sess.buzzerGedrückt&&!sess.buzzerAlleOffen&&!sess.gruppenAntwort){
+      var rest=restSekunden(sess);
       var farbe=rest<=5?"var(--red)":rest<=10?"var(--gold)":"var(--green)";
       timerHTML="<div class='q-timer' id='lehrer-countdown' style='color:"+farbe+"'>⏱ "+rest+"s bis Steal-Modus</div>";
       // Countdown-Interval starten
@@ -1268,7 +1458,7 @@
       S.countdownInterval=setInterval(function(){
         var el=document.getElementById("lehrer-countdown");
         if(!el){clearInterval(S.countdownInterval);return;}
-        var r=Math.max(0,(sess.timerDauer||30)-Math.floor((Date.now()-sess.timerStart)/1000));
+        var r=restSekunden(sess);
         var f=r<=5?"var(--red)":r<=10?"var(--gold)":"var(--green)";
         el.style.color=f;
         el.textContent="⏱ "+r+"s "+(r===0?"→ Steal-Modus!":"bis Steal-Modus");
@@ -1322,7 +1512,7 @@
     if(!fragVal){toast("Frage wählen!","error");return;}
     var parts=fragVal.split("__");
     var sub=S.fragen.find(function(x){return x.id===parts[0];});
-    var ziel=sub.gruppe;
+    var ziel=gruppeVonSchueler(S.quizKlasse,sub.name,sub.gruppe);
     var fq=sub.fragen[parseInt(parts[1])];
     var fqText   = fq.f||fq.frage||fq.question||"";
     var fqAntwort= fq.a||fq.antwort||fq.answer||"";
@@ -1357,7 +1547,8 @@
       zielGruppe:null,zielVorschlag:null,
       buzzerOffen:false,buzzerAlleOffen:false,
       buzzerGedrückt:null,gruppenAntwort:null,letzteRichtigeGruppe:null,timerStart:null,timerDauer:30,
-      verwendeteZielgruppen:prevUsed,falscheGruppen:[],antwortLog:[],verlaufId:verlaufId
+      verwendeteZielgruppen:prevUsed,falscheGruppen:[],antwortLog:[],verlaufId:verlaufId,
+      appVersion:APP_VERSION
     });
     if(S.stealTimer){clearTimeout(S.stealTimer);S.stealTimer=null;}
     toast("Frage gestartet! Gruppe wählt Zielgruppe…","success");
@@ -1412,17 +1603,41 @@
     },30000);
   };
 
+  // NEU: Häkchen ("schon gestellt") für die geladene Klasse entfernen
+  window.haekchenZuruecksetzen=async function(){
+    if(!S.quizKlasse){toast("Erst oben die Klasse laden!","error");return;}
+    var betroffen=S.fragen.filter(function(sub){return (sub.fragen||[]).some(function(fq){return fq.gespielt;});});
+    var anz=0;betroffen.forEach(function(sub){sub.fragen.forEach(function(fq){if(fq.gespielt)anz++;});});
+    if(!anz){toast("Keine Häkchen vorhanden.","info");return;}
+    if(!confirm(anz+" Häkchen in "+S.quizKlasse.name+" entfernen? Die Fragen bleiben erhalten, nur die Markierung „schon gestellt“ verschwindet. (Der Antwort-Verlauf bleibt.)"))return;
+    for(var i=0;i<betroffen.length;i++){
+      var sub=betroffen[i];
+      var neu=sub.fragen.map(function(fq){if(!fq.gespielt)return fq;var c=Object.assign({},fq);delete c.gespielt;return c;});
+      await db.collection(C_FRAGEN).doc(sub.id).update({fragen:neu});
+      sub.fragen=neu;
+    }
+    renderFragenSel();
+    toast(anz+" Häkchen entfernt ✓","success");
+  };
+
   window.rundeZuruecksetzen=async function(){
-    if(!confirm("Runde zurücksetzen? Alle Gruppen werden wieder als Ziel verfügbar."))return;
+    if(!confirm("Runde zurücksetzen? Alle Gruppen werden wieder als Ziel verfügbar. (Die ✅ bei den Fragen bleiben – dafür gibt es „Häkchen zurücksetzen“.)"))return;
     await db.collection(C_SESSION).doc("current").update({verwendeteZielgruppen:[]});
     toast("Runde zurückgesetzt","info");
   };
 
   window.buzzerFreigeben=async function(alleOffen){
+    // NEU: Nicht stillschweigend einen Buzzer/eine Antwort wegwischen
+    var sess=S.session;
+    if(sess&&(sess.buzzerGedrückt||sess.gruppenAntwort)){
+      var wer=(sess.gruppenAntwort&&sess.gruppenAntwort.gruppe)||sess.buzzerGedrückt.gruppe;
+      if(!confirm(wer+" hat schon gebuzzert/geantwortet. Trotzdem neu öffnen? (Bitte vorher mit Richtig/Falsch werten)"))return;
+    }
     await db.collection(C_SESSION).doc("current").update({
       buzzerOffen:true,
       buzzerAlleOffen:alleOffen===true,
-      buzzerGedrückt:null
+      buzzerGedrückt:null,
+      gruppenAntwort:null
     });
     toast(alleOffen?"⚡ Steal-Modus für alle!":"Buzzer offen!","success");
   };
@@ -1480,8 +1695,10 @@
     if(sess&&sess.aktiv&&sess.verlaufId){
       await verlaufEintrag(sess.verlaufId,{typ:"ende",text:"ohne Wertung beendet",zeit:Date.now()},{ende:Date.now(),ergebnis:"ohne Wertung"});
     }
-    await db.collection(C_SESSION).doc("current").set({aktiv:false});
-    toast("Quiz beendet","info");
+    // NEU: Frage + Lösung bleiben erhalten, damit Handys und Tafel die richtige Antwort zeigen
+    await db.collection(C_SESSION).doc("current").set({aktiv:false,buzzerOffen:false,buzzerAlleOffen:false,
+      buzzerGedrückt:null,gruppenAntwort:null,letzteRichtigeGruppe:null},{merge:true});
+    toast("Frage beendet – Lösung wird angezeigt","info");
   };
 
   // ════════ ALLES LÖSCHEN ════════
@@ -1525,6 +1742,7 @@
     var klasseId=val("dd-l-kl-aus");if(!klasseId)return;
     var k=S.klassen.find(function(x){return x.id===klasseId;});
     await ladeFragen(k.name);await ladePunkte(k.name);
+    await migriereBonus(k);
     renderAuswertung(k);
     try{await ladeVerlauf(k.name);}catch(e){console.error(e);S.verlauf=[];}
     befuelleVerlaufFilter(k);
@@ -1630,25 +1848,10 @@
 
   function renderAuswertung(k){
     var maxPkt=parseInt(document.getElementById("inp-max-pkt").value)||0;
-    var fragenGr={};
-    Object.values(S.punkte).forEach(function(p){
-      if(p.typ==="schueler"){
-        fragenGr[p.gruppe]=(fragenGr[p.gruppe]||0)+(p.fragenPunkte||0);
-      }
-    });
-    S.fragen.forEach(function(sub){
-      fragenGr[sub.gruppe]=fragenGr[sub.gruppe]||0;
-    });
-    var buzzerGr={};
-    Object.values(S.punkte).forEach(function(p){
-      if(p.typ==="gruppe") buzzerGr[p.gruppe]=(buzzerGr[p.gruppe]||0)+(p.buzzerPunkte||0);
-    });
-    var grRows=(k.gruppen||[]).map(function(g){
-      var fragen=fragenGr[g.name]||0;
-      var buzzer=buzzerGr[g.name]||0;
-      var total=fragen+buzzer;
-      var note=noteAusGesamt(total,maxPkt);
-      return {name:g.name,fragen:fragen,buzzer:buzzer,total:total,note:note};
+    // NEU: einheitliche Berechnung (Fragen aus Freigaben, Bonus max. 1, aktuelle Gruppenzuordnung)
+    var P=berechnePunkte(k,S.fragen,S.punkte);
+    var grRows=Object.values(P.gruppen).filter(function(g){return !g.alt||g.buzzer>0;}).map(function(g){
+      return {name:g.name+(g.alt?" (alte Gruppe)":""),fragen:g.fragen,bonus:g.bonus,buzzer:g.buzzer,total:g.total,note:noteAusGesamt(g.total,maxPkt)};
     });
     grRows.sort(function(a,b){return b.total-a.total;});
     var noteHinweis=maxPkt>0
@@ -1658,14 +1861,30 @@
       "<h3 style='margin-bottom:10px'>Gruppen-Auswertung</h3>"+
       "<p class='hint' style='margin-bottom:12px'>"+noteHinweis+"</p>"+
       "<table class='aus-tbl'><thead><tr>"+
-        "<th>Gruppe</th><th>Fragen-Pkt</th><th>Buzzer-Pkt</th><th>Gesamt</th><th>Note</th>"+
+        "<th>Gruppe</th><th>Fragen-Pkt</th><th>Bonus</th><th>Buzzer-Pkt</th><th>Gesamt</th><th>Note</th>"+
       "</tr></thead><tbody>"+
       grRows.map(function(r){
         var noteStr=maxPkt>0?"<span class='note n"+r.note+"'>"+r.note+"</span>":"–";
-        return "<tr><td><strong>"+r.name+"</strong></td>"+
-          "<td>"+r.fragen+"</td><td>"+r.buzzer+"</td>"+
+        return "<tr><td><strong>"+esc(r.name)+"</strong></td>"+
+          "<td>"+r.fragen+"</td><td>"+r.bonus+"</td><td>"+r.buzzer+"</td>"+
           "<td><strong>"+r.total+"</strong></td><td>"+noteStr+"</td></tr>";
       }).join("")+"</tbody></table>";
+    // NEU: Aufschlüsselung pro Schüler, damit die Gruppensummen nachvollziehbar sind
+    var schRows=Object.values(P.schueler).filter(function(s){return s.fragen+s.bonus>0||s.anzFrei>0;})
+      .sort(function(a,b){return (a.gruppe||"~").localeCompare(b.gruppe||"~","de")||a.name.localeCompare(b.name,"de");});
+    if(schRows.length){
+      tableHTML+="<details class='aus-details'><summary>Aufschlüsselung pro Schüler ("+schRows.length+")</summary>"+
+        "<table class='aus-tbl'><thead><tr><th>Schüler</th><th>Gruppe</th><th>Freigegebene Fragen</th><th>Fragen-Pkt</th><th>Bonus</th></tr></thead><tbody>"+
+        schRows.map(function(s){
+          return "<tr><td>"+esc(s.name)+"</td><td>"+(s.gruppe?esc(s.gruppe):"<span style='color:var(--gold)'>⚠️ keine Gruppe</span>")+"</td>"+
+            "<td>"+s.anzFrei+"</td><td>"+s.fragen+"</td><td>"+(s.bonus?"⭐ 1":"–")+"</td></tr>";
+        }).join("")+"</tbody></table></details>";
+    }
+    if(P.ohneGruppe.length){
+      tableHTML+="<p class='hint' style='color:var(--gold);margin-top:10px'>⚠️ Punkte ohne gültige Gruppe (zählen in keiner Gruppe): "+
+        P.ohneGruppe.map(function(s){return esc(s.name)+" ("+(s.fragen+s.bonus)+")";}).join(", ")+
+        " – im Tab „Klassen“ unter „Schüler &amp; Gruppen“ einer Gruppe zuordnen.</p>";
+    }
     setHTML("aus-container",tableHTML);
   }
 
@@ -1673,18 +1892,17 @@
     var klasseId=val("dd-l-kl-aus");if(!klasseId){toast("Klasse wählen!","error");return;}
     var k=S.klassen.find(function(x){return x.id===klasseId;});
     await ladeFragen(k.name);await ladePunkte(k.name);
-    var schueler=[];
-    Object.values(S.punkte).forEach(function(p){if(p.typ==="schueler")schueler.push(p);});
-    S.fragen.forEach(function(sub){if(!schueler.find(function(s){return s.name===sub.name;}))schueler.push({name:sub.name,gruppe:sub.gruppe,fragenPunkte:0});});
-    var buzzerGr={};
-    Object.values(S.punkte).forEach(function(p){if(p.typ==="gruppe")buzzerGr[p.gruppe]=(buzzerGr[p.gruppe]||0)+(p.buzzerPunkte||0);});
+    await migriereBonus(k);
+    // NEU: gleiche Berechnung wie in der Tabelle
+    var P=berechnePunkte(k,S.fragen,S.punkte);
     var sep=";";
-    var zeilen=[["Name","Gruppe","Fragen-Punkte","Buzzer-Punkte (Gruppe)","Gesamt","Note"].join(sep)];
-    schueler.forEach(function(s){
-      var buzzer=buzzerGr[s.gruppe]||0;
-      var total=(s.fragenPunkte||0)+buzzer;
-      zeilen.push([s.name,s.gruppe,s.fragenPunkte||0,buzzer,total,NOTE(total)].join(sep));
-    });
+    var q=function(x){return '"'+String(x==null?"":x).replace(/"/g,'""')+'"';};
+    var zeilen=[["Name","Gruppe","Fragen-Punkte","Bonus","Buzzer-Punkte (Gruppe)","Gruppe gesamt"].map(q).join(sep)];
+    Object.values(P.schueler).sort(function(a,b){return (a.gruppe||"~").localeCompare(b.gruppe||"~","de")||a.name.localeCompare(b.name,"de");})
+      .forEach(function(s){
+        var g=P.gruppen[s.gruppe];
+        zeilen.push([s.name,s.gruppe||"(keine Gruppe)",s.fragen,s.bonus,g?g.buzzer:0,g?g.total:""].map(q).join(sep));
+      });
     var blob=new Blob(["\uFEFF"+zeilen.join("\r\n")],{type:"text/csv;charset=utf-8;"});
     var url=URL.createObjectURL(blob);
     var a=document.createElement("a");a.href=url;a.style.display="none";
@@ -1709,9 +1927,12 @@
     var unsub=db.collection(C_SESSION).doc("current").onSnapshot(async function(doc){
       var sess=doc.exists?doc.data():null;
       S.session=sess;
+      stealAutomatik(sess);
       renderTafel(sess);
       if(sess&&sess.klasse){
         await ladePunkte(sess.klasse);
+        // Fragen nur neu laden, wenn sich die Klasse ändert oder eine Frage abgeschlossen wurde
+        if(S.tafelFragenKlasse!==sess.klasse||!sess.aktiv){await ladeFragen(sess.klasse);S.tafelFragenKlasse=sess.klasse;}
         renderScoreboard(sess.klasse);
       }
     });
@@ -1723,6 +1944,15 @@
     var aBox=document.getElementById("tafel-antwort-box");
     var buzBox=document.getElementById("tafel-buzzer-box");
     if(!sess||!sess.aktiv){
+      // NEU: Nach der Auflösung die richtige Antwort automatisch zeigen
+      if(sess&&sess.aktuelleAntwort&&sess.aktuelleFrageText){
+        fBox.textContent=sess.aktuelleFrageText;
+        document.getElementById("tafel-antwort-text").textContent="💡 "+sess.aktuelleAntwort;
+        aBox.style.display="block";
+        buzBox.innerHTML=sess.letzteRichtigeGruppe?"✓ <strong>"+esc(sess.letzteRichtigeGruppe)+"</strong> holt den Punkt!":"Frage beendet";
+        buzBox.style.background=sess.letzteRichtigeGruppe?"rgba(62,207,142,.15)":"transparent";
+        return;
+      }
       fBox.textContent="Warte auf Lehrer…";aBox.style.display="none";
       buzBox.textContent="";return;
     }
@@ -1734,21 +1964,19 @@
       buzBox.style.background="rgba(250,200,50,.15)";
     } else if(sess.buzzerAlleOffen){
       buzBox.innerHTML="⚡ STEAL-MODUS – Alle Gruppen können antworten!";buzBox.style.background="rgba(240,96,96,.15)";
-    } else if(sess.timerStart){
-      var vergangen=Math.floor((Date.now()-sess.timerStart)/1000);
-      var rest=Math.max(0,(sess.timerDauer||30)-vergangen);
-      var farbe=rest<=5?"#f06060":rest<=10?"#f0c040":"#3ecf8e";
-      buzBox.innerHTML="<span style='font-family:Bebas Neue,sans-serif;font-size:2rem;color:"+farbe+"'>⏱ "+rest+"</span> Sekunden bis Steal-Modus";
-      buzBox.style.background="transparent";
-      if(!S.tafelTimer)S.tafelTimer=setInterval(function(){
-        var v2=Math.floor((Date.now()-sess.timerStart)/1000);
-        var r2=Math.max(0,(sess.timerDauer||30)-v2);
+    } else if(sess.zielGruppe&&!sess.gruppenAntwort){
+      var zeichne=function(){
+        var r2=restSekunden(sess);
         var f2=r2<=5?"#f06060":r2<=10?"#f0c040":"#3ecf8e";
         var bb=document.getElementById("tafel-buzzer-box");
-        if(bb&&!S.session?.buzzerGedrückt&&!S.session?.buzzerAlleOffen)
+        if(bb&&S.session&&!S.session.buzzerGedrückt&&!S.session.buzzerAlleOffen&&!S.session.gruppenAntwort){
           bb.innerHTML="<span style='font-family:Bebas Neue,sans-serif;font-size:2rem;color:"+f2+"'>⏱ "+r2+"</span> Sekunden bis Steal-Modus";
-        else if(S.tafelTimer){clearInterval(S.tafelTimer);S.tafelTimer=null;}
-      },1000);
+          bb.style.background="transparent";
+        } else if(S.tafelTimer){clearInterval(S.tafelTimer);S.tafelTimer=null;}
+      };
+      zeichne();
+      if(S.tafelTimer)clearInterval(S.tafelTimer);
+      S.tafelTimer=setInterval(zeichne,1000);
     } else {
       buzBox.innerHTML="";buzBox.style.background="transparent";
     }
@@ -1760,14 +1988,12 @@
 
   function renderScoreboard(klasse){
     var k=S.klassen.find(function(x){return x.name===klasse;});if(!k)return;
-    var buzzerGr={};
-    Object.values(S.punkte).forEach(function(p){
-      if(p.typ==="gruppe")buzzerGr[p.gruppe]=(buzzerGr[p.gruppe]||0)+(p.buzzerPunkte||0);
-    });
+    // NEU: Gesamtpunkte wie in der Auswertung (Fragen + Bonus + Buzzer)
+    var P=berechnePunkte(k,S.fragen||[],S.punkte);
     var c=document.getElementById("scoreboard");
     c.innerHTML=(k.gruppen||[]).map(function(g){
-      var pkt=buzzerGr[g.name]||0;
-      return "<div class='sb-item'><div class='sb-name'>"+g.name+"</div><div class='sb-pkt'>"+pkt+"</div><div class='sb-label'>Punkte</div></div>";
+      var x=P.gruppen[g.name]||{total:0,buzzer:0};
+      return "<div class='sb-item'><div class='sb-name'>"+esc(g.name)+"</div><div class='sb-pkt'>"+x.total+"</div><div class='sb-label'>Punkte · davon Quiz "+x.buzzer+"</div></div>";
     }).join("");
   }
 
@@ -1997,6 +2223,13 @@
     .sm-aktion{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;padding:10px 12px;background:rgba(240,192,64,.07);border:1px solid rgba(240,192,64,.25);border-radius:10px}
     .sm-tbl tr.sm-row-an td{background:rgba(240,192,64,.07)}
     .opt-gespielt{color:var(--green)}
+    .weiter-banner{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;background:rgba(240,192,64,.08);border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:12px 16px;margin-bottom:18px;font-size:.92rem}
+    .bz-loesung{margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.12);font-size:1rem;font-weight:400;color:var(--text);text-align:left}
+    .bz-loesung-frage{color:var(--muted);font-size:.9rem;margin-bottom:6px}
+    .bz-loesung-antwort strong{color:var(--green)}
+    .bonus-an{background:rgba(240,192,64,.22)!important;color:var(--gold)!important;border-color:var(--gold)!important}
+    .aus-details{margin-top:16px}
+    .aus-details summary{cursor:pointer;color:var(--muted);font-size:.88rem;margin-bottom:8px}
     .vl-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:10px}
     .vl-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
     .vl-zeit{font-size:.78rem;color:var(--muted)}
@@ -2048,6 +2281,7 @@
 
 <!-- ════ START ════ -->
 <div id="s-start" class="screen" style="display:block;max-width:820px">
+  <div id="weiter-banner" class="weiter-banner" style="display:none"></div>
   <div class="start-hero">
     <div class="start-icon">🎯</div>
     <div class="start-title">Klassen-Quiz</div>
@@ -2192,8 +2426,9 @@
         <button class="btn-secondary" onclick="buzzerFreigeben(false)">🔔 Buzzer öffnen</button>
         <button class="btn-secondary" onclick="buzzerFreigeben(true)" style="color:var(--red);border-color:rgba(240,96,96,.3)">⚡ Steal!</button>
         <button class="btn-secondary" onclick="rundeZuruecksetzen()" style="color:var(--muted)">↺ Runde reset</button>
-        <button class="btn-secondary" onclick="quizBeenden()">⏹ Beenden</button>
+        <button class="btn-secondary" onclick="quizBeenden()" title="Frage auflösen, niemand bekommt einen Punkt – Lösung wird angezeigt">⏹ Frage beenden (ohne Punkt)</button>
         <button class="btn-secondary" onclick="tafelStarten()">📺 Tafel-Modus</button>
+        <button class="btn-secondary" onclick="haekchenZuruecksetzen()" style="color:var(--muted)" title="Alle ✅ dieser Klasse entfernen, z.B. für eine neue Quiz-Woche">✅ Häkchen zurücksetzen</button>
       </div>
     </div>
     <div id="quiz-panel"><p class="muted">Kein Quiz aktiv.</p></div>
