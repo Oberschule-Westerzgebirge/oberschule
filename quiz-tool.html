@@ -25,6 +25,7 @@
   var C_FRAGEN   = "quiz_fragen";
   var C_PUNKTE   = "quiz_punkte";
   var C_SESSION  = "quiz_session";
+  var C_LFRAGEN  = "quiz_lehrerfragen"; // NEU: eigener Fragenpool des Lehrers (für alle Klassen)
   var C_VERLAUF  = "quiz_verlauf";   // NEU: dauerhafter Verlauf je gestellter Frage
   // Eintrag an den Verlauf einer Frage anhängen (arrayUnion → kein Überschreiben bei gleichzeitigen Aktionen)
   function verlaufRef(id){return id?db.collection(C_VERLAUF).doc(id):null;}
@@ -57,7 +58,7 @@
   function setHTML(id,html){document.getElementById(id).innerHTML=html;}
 
   // ════════ NEU: VERSION & ANGEMELDET BLEIBEN ════════
-  var APP_VERSION="2026-11-10";
+  var APP_VERSION="2026-11-24";
   // Lehrer schreibt die Version in die Sitzung; ältere Handys laden sich dann einmal automatisch neu
   function pruefeVersion(sess){
     if(!sess||!sess.appVersion||sess.appVersion<=APP_VERSION)return;
@@ -455,7 +456,7 @@
     var k=S.klassen.find(function(x){return x.name===S.klasse;});
     var g=berechnePunkte(k,S.fragenGruppe||[],S.punkte).gruppen[S.gruppe]||{fragen:0,bonus:0,buzzer:0,total:0};
     box.innerHTML="📊 Eure Punkte: <strong style='color:var(--gold)'>"+g.total+"</strong>"+
-      " (Fragen: "+g.fragen+(g.bonus?" · Bonus: "+g.bonus:"")+" · Buzzer: "+g.buzzer+")";
+      " (Fragen: "+g.fragen+(g.bonus?" · Bonus: "+g.bonus:"")+" · Quiz: "+g.buzzer+")";
   }
 
   function startBuzzerListener(){
@@ -473,7 +474,10 @@
         // NEU: Nach der Auflösung sehen alle Gruppen die richtige Antwort
         if(!sess.aktiv&&sess.klasse===S.klasse&&sess.aktuelleAntwort){
           var kopf,bg="rgba(74,158,255,.10)",rand="1px solid rgba(74,158,255,.35)",farbe="var(--text)";
-          if(sess.letzteRichtigeGruppe===S.gruppe){kopf="🎉 Richtig! +1 Punkt für euch!";bg="rgba(62,207,142,.15)";rand="1px solid rgba(62,207,142,.4)";farbe="var(--green)";}
+          if(sess.schiebePunktGruppe===S.gruppe){kopf="🎉 +1 Punkt für euch – "+esc((sess.falscheGruppen||[])[0]||"")+" lag nach dem Schieben falsch!";bg="rgba(62,207,142,.15)";rand="1px solid rgba(62,207,142,.4)";farbe="var(--green)";}
+          else if(sess.schiebePunktGruppe&&(sess.falscheGruppen||[]).includes(S.gruppe)){kopf="✗ Leider falsch – der Punkt geht an "+esc(sess.schiebePunktGruppe)+".";bg="rgba(240,96,96,.12)";rand="1px solid rgba(240,96,96,.3)";farbe="var(--red)";}
+          else if(sess.schiebePunktGruppe){kopf="↪ "+esc(sess.schiebePunktGruppe)+" holt den Schiebe-Punkt.";}
+          else if(sess.letzteRichtigeGruppe===S.gruppe){kopf="🎉 Richtig! +1 Punkt für euch!";bg="rgba(62,207,142,.15)";rand="1px solid rgba(62,207,142,.4)";farbe="var(--green)";}
           else if(sess.letzteRichtigeGruppe){kopf="✓ "+esc(sess.letzteRichtigeGruppe)+" hat den Punkt geholt.";}
           else if((sess.falscheGruppen||[]).includes(S.gruppe)){kopf="✗ Leider falsch!";bg="rgba(240,96,96,.12)";rand="1px solid rgba(240,96,96,.3)";farbe="var(--red)";}
           else {kopf="Frage beendet – niemand hat den Punkt geholt.";}
@@ -518,6 +522,29 @@
           status.textContent="✗ Eure Antwort war falsch – diese Frage ist für euch vorbei.";
         } else {
           status.textContent="🔒 "+gedrückt.gruppe+" war schneller!";
+        }
+      } else if(sess.modus==="schieben"){
+        // ── NEU: Modus „Eigene Fragen“: Zielgruppe antwortet oder schiebt einmal weiter ──
+        btn.style.display="none";
+        var pick=document.getElementById("bz-picker");pick.innerHTML="";
+        if(istZiel){
+          document.getElementById("bz-ziel").textContent=sess.geschoben?"↪ "+sess.geschobenVon+" hat euch die Frage zugeschoben!":"🎯 Ihr seid gefragt!";
+          status.textContent=sess.geschoben?"Ihr müsst antworten – weiterschieben geht nicht mehr.":"Antwortet – oder schiebt die Frage einmal weiter.";
+          zeigeAntwortfeld();
+          if(!sess.geschoben){
+            var alleG=((S.klassen.find(function(x){return x.name===S.klasse;})||{}).gruppen||[]).filter(function(g){return g.name!==S.gruppe;});
+            pick.innerHTML="<div class='bz-schieben'><div class='bz-schieben-titel'>↪ Zu schwer? Einmal weiterschieben an:</div><div class='bz-schieben-btns'>"+
+              alleG.map(function(g,i){return "<button class='btn-schieben' onclick='frageSchieben("+i+")'>"+esc(g.name)+"</button>";}).join("")+
+              "</div>"+(sess.schiebeBonus?"<div class='hint' style='margin:0;text-align:center'>Antwortet die Gruppe falsch, bekommt ihr den Punkt.</div>":"")+"</div>";
+            S.schiebeZiele=alleG.map(function(g){return g.name;});
+          }
+        } else {
+          document.getElementById("bz-ziel").textContent=sess.geschoben
+            ?"↪ "+sess.geschobenVon+" hat an "+sess.zielGruppe+" geschoben"
+            :"➡️ Frage für: "+sess.zielGruppe;
+          status.textContent=(sess.geschoben&&sess.geschobenVon===S.gruppe)
+            ?(sess.schiebeBonus?"Antwortet "+sess.zielGruppe+" falsch, bekommt ihr den Punkt! 🤞":"Ihr habt geschoben – warte auf die Antwort…")
+            :"⏳ Warte – "+sess.zielGruppe+" ist dran.";
         }
       } else if(istFragengruppe&&!sess.zielGruppe){
         btn.style.display="none";
@@ -566,7 +593,7 @@
           if(sess.zielGruppe&&!istFragengruppe)starteHandyCountdown(sess,status,"⚡ Steal in {s} s – Finger bereit!");
         }
       }
-      if(istZiel&&!sess.buzzerAlleOffen&&!antwort&&!gedrückt)starteHandyCountdown(sess,status,"⏱ Noch {s} s – dann dürfen alle anderen buzzern!");
+      if(sess.modus!=="schieben"&&istZiel&&!sess.buzzerAlleOffen&&!antwort&&!gedrückt)starteHandyCountdown(sess,status,"⏱ Noch {s} s – dann dürfen alle anderen buzzern!");
     },function(e){
       console.error(e);
       document.getElementById("bz-status").textContent="📡 Verbindung unterbrochen – verbinde neu…";
@@ -625,6 +652,32 @@
     document.getElementById("bz-status").textContent="Kein Quiz aktiv";
   }
   // NEU: Antworten & Buzzern per Transaktion → wer zuerst kommt, sperrt für alle anderen
+  // NEU: Frage einmal an eine andere Gruppe weiterschieben
+  window.frageSchieben=async function(i){
+    var ziel=(S.schiebeZiele||[])[i];if(!ziel)return;
+    if(!confirm("Frage wirklich an „"+ziel+"“ schieben? Das geht nur einmal!"))return;
+    var ref=db.collection(C_SESSION).doc("current"),ergebnis;
+    try{
+      ergebnis=await db.runTransaction(async function(tx){
+        var d=await tx.get(ref);if(!d.exists)return "zu";
+        var s=d.data();
+        if(!s.aktiv||s.modus!=="schieben")return "zu";
+        if(s.zielGruppe!==S.gruppe)return "nichtdran";
+        if(s.geschoben)return "schon";
+        if(s.gruppenAntwort)return "beantwortet";
+        if(ziel===S.gruppe)return "selbst";
+        var e={typ:"schieben",gruppe:S.gruppe,an:ziel,zeit:Date.now()};
+        tx.update(ref,{zielGruppe:ziel,geschoben:true,geschobenVon:S.gruppe,antwortLog:(s.antwortLog||[]).concat([e])});
+        if(s.verlaufId)tx.update(verlaufRef(s.verlaufId),{log:firebase.firestore.FieldValue.arrayUnion(e),zielGruppe:ziel});
+        return "ok";
+      });
+    }catch(e){console.error(e);toast("Fehler – nochmal versuchen!","error");return;}
+    if(ergebnis==="ok")toast("↪ Frage an "+ziel+" geschoben!","success");
+    else if(ergebnis==="schon")toast("Die Frage wurde schon geschoben.","error");
+    else if(ergebnis==="beantwortet")toast("Ihr habt schon geantwortet.","error");
+    else toast("Schieben geht gerade nicht.","error");
+  };
+
   window.antwortAbschicken=async function(){
     var inp=document.getElementById("bz-antwort-inp");
     var text=inp.value.trim();
@@ -690,6 +743,8 @@
     ["dd-l-kl-fragen","dd-l-kl-quiz","dd-l-kl-aus"].forEach(befuelleKlassenSel);
     renderKlassenTab();
     lehrerTab("tab-klassen");
+    try{await ladeLFragen();renderPool();}catch(e){console.error(e);}
+    setzeQuizModus(lsGet("kq_modus")||"schueler");
   };
   window.lehrerTab=function(tab){
     ["tab-klassen","tab-fragen","tab-quiz","tab-aus"].forEach(function(t){
@@ -1031,7 +1086,7 @@
         "<div class='sm-vorschau-namen'>"+liste.map(function(s){return esc(s.vorname+" "+s.nachname);}).join(" · ")+"</div>"+
         (sm.schueler.length?"<p class='hint'>Beim Ersetzen behalten Schüler mit gleichem Namen ihre Gruppe.</p>":"")+
         "<div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:10px'>"+btns+
-        "<button class='btn-secondary' onclick=\"S.sm.imp=null;setHTML('sm-vorschau','')\">Abbrechen</button></div>"+
+        "<button class='btn-secondary' onclick=\"S.sm.imp=null;window.setHTML('sm-vorschau','')\">Abbrechen</button></div>"+
       "</div>");
   }
   window.setHTML=setHTML;
@@ -1234,6 +1289,122 @@
     toast("Fragen exportiert ✓","success");
   };
 
+  // ════════ NEU: EIGENER FRAGENPOOL ════════
+  S.lfragen=[];S.poolImport=null;
+  async function ladeLFragen(){
+    var snap=await db.collection(C_LFRAGEN).get();
+    S.lfragen=snap.docs.map(function(d){return Object.assign({id:d.id},d.data());});
+    S.lfragen.sort(function(a,b){return (a.thema||"").localeCompare(b.thema||"","de")||(a.erstellt||0)-(b.erstellt||0);});
+  }
+  // CSV: Frage;Antwort;Thema (Kopfzeile optional, Thema optional) – ; oder Tab oder , als Trenner
+  function parseFragenCSV(text,themaStandard){
+    text=String(text||"").replace(/^\uFEFF/,"");
+    var lines=text.split(/\r\n|\n|\r/).filter(function(l){return l.trim();});
+    if(!lines.length)return [];
+    var d=lines[0].indexOf(";")>-1?";":(lines[0].indexOf("\t")>-1?"\t":",");
+    var rows=lines.map(function(l){return csvZeileTeilen(l,d);});
+    var h=rows[0].map(function(c){return c.toLowerCase();});
+    var iF=0,iA=1,iT=2;
+    if(h.some(function(c){return c.indexOf("frage")>-1;})){
+      iF=h.findIndex(function(c){return c.indexOf("frage")>-1;});
+      iA=h.findIndex(function(c){return c.indexOf("antwort")>-1||c.indexOf("lösung")>-1||c.indexOf("loesung")>-1;});
+      iT=h.findIndex(function(c){return c.indexOf("thema")>-1||c.indexOf("kategorie")>-1;});
+      rows=rows.slice(1);
+    }
+    var liste=[];
+    rows.forEach(function(r){
+      var f=(r[iF]||"").trim(),a=iA>-1?(r[iA]||"").trim():"";
+      if(!f)return;
+      liste.push({f:f,a:a,thema:((iT>-1?r[iT]:"")||themaStandard||"").trim()});
+    });
+    return liste;
+  }
+  function renderPool(){
+    var c=document.getElementById("pool-liste");if(!c)return;
+    document.getElementById("pool-anzahl").textContent=S.lfragen.length?S.lfragen.length+" Fragen im Pool":"Pool ist leer";
+    if(!S.lfragen.length){c.innerHTML="<p class='muted'>Noch keine eigenen Fragen. Importiere oben eine CSV-Datei.</p>";return;}
+    var themen={};
+    S.lfragen.forEach(function(q){var t=q.thema||"Ohne Thema";(themen[t]=themen[t]||[]).push(q);});
+    c.innerHTML=Object.keys(themen).sort(function(a,b){return a.localeCompare(b,"de");}).map(function(t){
+      var qs=themen[t];
+      return "<details class='pool-thema'><summary><strong>"+esc(t)+"</strong> <span class='muted'>("+qs.length+")</span>"+
+        "<button class='btn-sm btn-del' style='margin-left:10px' onclick='event.preventDefault();poolThemaLoeschen("+JSON.stringify(t).replace(/'/g,"&#39;")+")'>🗑️ Thema löschen</button></summary>"+
+        "<table class='sm-tbl'><thead><tr><th>Frage</th><th>Antwort</th><th>Gestellt</th><th></th></tr></thead><tbody>"+
+        qs.map(function(q){
+          var gesp=Object.keys(q.gespieltIn||{}).map(function(k){var d=new Date(q.gespieltIn[k]);return esc(k)+" "+("0"+d.getDate()).slice(-2)+"."+("0"+(d.getMonth()+1)).slice(-2)+".";}).join("<br>");
+          return "<tr><td>"+esc(q.f)+"</td><td style='color:var(--green)'>"+esc(q.a)+"</td><td style='font-size:.75rem;color:var(--muted)'>"+(gesp||"–")+"</td>"+
+            "<td><button class='btn-sm btn-del' title='Frage löschen' onclick=\"poolFrageLoeschen('"+q.id+"')\">✕</button></td></tr>";
+        }).join("")+"</tbody></table></details>";
+    }).join("");
+  }
+  window.poolDateiGewaehlt=function(inp){
+    var f=inp.files&&inp.files[0];if(!f)return;
+    var r=new FileReader();
+    r.onload=function(){poolImportVorbereiten(dekodiere(new Uint8Array(r.result)),f.name);inp.value="";};
+    r.readAsArrayBuffer(f);
+  };
+  window.poolToggleEinfuegen=function(){
+    var b=document.getElementById("pool-paste-box");
+    b.style.display=b.style.display==="none"?"block":"none";
+  };
+  window.poolEinfuegenVerarbeiten=function(){poolImportVorbereiten(val("pool-paste"),"eingefügter Liste");};
+  function poolImportVorbereiten(text,quelle){
+    var liste=parseFragenCSV(text,val("pool-thema").trim());
+    if(!liste.length){toast("Keine Fragen erkannt – Format: Frage;Antwort;Thema","error");return;}
+    var vorh={};S.lfragen.forEach(function(q){vorh[(q.thema||"")+"|"+q.f.toLowerCase()]=true;});
+    var neu=liste.filter(function(q){return !vorh[(q.thema||"")+"|"+q.f.toLowerCase()];});
+    var ohneAntwort=liste.filter(function(q){return !q.a;}).length;
+    S.poolImport=neu;
+    setHTML("pool-vorschau","<div class='sm-vorschau'>"+
+      "<div><strong>"+liste.length+" Fragen erkannt</strong> <span class='muted'>aus "+esc(quelle)+"</span>"+
+        (liste.length-neu.length?" · <span style='color:var(--gold)'>"+(liste.length-neu.length)+" schon im Pool (werden übersprungen)</span>":"")+
+        (ohneAntwort?" · <span style='color:var(--gold)'>⚠️ "+ohneAntwort+" ohne Antwort</span>":"")+"</div>"+
+      "<table class='sm-tbl' style='margin-top:8px'><thead><tr><th>Thema</th><th>Frage</th><th>Antwort</th></tr></thead><tbody>"+
+        neu.slice(0,8).map(function(q){return "<tr><td>"+esc(q.thema||"–")+"</td><td>"+esc(q.f)+"</td><td style='color:var(--green)'>"+esc(q.a)+"</td></tr>";}).join("")+
+        (neu.length>8?"<tr><td colspan='3' class='muted'>… und "+(neu.length-8)+" weitere</td></tr>":"")+
+      "</tbody></table>"+
+      "<div style='display:flex;gap:8px;margin-top:10px;flex-wrap:wrap'>"+
+        (neu.length?"<button class='btn-primary' style='width:auto;padding:8px 16px' onclick='poolImportSpeichern()'>✓ "+neu.length+" Fragen importieren</button>":"")+
+        "<button class='btn-secondary' onclick=\"S.poolImport=null;window.setHTML('pool-vorschau','')\">Abbrechen</button></div></div>");
+  }
+  window.poolImportSpeichern=async function(){
+    var neu=S.poolImport;if(!neu||!neu.length)return;
+    var jetzt=Date.now(),i=0;
+    while(i<neu.length){
+      var batch=db.batch();
+      neu.slice(i,i+400).forEach(function(q,j){
+        batch.set(db.collection(C_LFRAGEN).doc(),{f:q.f,a:q.a,thema:q.thema||"",erstellt:jetzt+i+j,gespieltIn:{}});
+      });
+      await batch.commit();i+=400;
+    }
+    toast(neu.length+" Fragen importiert ✓","success");
+    S.poolImport=null;setHTML("pool-vorschau","");
+    document.getElementById("pool-paste").value="";document.getElementById("pool-paste-box").style.display="none";
+    await ladeLFragen();renderPool();renderLFragenSel();
+  };
+  window.poolFrageLoeschen=async function(id){
+    var q=S.lfragen.find(function(x){return x.id===id;});if(!q)return;
+    if(!confirm("Frage löschen?\n\n„"+q.f+"“"))return;
+    await db.collection(C_LFRAGEN).doc(id).delete();
+    await ladeLFragen();renderPool();renderLFragenSel();
+  };
+  window.poolThemaLoeschen=async function(t){
+    var qs=S.lfragen.filter(function(q){return (q.thema||"Ohne Thema")===t;});
+    if(!confirm("Alle "+qs.length+" Fragen des Themas „"+t+"“ löschen?"))return;
+    var batch=db.batch();qs.forEach(function(q){batch.delete(db.collection(C_LFRAGEN).doc(q.id));});await batch.commit();
+    toast(qs.length+" Fragen gelöscht","success");
+    await ladeLFragen();renderPool();renderLFragenSel();
+  };
+  window.poolVorlage=function(){
+    var inhalt="\uFEFF"+'"Frage";"Antwort";"Thema"\r\n'+
+      '"Wann wurde Mozart geboren?";"27. Januar 1756";"Mozart"\r\n'+
+      '"In welcher Stadt wurde Mozart geboren?";"Salzburg";"Mozart"\r\n'+
+      '"Wie heißt Mozarts bekannteste Oper mit einem Vogelfänger?";"Die Zauberflöte";"Mozart"\r\n';
+    var blob=new Blob([inhalt],{type:"text/csv;charset=utf-8;"});
+    var url=URL.createObjectURL(blob);var a=document.createElement("a");a.href=url;a.download="Fragen_Vorlage.csv";
+    a.style.display="none";document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  };
+
   window.fragenLaden=async function(){
     var klasseId=val("dd-l-kl-fragen");if(!klasseId){toast("Klasse wählen!","error");return;}
     S.aktiveKlasse=S.klassen.find(function(x){return x.id===klasseId;});
@@ -1350,6 +1521,8 @@
     S.quizKlasse=S.klassen.find(function(x){return x.id===klasseId;});
     await ladeFragen(S.quizKlasse.name);await ladePunkte(S.quizKlasse.name);
     renderFragenSel();
+    try{await ladeLFragen();}catch(e){console.error(e);}
+    renderLFragenSel();renderLZielSel();
     startSessionListener();
   };
 
@@ -1402,6 +1575,111 @@
     });
   }
 
+  // ════════ NEU: SPIELMODUS „EIGENE FRAGEN“ (antworten oder 1× schieben) ════════
+  window.setzeQuizModus=function(m){
+    S.quizModus=m==="lehrer"?"lehrer":"schueler";lsSet("kq_modus",S.quizModus);
+    document.getElementById("modus-schueler-ctrl").style.display=S.quizModus==="schueler"?"block":"none";
+    document.getElementById("modus-lehrer-ctrl").style.display=S.quizModus==="lehrer"?"block":"none";
+    document.getElementById("modus-btn-schueler").classList.toggle("active",S.quizModus==="schueler");
+    document.getElementById("modus-btn-lehrer").classList.toggle("active",S.quizModus==="lehrer");
+    var cb=document.getElementById("chk-schiebebonus");var gem=lsGet("kq_schiebebonus");if(gem!==null)cb.checked=!!gem;
+  };
+  function datumKurz(z){var d=new Date(z);return ("0"+d.getDate()).slice(-2)+"."+("0"+(d.getMonth()+1)).slice(-2)+".";}
+  window.renderLFragenSel=function(){
+    var tSel=document.getElementById("sel-lthema"),qSel=document.getElementById("sel-lfrage");
+    var tVor=tSel.value,qVor=qSel.value;
+    var themen={};S.lfragen.forEach(function(q){themen[q.thema||""]=(themen[q.thema||""]||0)+1;});
+    tSel.innerHTML="<option value='__alle'>Alle Themen ("+S.lfragen.length+")</option>"+Object.keys(themen).sort().map(function(t){
+      return "<option value='"+esc(t)+"'>"+esc(t||"Ohne Thema")+" ("+themen[t]+")</option>";}).join("");
+    tSel.value=(tVor&&(tVor==="__alle"||themen[tVor]!==undefined))?tVor:"__alle";
+    if(!S.quizKlasse){qSel.innerHTML="<option value=''>– zuerst Klasse laden –</option>";return;}
+    if(!S.lfragen.length){qSel.innerHTML="<option value=''>– Pool leer: im Tab „Fragen“ CSV importieren –</option>";return;}
+    var kl=S.quizKlasse.name,t=tSel.value;
+    var liste=S.lfragen.filter(function(q){return t==="__alle"||(q.thema||"")===t;});
+    var gesp=liste.filter(function(q){return q.gespieltIn&&q.gespieltIn[kl];}).length;
+    qSel.innerHTML="<option value=''>– Frage wählen ("+liste.length+(gesp?" · ✅ "+gesp+" schon gestellt":"")+") –</option>"+
+      liste.map(function(q){
+        var g=q.gespieltIn&&q.gespieltIn[kl];
+        return "<option value='"+q.id+"'"+(g?" class='opt-gespielt'":"")+">"+(g?"✅ "+datumKurz(g)+" ":"")+esc((q.thema&&t==="__alle"?q.thema+": ":"")+q.f.substring(0,70))+(q.f.length>70?"…":"")+"</option>";
+      }).join("");
+    if(qVor)qSel.value=qVor;
+  };
+  function renderLZielSel(){
+    var sel=document.getElementById("sel-lziel");if(!sel)return;
+    var vor=sel.value;
+    var sess=S.session||{};
+    var used=(S.quizKlasse&&sess.klasse===S.quizKlasse.name)?(sess.verwendeteZielgruppen||[]):[];
+    sel.innerHTML="<option value=''>– Gruppe –</option>"+((S.quizKlasse&&S.quizKlasse.gruppen)||[]).map(function(g){
+      return "<option value='"+esc(g.name)+"'>"+esc(g.name)+(used.includes(g.name)?"  · schon dran":"")+"</option>";
+    }).join("");
+    if(vor)sel.value=vor;
+  }
+  window.lZielZufall=function(){
+    if(!S.quizKlasse){toast("Erst Klasse laden!","error");return;}
+    var sess=S.session||{};
+    var used=sess.klasse===S.quizKlasse.name?(sess.verwendeteZielgruppen||[]):[];
+    var alle=(S.quizKlasse.gruppen||[]).map(function(g){return g.name;});
+    var frei=alle.filter(function(n){return !used.includes(n);});
+    if(!frei.length)frei=alle;
+    if(!frei.length)return;
+    document.getElementById("sel-lziel").value=frei[Math.floor(Math.random()*frei.length)];
+  };
+  // +1 Quiz-Punkt für eine Gruppe
+  async function gruppePunktPlus(klasse,gruppe){
+    var ref=db.collection(C_PUNKTE).doc((klasse+"_GR_"+gruppe).replace(/[\s/]/g,"_"));
+    var snap=await ref.get();
+    if(snap.exists){await ref.update({buzzerPunkte:firebase.firestore.FieldValue.increment(1)});}
+    else{await ref.set({klasse:klasse,gruppe:gruppe,name:"(Gruppe "+gruppe+")",typ:"gruppe",fragenPunkte:0,buzzerPunkte:1});}
+  }
+  window.lehrerFrageStarten=async function(){
+    if(!S.quizKlasse){toast("Erst Klasse laden!","error");return;}
+    var qid=val("sel-lfrage"),ziel=val("sel-lziel");
+    if(!qid){toast("Frage wählen!","error");return;}
+    if(!ziel){toast("Gruppe wählen, an die die Frage geht!","error");return;}
+    var q=S.lfragen.find(function(x){return x.id===qid;});if(!q)return;
+    var kl=S.quizKlasse.name,jetzt=Date.now();
+    var prevDoc=await db.collection(C_SESSION).doc("current").get();
+    var prev=prevDoc.exists?prevDoc.data():{};
+    if(prev.aktiv&&!confirm("Es läuft noch eine Frage. Abbrechen und neue Frage stellen?"))return;
+    var alle=(S.quizKlasse.gruppen||[]).map(function(g){return g.name;});
+    var used=(prev.klasse===kl?(prev.verwendeteZielgruppen||[]):[]).filter(function(n){return alle.includes(n)&&n!==ziel;});
+    used.push(ziel);
+    if(alle.every(function(n){return used.includes(n);}))used=[ziel]; // alle waren dran → neue Runde
+    if(prev.aktiv&&prev.verlaufId){
+      await verlaufEintrag(prev.verlaufId,{typ:"ende",text:"ohne Wertung abgebrochen",zeit:jetzt},{ende:jetzt,ergebnis:"ohne Wertung"});
+    }
+    var bonus=document.getElementById("chk-schiebebonus").checked;
+    var zielE={typ:"ziel",gruppe:ziel,zeit:jetzt};
+    var verlaufId=null;
+    try{
+      var vRef=await db.collection(C_VERLAUF).add({
+        klasse:kl,start:jetzt,ende:null,frage:q.f,antwort:q.a,modus:"schieben",
+        fragenstellendeGruppe:"Lehrer",eingereichtVon:"Eigene Frage"+(q.thema?" · "+q.thema:""),lehrerFrageId:q.id,
+        zielGruppe:ziel,ergebnis:"läuft",richtigeGruppe:null,log:[zielE]
+      });
+      verlaufId=vRef.id;
+    }catch(e){console.error("Verlauf anlegen",e);}
+    await db.collection(C_SESSION).doc("current").set({
+      aktiv:true,modus:"schieben",klasse:kl,
+      aktuelleFrageText:q.f,aktuelleAntwort:q.a,
+      fragenstellendeGruppe:null,zielGruppe:ziel,ersteZielGruppe:ziel,
+      geschoben:false,geschobenVon:null,schiebeBonus:bonus,schiebePunktGruppe:null,
+      buzzerOffen:false,buzzerAlleOffen:false,buzzerGedrückt:null,gruppenAntwort:null,
+      letzteRichtigeGruppe:null,timerStart:null,timerDauer:30,
+      verwendeteZielgruppen:used,falscheGruppen:[],antwortLog:[zielE],verlaufId:verlaufId,
+      lehrerFrageId:q.id,appVersion:APP_VERSION
+    });
+    if(S.stealTimer){clearTimeout(S.stealTimer);S.stealTimer=null;}
+    toast("Frage an "+ziel+" gestellt","success");
+    // Als gestellt markieren – pro Klasse
+    try{
+      var gm=Object.assign({},q.gespieltIn||{});gm[kl]=jetzt;
+      await db.collection(C_LFRAGEN).doc(q.id).update({gespieltIn:gm});
+      q.gespieltIn=gm;renderLFragenSel();
+    }catch(e){console.error(e);}
+    document.getElementById("sel-lziel").value="";
+  };
+
   function startSessionListener(){
     if(S.lehrerSessionUnsub){try{S.lehrerSessionUnsub();}catch(e){}}
     var unsub=db.collection(C_SESSION).doc("current").onSnapshot(function(doc){
@@ -1417,6 +1695,7 @@
   function stealAutomatik(sess){
     if(S.stealTimer){clearTimeout(S.stealTimer);S.stealTimer=null;}
     if(!(sess&&sess.aktiv&&sess.zielGruppe&&!sess.buzzerAlleOffen&&!sess.buzzerGedrückt&&!sess.gruppenAntwort))return;
+    if(sess.modus==="schieben")return; // NEU: kein Steal im Modus „Eigene Fragen“
     var restMs=Math.max(0,(sess.timerDauer||30)*1000-(Date.now()-zielStartLokal(sess)));
     S.stealTimer=setTimeout(async function(){
       S.stealTimer=null;
@@ -1437,7 +1716,13 @@
     var c=document.getElementById("quiz-panel");
     document.getElementById("btn-richtig").disabled=true;
     document.getElementById("btn-falsch").disabled=true;
-    if(!sess||!sess.aktiv){c.innerHTML="<p class='muted'>Kein Quiz aktiv.</p>";return;}
+    renderLZielSel();
+    if(!sess||!sess.aktiv){
+      if(S.countdownInterval){clearInterval(S.countdownInterval);S.countdownInterval=null;}
+      c.innerHTML="<p class='muted'>Kein Quiz aktiv.</p>"+(sess&&sess.aktuelleAntwort?"<p class='hint'>Zuletzt: „"+esc(sess.aktuelleFrageText)+"“ – 💡 "+esc(sess.aktuelleAntwort)+"</p>":"");
+      return;
+    }
+    if(sess.modus==="schieben"){renderQuizPanelSchieben(sess,c);return;}
     var bInfo=sess.buzzerGedrückt
       ?"🔔 <strong>"+sess.buzzerGedrückt.gruppe+"</strong> hat gebrummt!"
       :(sess.buzzerAlleOffen?"⚡ Steal-Modus – alle können buzzen!"
@@ -1505,6 +1790,43 @@
       document.getElementById("btn-richtig").disabled=false;
       document.getElementById("btn-falsch").disabled=false;
     }
+  }
+
+  function logHTMLaus(sess){
+    var zeitStr=function(z){var d=new Date(z);return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2)+":"+("0"+d.getSeconds()).slice(-2);};
+    var log=sess.antwortLog||[];
+    if(!log.length)return "";
+    return "<div class='q-log'><div class='q-log-title'>Verlauf</div>"+log.map(function(e){
+      var t="<span class='q-log-zeit'>"+zeitStr(e.zeit)+"</span> ";
+      if(e.typ==="ziel")return "<div>"+t+"🎯 Frage an <strong>"+esc(e.gruppe)+"</strong></div>";
+      if(e.typ==="schieben")return "<div>"+t+"↪ <strong>"+esc(e.gruppe)+"</strong> schiebt an <strong>"+esc(e.an)+"</strong></div>";
+      if(e.typ==="antwort")return "<div>"+t+"✏️ <strong>"+esc(e.gruppe)+"</strong>: <em>"+esc(e.text)+"</em></div>";
+      if(e.typ==="falsch")return "<div class='q-log-falsch'>"+t+"✗ "+esc(e.gruppe)+" – als falsch gewertet</div>";
+      if(e.typ==="richtig")return "<div class='q-log-richtig'>"+t+"✓ "+esc(e.gruppe)+" – richtig (+1)</div>";
+      if(e.typ==="schiebepunkt")return "<div class='q-log-richtig'>"+t+"↪ "+esc(e.gruppe)+" – Schiebe-Punkt (+1)</div>";
+      return "";
+    }).join("")+"</div>";
+  }
+  function renderQuizPanelSchieben(sess,c){
+    if(S.countdownInterval){clearInterval(S.countdownInterval);S.countdownInterval=null;}
+    var a=sess.gruppenAntwort;
+    var info=sess.geschoben
+      ?"<div class='schiebe-box'>↪ <strong>"+esc(sess.geschobenVon)+"</strong> hat an <strong>"+esc(sess.zielGruppe)+"</strong> geschoben"+
+        (sess.schiebeBonus?" – bei falscher Antwort bekommt "+esc(sess.geschobenVon)+" den Punkt":"")+"</div>"
+      :"<div class='vorschlag-box warten'>⏳ "+esc(sess.zielGruppe)+" antwortet – oder schiebt einmal weiter…</div>";
+    c.innerHTML="<div class='q-box'>"+
+      "<div class='q-f'>❓ "+esc(sess.aktuelleFrageText)+"</div>"+
+      "<div class='q-a'>💡 "+esc(sess.aktuelleAntwort)+"</div>"+
+      "<div class='q-ziel'>📚 Eigene Frage → an: <strong>"+esc(sess.zielGruppe)+"</strong>"+(sess.geschoben?" <span class='muted'>(ursprünglich "+esc(sess.ersteZielGruppe)+")</span>":"")+"</div>"+
+      info+
+      (a?"<div class='q-antwort-gruppe'>✏️ <strong>"+esc(a.gruppe)+"</strong> antwortet: <em>"+esc(a.text)+"</em></div>":"<p class='hint' style='margin-top:8px'>Mündliche Antwort? Einfach direkt mit Richtig/Falsch werten.</p>")+
+      logHTMLaus(sess)+
+      "</div>";
+    var g=(a&&a.gruppe)||sess.zielGruppe;
+    var r=document.getElementById("btn-richtig"),f=document.getElementById("btn-falsch");
+    r.textContent="✓ Richtig – +1 für "+g;
+    f.textContent=(sess.geschoben&&sess.schiebeBonus)?"✗ Falsch – Punkt an "+sess.geschobenVon:"✗ Falsch – kein Punkt";
+    r.disabled=false;f.disabled=false;
   }
 
   window.quizStarten=async function(){
@@ -1608,6 +1930,9 @@
     if(!S.quizKlasse){toast("Erst oben die Klasse laden!","error");return;}
     var betroffen=S.fragen.filter(function(sub){return (sub.fragen||[]).some(function(fq){return fq.gespielt;});});
     var anz=0;betroffen.forEach(function(sub){sub.fragen.forEach(function(fq){if(fq.gespielt)anz++;});});
+    var kl=S.quizKlasse.name;
+    var poolBetr=S.lfragen.filter(function(q){return q.gespieltIn&&q.gespieltIn[kl];});
+    anz+=poolBetr.length;
     if(!anz){toast("Keine Häkchen vorhanden.","info");return;}
     if(!confirm(anz+" Häkchen in "+S.quizKlasse.name+" entfernen? Die Fragen bleiben erhalten, nur die Markierung „schon gestellt“ verschwindet. (Der Antwort-Verlauf bleibt.)"))return;
     for(var i=0;i<betroffen.length;i++){
@@ -1616,7 +1941,11 @@
       await db.collection(C_FRAGEN).doc(sub.id).update({fragen:neu});
       sub.fragen=neu;
     }
-    renderFragenSel();
+    for(var j=0;j<poolBetr.length;j++){
+      var q=poolBetr[j];var gm=Object.assign({},q.gespieltIn);delete gm[kl];
+      await db.collection(C_LFRAGEN).doc(q.id).update({gespieltIn:gm});q.gespieltIn=gm;
+    }
+    renderFragenSel();renderLFragenSel();
     toast(anz+" Häkchen entfernt ✓","success");
   };
 
@@ -1642,17 +1971,21 @@
     toast(alleOffen?"⚡ Steal-Modus für alle!":"Buzzer offen!","success");
   };
 
+  S.wertungLaeuft=false;
+  function wertungSperre(fn){return async function(){
+    if(S.wertungLaeuft)return;S.wertungLaeuft=true;
+    document.getElementById("btn-richtig").disabled=true;document.getElementById("btn-falsch").disabled=true;
+    try{await fn();}finally{S.wertungLaeuft=false;}
+  };}
   window.antwortRichtig=async function(){
     if(S.stealTimer){clearTimeout(S.stealTimer);S.stealTimer=null;}
     var sess=S.session;if(!sess)return;
     // NEU: Die angezeigte Antwort zählt; sonst die Gruppe, die gebuzzert hat (mündliche Antwort)
-    var gruppe=(sess.gruppenAntwort&&sess.gruppenAntwort.gruppe)||(sess.buzzerGedrückt&&sess.buzzerGedrückt.gruppe);
+    var gruppe=(sess.gruppenAntwort&&sess.gruppenAntwort.gruppe)||(sess.buzzerGedrückt&&sess.buzzerGedrückt.gruppe)||
+      (sess.modus==="schieben"?sess.zielGruppe:null);
     if(!gruppe)return;
-    var docId=(sess.klasse+"_GR_"+gruppe).replace(/[\s/]/g,"_");
-    var ref=db.collection(C_PUNKTE).doc(docId);
-    var snap=await ref.get();
-    if(snap.exists){await ref.update({buzzerPunkte:firebase.firestore.FieldValue.increment(1)});}
-    else{await ref.set({klasse:sess.klasse,gruppe:gruppe,name:"(Gruppe "+gruppe+")",typ:"gruppe",fragenPunkte:0,buzzerPunkte:1});}
+    if(!sess.aktiv)return;
+    await gruppePunktPlus(sess.klasse,gruppe);
     await db.collection(C_SESSION).doc("current").update({aktiv:false,buzzerOffen:false,buzzerGedrückt:null,letzteRichtigeGruppe:gruppe,
       antwortLog:(sess.antwortLog||[]).concat([{typ:"richtig",gruppe:gruppe,zeit:Date.now()}])});
     if(sess.verlaufId){
@@ -1666,9 +1999,35 @@
   };
 
   // NEU: Falsch → diese Gruppe ist für die Frage raus, alle übrigen dürfen sofort buzzern (Steal)
+  // NEU: Falsch im Modus „Eigene Fragen“ → Frage endet; nach dem Schieben ggf. Punkt für die schiebende Gruppe
+  async function antwortFalschSchieben(sess){
+    if(!sess.aktiv)return;
+    var gruppe=(sess.gruppenAntwort&&sess.gruppenAntwort.gruppe)||sess.zielGruppe;
+    var text=(sess.gruppenAntwort&&sess.gruppenAntwort.gruppe===gruppe)?sess.gruppenAntwort.text:"(mündlich)";
+    var punktAn=(sess.geschoben&&sess.schiebeBonus&&sess.geschobenVon)?sess.geschobenVon:null;
+    var jetzt=Date.now();
+    var log=(sess.antwortLog||[]).concat([{typ:"falsch",gruppe:gruppe,zeit:jetzt}]);
+    if(punktAn){
+      await gruppePunktPlus(sess.klasse,punktAn);
+      log.push({typ:"schiebepunkt",gruppe:punktAn,zeit:jetzt});
+    }
+    await db.collection(C_SESSION).doc("current").update({
+      aktiv:false,falscheGruppen:[gruppe],schiebePunktGruppe:punktAn,letzteRichtigeGruppe:null,antwortLog:log
+    });
+    if(sess.verlaufId){
+      await verlaufEintrag(sess.verlaufId,{typ:"falsch",gruppe:gruppe,text:text,zeit:jetzt},
+        punktAn?null:{ende:jetzt,ergebnis:"falsch"});
+      if(punktAn)await verlaufEintrag(sess.verlaufId,{typ:"schiebepunkt",gruppe:punktAn,zeit:jetzt+1},{ende:jetzt,ergebnis:"richtig",richtigeGruppe:punktAn});
+    }
+    toast(punktAn?"✗ Falsch – Schiebe-Punkt für "+punktAn:"✗ Falsch – Frage beendet, Lösung wird angezeigt","info");
+    await ladePunkte(sess.klasse);
+  }
+
+  window.antwortRichtig=wertungSperre(window.antwortRichtig);
   window.antwortFalsch=async function(){
     if(S.stealTimer){clearTimeout(S.stealTimer);S.stealTimer=null;}
     var sess=S.session;if(!sess)return;
+    if(sess.modus==="schieben"){await antwortFalschSchieben(sess);return;}
     var gruppe=(sess.gruppenAntwort&&sess.gruppenAntwort.gruppe)||(sess.buzzerGedrückt&&sess.buzzerGedrückt.gruppe);
     var falsche=(sess.falscheGruppen||[]).slice();
     if(gruppe&&!falsche.includes(gruppe))falsche.push(gruppe);
@@ -1689,6 +2048,7 @@
     if(!uebrig.length)toast("✗ Falsch – keine Gruppe mehr übrig. Antwort auflösen und Frage beenden.","info");
     else toast("✗ Falsch – Steal für die übrigen "+uebrig.length+" Gruppen","info");
   };
+  window.antwortFalsch=wertungSperre(window.antwortFalsch);
 
   window.quizBeenden=async function(){
     var sess=S.session;
@@ -1767,6 +2127,8 @@
     if(e.typ==="falsch")return "✗ "+e.gruppe+" – falsch";
     if(e.typ==="richtig")return "✓ "+e.gruppe+" – richtig (+1)";
     if(e.typ==="ende")return "■ "+(e.text||"beendet");
+    if(e.typ==="schieben")return "↪ "+e.gruppe+" schiebt an "+e.an;
+    if(e.typ==="schiebepunkt")return "↪ "+e.gruppe+" – Schiebe-Punkt (+1)";
     return e.typ;
   }
   function renderVerlauf(){
@@ -1780,6 +2142,7 @@
     c.innerHTML=liste.map(function(v){
       var badge=v.ergebnis==="richtig"?"<span class='vl-badge vl-ok'>✓ "+esc(v.richtigeGruppe)+"</span>"
         :v.ergebnis==="läuft"?"<span class='vl-badge vl-live'>läuft</span>"
+        :v.ergebnis==="falsch"?"<span class='vl-badge vl-off'>✗ falsch</span>"
         :"<span class='vl-badge vl-off'>ohne Wertung</span>";
       var log=(v.log||[]).filter(function(e){return !filter||!e.gruppe||e.gruppe===filter||e.typ==="ende";});
       return "<div class='vl-card'>"+
@@ -1809,14 +2172,14 @@
     await ladeVerlauf(k.name);
     if(!S.verlauf.length){toast("Kein Verlauf vorhanden.","info");return;}
     var q=function(x){return '"'+String(x==null?"":x).replace(/"/g,'""')+'"';};
-    var typName={ziel:"Frage an",buzzer:"Buzzer",antwort:"Antwort",falsch:"Falsch gewertet",richtig:"Richtig gewertet",ende:"Beendet"};
+    var typName={ziel:"Frage an",buzzer:"Buzzer",antwort:"Antwort",falsch:"Falsch gewertet",richtig:"Richtig gewertet",ende:"Beendet",schieben:"Geschoben",schiebepunkt:"Schiebe-Punkt"};
     var zeilen=[["Datum","Start","Frage","Lösung","Fragende Gruppe","Eingereicht von","Zielgruppe","Ergebnis","Uhrzeit","Ereignis","Gruppe","Antworttext"].map(q).join(";")];
     S.verlauf.slice().reverse().forEach(function(v){
       var basis=[fmtDatum(v.start),fmtZeit(v.start),v.frage,v.antwort,v.fragenstellendeGruppe,v.eingereichtVon,v.zielGruppe||"",
         v.ergebnis==="richtig"?"richtig: "+v.richtigeGruppe:v.ergebnis];
       var log=v.log||[];
       if(!log.length)zeilen.push(basis.concat(["","","",""]).map(q).join(";"));
-      log.forEach(function(e){zeilen.push(basis.concat([fmtZeit(e.zeit),typName[e.typ]||e.typ,e.gruppe||"",e.text||""]).map(q).join(";"));});
+      log.forEach(function(e){zeilen.push(basis.concat([fmtZeit(e.zeit),typName[e.typ]||e.typ,e.gruppe||"",e.text||(e.an?"an "+e.an:"")]).map(q).join(";"));});
     });
     var blob=new Blob(["﻿"+zeilen.join("\r\n")],{type:"text/csv;charset=utf-8;"});
     var url=URL.createObjectURL(blob);
@@ -1861,7 +2224,7 @@
       "<h3 style='margin-bottom:10px'>Gruppen-Auswertung</h3>"+
       "<p class='hint' style='margin-bottom:12px'>"+noteHinweis+"</p>"+
       "<table class='aus-tbl'><thead><tr>"+
-        "<th>Gruppe</th><th>Fragen-Pkt</th><th>Bonus</th><th>Buzzer-Pkt</th><th>Gesamt</th><th>Note</th>"+
+        "<th>Gruppe</th><th>Fragen-Pkt</th><th>Bonus</th><th>Quiz-Pkt</th><th>Gesamt</th><th>Note</th>"+
       "</tr></thead><tbody>"+
       grRows.map(function(r){
         var noteStr=maxPkt>0?"<span class='note n"+r.note+"'>"+r.note+"</span>":"–";
@@ -1897,7 +2260,7 @@
     var P=berechnePunkte(k,S.fragen,S.punkte);
     var sep=";";
     var q=function(x){return '"'+String(x==null?"":x).replace(/"/g,'""')+'"';};
-    var zeilen=[["Name","Gruppe","Fragen-Punkte","Bonus","Buzzer-Punkte (Gruppe)","Gruppe gesamt"].map(q).join(sep)];
+    var zeilen=[["Name","Gruppe","Fragen-Punkte","Bonus","Quiz-Punkte (Gruppe)","Gruppe gesamt"].map(q).join(sep)];
     Object.values(P.schueler).sort(function(a,b){return (a.gruppe||"~").localeCompare(b.gruppe||"~","de")||a.name.localeCompare(b.name,"de");})
       .forEach(function(s){
         var g=P.gruppen[s.gruppe];
@@ -1949,8 +2312,10 @@
         fBox.textContent=sess.aktuelleFrageText;
         document.getElementById("tafel-antwort-text").textContent="💡 "+sess.aktuelleAntwort;
         aBox.style.display="block";
-        buzBox.innerHTML=sess.letzteRichtigeGruppe?"✓ <strong>"+esc(sess.letzteRichtigeGruppe)+"</strong> holt den Punkt!":"Frage beendet";
-        buzBox.style.background=sess.letzteRichtigeGruppe?"rgba(62,207,142,.15)":"transparent";
+        var punktG=sess.letzteRichtigeGruppe||sess.schiebePunktGruppe;
+        buzBox.innerHTML=sess.letzteRichtigeGruppe?"✓ <strong>"+esc(sess.letzteRichtigeGruppe)+"</strong> holt den Punkt!"
+          :sess.schiebePunktGruppe?"↪ <strong>"+esc(sess.schiebePunktGruppe)+"</strong> holt den Schiebe-Punkt!":"Frage beendet";
+        buzBox.style.background=punktG?"rgba(62,207,142,.15)":"transparent";
         return;
       }
       fBox.textContent="Warte auf Lehrer…";aBox.style.display="none";
@@ -1959,6 +2324,14 @@
     fBox.textContent=sess.aktuelleFrageText;
     aBox.style.display="none";
     document.getElementById("tafel-antwort-text").textContent=sess.aktuelleAntwort;
+    if(sess.modus==="schieben"){
+      if(S.tafelTimer){clearInterval(S.tafelTimer);S.tafelTimer=null;}
+      buzBox.innerHTML=sess.gruppenAntwort?"✏️ <strong>"+esc(sess.gruppenAntwort.gruppe)+"</strong> hat geantwortet!"
+        :sess.geschoben?"↪ <strong>"+esc(sess.geschobenVon)+"</strong> schiebt an <strong>"+esc(sess.zielGruppe)+"</strong>!"
+        :"🎯 Frage an <strong>"+esc(sess.zielGruppe)+"</strong>";
+      buzBox.style.background=sess.geschoben?"rgba(74,158,255,.15)":"rgba(250,200,50,.12)";
+      return;
+    }
     if(sess.buzzerGedrückt){
       buzBox.innerHTML="🔔 <strong>"+sess.buzzerGedrückt.gruppe+"</strong> hat gebrummt!";
       buzBox.style.background="rgba(250,200,50,.15)";
@@ -2224,6 +2597,20 @@
     .sm-tbl tr.sm-row-an td{background:rgba(240,192,64,.07)}
     .opt-gespielt{color:var(--green)}
     .weiter-banner{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;background:rgba(240,192,64,.08);border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:12px 16px;margin-bottom:18px;font-size:.92rem}
+    .modus-switch{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+    .modus-btn{background:var(--bg2);border:1px solid var(--border);color:var(--muted);border-radius:12px;padding:12px 14px;font-family:inherit;font-size:1rem;font-weight:600;cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:3px}
+    .modus-btn small{font-weight:400;font-size:.76rem;color:var(--muted)}
+    .modus-btn.active{border-color:var(--gold);color:var(--gold);background:rgba(240,192,64,.08)}
+    .modus-check{display:flex!important;gap:8px;align-items:flex-start;font-size:.84rem!important;color:var(--text)!important;margin-top:12px;cursor:pointer;line-height:1.4}
+    .modus-check input{width:16px;height:16px;accent-color:var(--gold);margin-top:2px;flex-shrink:0}
+    .schiebe-box{margin-top:10px;padding:10px 14px;border-radius:10px;background:rgba(74,158,255,.1);border:1px solid rgba(74,158,255,.3);color:var(--blue);font-weight:600}
+    .bz-schieben{display:flex;flex-direction:column;align-items:center;gap:8px;margin:14px auto 0;max-width:420px;padding:12px;border:1px dashed rgba(74,158,255,.45);border-radius:12px}
+    .bz-schieben-titel{font-size:.85rem;color:var(--blue)}
+    .bz-schieben-btns{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+    .btn-schieben{background:rgba(74,158,255,.12);color:var(--blue);border:1px solid rgba(74,158,255,.4);border-radius:10px;padding:9px 14px;font-family:inherit;font-size:.9rem;cursor:pointer}
+    .pool-thema{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:8px}
+    .pool-thema summary{cursor:pointer;display:flex;align-items:center;gap:6px}
+    .pool-thema table{margin-top:10px}
     .bz-loesung{margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.12);font-size:1rem;font-weight:400;color:var(--text);text-align:left}
     .bz-loesung-frage{color:var(--muted);font-size:.9rem;margin-bottom:6px}
     .bz-loesung-antwort strong{color:var(--green)}
@@ -2406,16 +2793,40 @@
     </div>
     <p class="hint" style="margin-bottom:14px">Max. 2 Fragen pro Schüler freigeben (je +2 Punkte). Abgelehnte Fragen werden aus dem Quiz entfernt. CSV exportiert alle Fragen mit Status und Punkten.</p>
     <div id="fragen-liste"></div>
+
+    <!-- NEU: EIGENER FRAGENPOOL -->
+    <div class="sm-section" style="margin-top:30px">
+      <div class="sm-sec-title">📚 Eigene Fragen (Fragenpool) · <span id="pool-anzahl" style="color:var(--muted)"></span></div>
+      <p class="hint">Für das Spiel „Eigene Fragen“ im Live-Quiz. Der Pool gilt für alle Klassen. CSV-Spalten: <strong>Frage; Antwort; Thema</strong> (Thema optional, Kopfzeile optional).</p>
+      <div class="sm-row">
+        <input id="pool-thema" placeholder="Thema für diesen Import (optional, z.B. Mozart)" style="flex:1;min-width:200px">
+        <label class="btn-secondary sm-file">📄 CSV-Datei wählen<input type="file" accept=".csv,.txt,text/csv" style="display:none" onchange="poolDateiGewaehlt(this)"></label>
+        <button class="btn-secondary" onclick="poolToggleEinfuegen()">📋 Liste einfügen</button>
+        <button class="btn-export" onclick="poolVorlage()">⬇️ Vorlage</button>
+      </div>
+      <div id="pool-paste-box" style="display:none">
+        <textarea id="pool-paste" rows="5" style="width:100%;margin-top:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-family:ui-monospace,Menlo,monospace;font-size:.8rem" placeholder='Wann wurde Mozart geboren?;1756;Mozart&#10;Wo wurde Mozart geboren?;Salzburg;Mozart'></textarea>
+        <button class="btn-secondary" style="margin-top:8px" onclick="poolEinfuegenVerarbeiten()">Liste prüfen →</button>
+      </div>
+      <div id="pool-vorschau"></div>
+      <div id="pool-liste" style="margin-top:14px"></div>
+    </div>
   </div>
 
   <!-- TAB: LIVE QUIZ -->
   <div id="tab-quiz" style="display:none">
     <div class="quiz-ctrl">
+      <!-- NEU: Spielmodus -->
+      <div class="modus-switch">
+        <button id="modus-btn-schueler" class="modus-btn" onclick="setzeQuizModus('schueler')">🎓 Schülerfragen<small>Gruppe stellt Frage · Buzzer &amp; Steal</small></button>
+        <button id="modus-btn-lehrer" class="modus-btn" onclick="setzeQuizModus('lehrer')">📚 Eigene Fragen<small>Du stellst Frage · antworten oder 1× schieben</small></button>
+      </div>
       <label>Klasse laden</label>
       <div style="display:flex;gap:8px">
         <select id="dd-l-kl-quiz" style="flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-family:inherit;font-size:.88rem;outline:none"></select>
         <button class="btn-primary" style="width:auto;padding:9px 18px" onclick="quizKlasseLaden()">Laden</button>
       </div>
+      <div id="modus-schueler-ctrl">
       <label>Frage auswählen</label>
       <select id="sel-frage"><option value="">– zuerst Klasse laden –</option></select>
       <div id="sel-ziel-info" style="font-size:.82rem;color:var(--muted);margin-top:6px;padding:7px 12px;background:var(--bg4);border-radius:8px;display:none">
@@ -2426,6 +2837,30 @@
         <button class="btn-secondary" onclick="buzzerFreigeben(false)">🔔 Buzzer öffnen</button>
         <button class="btn-secondary" onclick="buzzerFreigeben(true)" style="color:var(--red);border-color:rgba(240,96,96,.3)">⚡ Steal!</button>
         <button class="btn-secondary" onclick="rundeZuruecksetzen()" style="color:var(--muted)">↺ Runde reset</button>
+      </div>
+      </div>
+
+      <!-- NEU: Modus „Eigene Fragen“ -->
+      <div id="modus-lehrer-ctrl" style="display:none">
+        <label>Thema</label>
+        <select id="sel-lthema" onchange="renderLFragenSel()"><option value="">Alle Themen</option></select>
+        <label>Frage auswählen</label>
+        <select id="sel-lfrage"><option value="">– zuerst Klasse laden –</option></select>
+        <label>Frage geht an</label>
+        <div style="display:flex;gap:8px">
+          <select id="sel-lziel" style="flex:1"><option value="">– Gruppe –</option></select>
+          <button class="btn-secondary" onclick="lZielZufall()" title="Zufällig eine Gruppe, die noch nicht dran war">🎲 Zufall</button>
+        </div>
+        <label class="modus-check"><input type="checkbox" id="chk-schiebebonus" checked onchange="lsSet('kq_schiebebonus',this.checked)">
+          Schiebe-Punkt: Antwortet die angeschobene Gruppe falsch, bekommt die <strong>schiebende</strong> Gruppe den Punkt</label>
+        <div class="quiz-actions">
+          <button class="btn-primary" style="width:auto" onclick="lehrerFrageStarten()">▶ Frage stellen</button>
+          <button class="btn-secondary" onclick="rundeZuruecksetzen()" style="color:var(--muted)">↺ Runde reset</button>
+          <button class="btn-secondary" onclick="lehrerTab('tab-fragen');document.getElementById('pool-liste').scrollIntoView({behavior:'smooth'})" style="color:var(--muted)">📚 Fragen importieren</button>
+        </div>
+      </div>
+
+      <div class="quiz-actions" style="margin-top:6px">
         <button class="btn-secondary" onclick="quizBeenden()" title="Frage auflösen, niemand bekommt einen Punkt – Lösung wird angezeigt">⏹ Frage beenden (ohne Punkt)</button>
         <button class="btn-secondary" onclick="tafelStarten()">📺 Tafel-Modus</button>
         <button class="btn-secondary" onclick="haekchenZuruecksetzen()" style="color:var(--muted)" title="Alle ✅ dieser Klasse entfernen, z.B. für eine neue Quiz-Woche">✅ Häkchen zurücksetzen</button>
