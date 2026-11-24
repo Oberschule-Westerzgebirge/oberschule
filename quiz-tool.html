@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Klassen-Quiz v2</title>
+  <title>Klassen-Quiz v3</title>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -58,7 +58,7 @@
   function setHTML(id,html){document.getElementById(id).innerHTML=html;}
 
   // ════════ NEU: VERSION & ANGEMELDET BLEIBEN ════════
-  var APP_VERSION="2026-11-24b";
+  var APP_VERSION="2026-11-24c";
   // Lehrer schreibt die Version in die Sitzung; ältere Handys laden sich dann einmal automatisch neu
   function pruefeVersion(sess){
     if(!sess||!sess.appVersion||sess.appVersion<=APP_VERSION)return;
@@ -424,6 +424,7 @@
     document.getElementById("inp-g-pw").value="";
     S.klasse=k.name;S.klasseId=klasseId;S.gruppe=gruppe;S.rolle="gruppe";
     merkeLogin({rolle:"gruppe",klasseId:klasseId,gruppe:gruppe,pw:pw});
+    uhrAbgleichen();
     unsubAll();
     hideAll();show("s-buzzer");
     document.getElementById("bz-gruppe").textContent=gruppe;
@@ -462,7 +463,7 @@
   function startBuzzerListener(){
     var unsub=db.collection(C_SESSION).doc("current").onSnapshot(function(doc){
       if(!doc.exists){zeigeBuzzerIdle();return;}
-      var sess=doc.data();S.session=sess;
+      var sess=doc.data({serverTimestamps:"estimate"});S.session=sess;
       pruefeVersion(sess);
       // NEU: Der Steal-Timer läuft nur noch auf dem Lehrer-Gerät (Handy-Uhren gehen oft unterschiedlich).
       // Die Handys zeigen nur einen Countdown an.
@@ -626,18 +627,41 @@
   // NEU: Wenn das Handy aus dem Standby kommt, Verbindung frisch aufbauen
   document.addEventListener("visibilitychange",function(){
     if(document.visibilityState!=="visible"||S.rolle!=="gruppe")return;
-    unsubAll();startBuzzerListener();ladePunkteFuerGruppe();
+    unsubAll();startBuzzerListener();ladePunkteFuerGruppe();uhrAbgleichen();
   });
   // NEU: Zeitpunkt merken, an dem DIESES Gerät die Zielgruppe zum ersten Mal gesehen hat.
   // So hängt der Countdown nicht von unterschiedlich gestellten Uhren der Geräte ab.
-  S.zielSeit={};
+  // NEU: Alle Geräte rechnen mit der Firebase-Server-Uhr (gleicher Start für alle, egal wann das Handy die Frage empfängt)
+  S.zielSeit={};S.uhrOffset=0;
+  function zeitMs(x){
+    if(!x)return null;
+    if(typeof x==="number")return x;
+    if(typeof x.toMillis==="function")return x.toMillis();
+    if(typeof x.seconds==="number")return x.seconds*1000+Math.round((x.nanoseconds||0)/1e6);
+    return null;
+  }
+  function jetztServer(){return Date.now()+(S.uhrOffset||0);}
+  async function uhrAbgleichen(){
+    try{
+      var ref=db.collection(C_SESSION).doc("uhr_"+Math.random().toString(36).slice(2));
+      var t0=Date.now();
+      await ref.set({t:firebase.firestore.FieldValue.serverTimestamp()});
+      var d=await ref.get();var t1=Date.now();
+      var ms=zeitMs(d.data()&&d.data().t);
+      if(ms)S.uhrOffset=ms-(t0+t1)/2;
+      ref.delete().catch(function(){});
+    }catch(e){console.error("Uhrabgleich",e);}
+  }
   function zielStartLokal(sess){
+    var z=zeitMs(sess.zielSeit);
+    if(z)return z;
     var key=(sess.verlaufId||sess.aktuelleFrageText||"")+"|"+sess.zielGruppe;
-    if(!S.zielSeit[key])S.zielSeit[key]=Date.now();
+    if(!S.zielSeit[key])S.zielSeit[key]=jetztServer();
     return S.zielSeit[key];
   }
+  function restMs(sess){return (sess.timerDauer||30)*1000-(jetztServer()-zielStartLokal(sess));}
   function restSekunden(sess){
-    return Math.max(0,Math.ceil(((sess.timerDauer||30)*1000-(Date.now()-zielStartLokal(sess)))/1000));
+    return Math.max(0,Math.ceil(restMs(sess)/1000));
   }
   function starteHandyCountdown(sess,el,vorlage){
     var tick=function(){
@@ -690,7 +714,8 @@
         if(s.buzzerAlleOffen||s.buzzerGedrückt)return "zeitum";
         if(ziel===S.gruppe)return "selbst";
         var e={typ:"schieben",gruppe:S.gruppe,an:ziel,zeit:Date.now()};
-        tx.update(ref,{zielGruppe:ziel,geschoben:true,geschobenVon:S.gruppe,antwortLog:(s.antwortLog||[]).concat([e])});
+        tx.update(ref,{zielGruppe:ziel,geschoben:true,geschobenVon:S.gruppe,antwortLog:(s.antwortLog||[]).concat([e]),
+          zielSeit:firebase.firestore.FieldValue.serverTimestamp()});
         if(s.verlaufId)tx.update(verlaufRef(s.verlaufId),{log:firebase.firestore.FieldValue.arrayUnion(e),zielGruppe:ziel});
         return "ok";
       });
@@ -763,6 +788,7 @@
   window.startLehrer=async function(){
     if(val("inp-l-pw")!==ADMIN_PW){toast("Falsches Passwort!","error");return;}
     merkeLogin({rolle:"lehrer",pw:val("inp-l-pw")});
+    uhrAbgleichen();
     S.rolle="lehrer";hideAll();show("s-lehrer");
     await ladeKlassen();
     ["dd-l-kl-fragen","dd-l-kl-quiz","dd-l-kl-aus"].forEach(befuelleKlassenSel);
@@ -1692,6 +1718,7 @@
       aktiv:true,modus:"schieben",klasse:kl,
       aktuelleFrageText:q.f,aktuelleAntwort:q.a,
       fragenstellendeGruppe:null,zielGruppe:ziel,ersteZielGruppe:ziel,
+      zielSeit:firebase.firestore.FieldValue.serverTimestamp(),
       geschoben:false,geschobenVon:null,schiebeBonus:bonus,schiebePunktGruppe:null,
       buzzerOffen:false,buzzerAlleOffen:false,buzzerGedrückt:null,gruppenAntwort:null,
       letzteRichtigeGruppe:null,timerStart:null,timerDauer:stealSekunden(),
@@ -1699,7 +1726,6 @@
       verwendeteZielgruppen:used,falscheGruppen:[],antwortLog:[zielE],verlaufId:verlaufId,
       lehrerFrageId:q.id,appVersion:APP_VERSION
     });
-    if(S.stealTimer){clearTimeout(S.stealTimer);S.stealTimer=null;}
     toast("Frage an "+ziel+" gestellt","success");
     // Als gestellt markieren – pro Klasse
     try{
@@ -1713,7 +1739,7 @@
   function startSessionListener(){
     if(S.lehrerSessionUnsub){try{S.lehrerSessionUnsub();}catch(e){}}
     var unsub=db.collection(C_SESSION).doc("current").onSnapshot(function(doc){
-      S.session=doc.exists?doc.data():null;
+      S.session=doc.exists?doc.data({serverTimestamps:"estimate"}):null;
       stealAutomatik(S.session);
       renderQuizPanel();
     },function(e){console.error(e);toast("Verbindung unterbrochen – verbinde neu…","error");setTimeout(startSessionListener,3000);});
@@ -1721,24 +1747,28 @@
     S.unsub.push(unsub);
   }
 
-  // NEU: Nur das Lehrer-Gerät öffnet nach Ablauf der Zeit den Steal-Modus (per Transaktion, genau einmal)
+  // NEU: Nur das Lehrer-Gerät öffnet nach Ablauf der Zeit den Buzzer – es prüft jede Sekunde (robust, kein Timer der verloren gehen kann)
   function stealAutomatik(sess){
-    if(S.stealTimer){clearTimeout(S.stealTimer);S.stealTimer=null;}
+    S.stealSess=sess;
+    if(!S.stealWatch)S.stealWatch=setInterval(stealPruefen,1000);
+    stealPruefen();
+  }
+  async function stealPruefen(){
+    var sess=S.stealSess;
     if(!(sess&&sess.aktiv&&sess.zielGruppe&&!sess.buzzerAlleOffen&&!sess.buzzerGedrückt&&!sess.gruppenAntwort))return;
-    if(sess.modus==="schieben"&&!sess.stealAktiv)return; // Steal bei „Eigene Fragen“ nur, wenn eingeschaltet
-    var restMs=Math.max(0,(sess.timerDauer||30)*1000-(Date.now()-zielStartLokal(sess)));
-    S.stealTimer=setTimeout(async function(){
-      S.stealTimer=null;
-      var ref=db.collection(C_SESSION).doc("current");
-      try{
-        await db.runTransaction(async function(tx){
-          var d=await tx.get(ref);if(!d.exists)return;
-          var s=d.data();
-          if(!s.aktiv||s.buzzerAlleOffen||s.buzzerGedrückt||s.gruppenAntwort||s.zielGruppe!==sess.zielGruppe)return;
-          tx.update(ref,{buzzerOffen:true,buzzerAlleOffen:true});
-        });
-      }catch(e){console.error(e);}
-    },restMs);
+    if(sess.modus==="schieben"&&!sess.stealAktiv)return;
+    if(restMs(sess)>0||S.stealLaeuft)return;
+    S.stealLaeuft=true;
+    var ref=db.collection(C_SESSION).doc("current");
+    try{
+      await db.runTransaction(async function(tx){
+        var d=await tx.get(ref);if(!d.exists)return;
+        var s=d.data();
+        if(!s.aktiv||s.buzzerAlleOffen||s.buzzerGedrückt||s.gruppenAntwort||s.zielGruppe!==sess.zielGruppe)return;
+        tx.update(ref,{buzzerOffen:true,buzzerAlleOffen:true});
+      });
+    }catch(e){console.error(e);}
+    S.stealLaeuft=false;
   }
 
   function renderQuizPanel(){
@@ -1940,6 +1970,7 @@
       zielGruppe:zielGruppe,
       zielVorschlag:zielGruppe,
       timerStart:jetzt,
+      zielSeit:firebase.firestore.FieldValue.serverTimestamp(),
       buzzerOffen:true,
       buzzerAlleOffen:false,
       buzzerGedrückt:null,
@@ -1958,17 +1989,10 @@
     await db.collection(C_SESSION).doc("current").update({
       zielGruppe:sess.zielVorschlag,
       timerStart:jetzt,
+      zielSeit:firebase.firestore.FieldValue.serverTimestamp(),
       verwendeteZielgruppen:used
     });
     toast("Ziel bestätigt: "+sess.zielVorschlag,"success");
-    if(S.stealTimer)clearTimeout(S.stealTimer);
-    S.stealTimer=setTimeout(async function(){
-      var doc=await db.collection(C_SESSION).doc("current").get();
-      if(doc.exists&&doc.data().aktiv&&!doc.data().buzzerGedrückt){
-        await db.collection(C_SESSION).doc("current").update({buzzerOffen:true,buzzerAlleOffen:true});
-        toast("Steal-Modus!","info");
-      }
-    },30000);
   };
 
   // NEU: Häkchen ("schon gestellt") für die geladene Klasse entfernen
@@ -2352,7 +2376,7 @@
   // ════════ TAFEL ════════
   function startTafelListener(){
     var unsub=db.collection(C_SESSION).doc("current").onSnapshot(async function(doc){
-      var sess=doc.exists?doc.data():null;
+      var sess=doc.exists?doc.data({serverTimestamps:"estimate"}):null;
       S.session=sess;
       stealAutomatik(sess);
       renderTafel(sess);
